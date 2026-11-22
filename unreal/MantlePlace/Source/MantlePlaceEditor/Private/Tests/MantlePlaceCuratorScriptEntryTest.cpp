@@ -16,17 +16,11 @@
 #include "Engine/World.h"
 #include "HAL/FileManager.h"
 
-// The script entries of Open in curator (the ones editor Python calls), over throwaway worlds: a level
-// with a previous import, a level with an Extent box, and an empty level. Each case compares the entry
-// with what the button does -- MantlePlaceLevelExtent::Resolve and ::CuratorUrl, the two calls the panel
-// makes -- so a copy of that code in the library would show here as a disagreement. The decisions
-// themselves are asserted in MantlePlace.CuratorExtent.Sources and .Precedence.
-
 namespace
 {
 	UWorld* NewWorld(const TCHAR* Name)
 	{
-		return UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false, FName(Name));
+		return UWorld::CreateWorld(EWorldType::Editor, false, FName(Name));
 	}
 }
 
@@ -37,7 +31,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceCuratorScriptEntryTest::RunTest(const FString& Parameters)
 {
-	// --- Reachable from editor Python: both entries are static Blueprint-callable functions ---------------
 	for (const TCHAR* Name : { TEXT("ResolveCuratorExtent"), TEXT("PlaceExtentBox") })
 	{
 		const UFunction* Function = UMantlePlaceAutomationLibrary::StaticClass()->FindFunctionByName(FName(Name));
@@ -54,7 +47,6 @@ bool FMantlePlaceCuratorScriptEntryTest::RunTest(const FString& Parameters)
 		return true;
 	}
 
-	// --- An empty level: no source, the plain curator link -----------------------------------------------
 	{
 		UWorld* World = NewWorld(TEXT("MantlePlaceScriptEntryEmptyWorld"));
 		if (!TestNotNull(TEXT("a throwaway world"), World))
@@ -72,10 +64,9 @@ bool FMantlePlaceCuratorScriptEntryTest::RunTest(const FString& Parameters)
 			Result.Url, FMantlePlaceCuratorExtentLogic::BuildCuratorUrl(
 				GetDefault<UMantlePlaceVaultClient>()->VaultApiBaseUrl, FMantlePlaceResolvedExtent()));
 		TestFalse(TEXT("with no extent token"), Result.Url.Contains(TEXT("aoi=")));
-		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		World->DestroyWorld(false);
 	}
 
-	// --- A level with an Extent box: placed by the entry, then located ----------------------------------
 	{
 		UWorld* World = NewWorld(TEXT("MantlePlaceScriptEntryBoxWorld"));
 		if (!TestNotNull(TEXT("a throwaway world"), World))
@@ -108,10 +99,9 @@ bool FMantlePlaceCuratorScriptEntryTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("the link is the one the button opens"), Result.Url, MantlePlaceLevelExtent::CuratorUrl(Button));
 			TestTrue(TEXT("on the extent, from Unreal"), Result.Url.Contains(TEXT("#aoi=")) && Result.Url.EndsWith(TEXT("&from=unreal")));
 		}
-		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		World->DestroyWorld(false);
 	}
 
-	// --- A level with a previous import ------------------------------------------------------------------
 	{
 		UWorld* World = NewWorld(TEXT("MantlePlaceScriptEntryImportWorld"));
 		if (!TestNotNull(TEXT("a throwaway world"), World))
@@ -132,7 +122,6 @@ bool FMantlePlaceCuratorScriptEntryTest::RunTest(const FString& Parameters)
 		Record.Extent.North = 30.27;
 		MantlePlaceImportProvenance::Write(Record);
 
-		// A located Extent box in the same level: the previous import still outranks it.
 		AMantlePlaceExtentBox* Box = Cast<AMantlePlaceExtentBox>(UMantlePlaceAutomationLibrary::PlaceExtentBoxInWorld(World));
 		if (TestNotNull(TEXT("an Extent box beside the import"), Box))
 		{
@@ -151,11 +140,10 @@ bool FMantlePlaceCuratorScriptEntryTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the link is the one the button opens"), Result.Url, MantlePlaceLevelExtent::CuratorUrl(Button));
 		TestTrue(TEXT("and carries the record's extent"), Result.Url.Contains(TEXT("#aoi=-97.75,30.25,-97.73,30.27&from=unreal")));
 
-		IFileManager::Get().Delete(*MantlePlaceImportProvenance::RecordPath(Identity), /*bRequireExists*/ false, /*bEvenReadOnly*/ true);
-		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		IFileManager::Get().Delete(*MantlePlaceImportProvenance::RecordPath(Identity), false, true);
+		World->DestroyWorld(false);
 	}
 
-	// --- The no-argument entry reads the editor's world, as the button does -------------------------------
 	{
 		UWorld* Editor = MantlePlaceLevelExtent::EditorWorld();
 		if (TestNotNull(TEXT("the editor has a world"), Editor))
@@ -170,4 +158,4 @@ bool FMantlePlaceCuratorScriptEntryTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
+#endif

@@ -3,25 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Client;
 
-/// <summary>
-/// Read access to a bundle zip on disk. I/O plus the manifest's own integrity check — it makes no
-/// import decisions.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The local-zip path is the permanent fallback: even once the vault client lands, a
-/// curator who already has the file on disk must be able to import it. Revit's importers take file
-/// paths rather than streams, so entries are extracted to disk first.
-/// </para>
-/// <para>
-/// <b>Two lifetimes, and the difference is load-bearing.</b> An imported toposurface is copied into
-/// the model; a linked DXF or IFC is a live reference to a path. Extracting both to one temporary
-/// directory and deleting it on dispose destroys the links the import just created — silently,
-/// because the failure only shows up the next time the project is opened. Which lifetime a step gets
-/// is decided by <see cref="ImportStepKinds.LifetimeOf"/> in the pure core, not here and not in the
-/// Revit shim.
-/// </para>
-/// </remarks>
 public sealed class LocalBundleArchive : IDisposable
 {
     private const string ManifestEntrySuffix = "Metadata/manifest.json";
@@ -45,36 +26,18 @@ public sealed class LocalBundleArchive : IDisposable
         EntryNames = [.. archive.Entries.Select(entry => entry.FullName)];
     }
 
-    /// <summary>
-    /// The bundle as <see cref="BundleReader"/> reads it, of either major: a <c>Manifest.json</c> at
-    /// the root as 3.x, a <c>Metadata/manifest.json</c> as 2.x or 1.x. <c>null</c> when the zip holds
-    /// neither — which is how "this file is not a Mantle Place bundle" is distinguished from "this
-    /// bundle is too old", a refusal the manifest itself explains.
-    /// </summary>
     public BundleManifest? Manifest { get; }
 
-    /// <summary>
-    /// The 2.x or 1.x manifest's text as the zip holds it, or <c>null</c> when there is none, a 3.x
-    /// bundle included: for a host whose own block this reader does not read (the AutoCAD plugin reads
-    /// <c>hosts.autocad</c> from it). A 3.x manifest has no host block (<c>spec/format.md</c> §9.7).
-    /// </summary>
     public string? ManifestText { get; }
 
-    /// <summary>
-    /// Where this bundle's files live, keyed by its <see cref="BundleManifest.FilingKey"/> where the
-    /// manifest gives one.
-    /// </summary>
     public BundleCacheLayout Layout { get; }
 
     public IReadOnlyList<string> EntryNames { get; }
 
-    /// <summary>Where linked files live, so the UI can tell the curator what not to delete.</summary>
     public string RetainedDirectory => Layout.ExtractedRoot;
 
-    /// <summary>Opens a bundle and resolves where its files belong.</summary>
     public static LocalBundleArchive Open(string zipPath) => Open(zipPath, cacheRoot: null);
 
-    /// <summary>As <see cref="Open(string)"/>, with an explicit cache root. For tests.</summary>
     public static LocalBundleArchive Open(string zipPath, string? cacheRoot)
     {
         ZipArchive archive = ZipFile.OpenRead(zipPath);
@@ -82,10 +45,6 @@ public sealed class LocalBundleArchive : IDisposable
         string? manifestText = ReadManifestText(archive);
         BundleManifest? manifest = BundleReader.Read(archive.Entries.Select(entry => entry.FullName), name => ReadEntryText(archive, name));
 
-        // The filing key -- the order id, or the id an older bundle's attribution carries -- is
-        // what makes the hand-downloaded zip and the vault download the same cache entry. A bundle
-        // too old to parse still yields one where the reader could recover it (HPS-37,
-        // accumulate-then-refuse); only a zip that names neither falls back to its path.
         BundleCacheLayout layout = ResolveLayout(manifest, zipPath, cacheRoot);
 
         string scratch = Path.Combine(
@@ -97,24 +56,6 @@ public sealed class LocalBundleArchive : IDisposable
         return new LocalBundleArchive(archive, manifestText, manifest, layout, scratch);
     }
 
-    /// <summary>
-    /// Verifies every artifact the plan will touch, before any of them is extracted.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Per-step verification alone would abort the first bad artifact, but only after the earlier
-    /// steps had already created a toposolid and a link in the user's model. The reference host
-    /// checks the whole set up front and creates nothing on a mismatch
-    /// (<c>MantlePlaceImporterLibrary.cpp</c>'s <c>VerifyEntrySha256</c> sweep); this is the same
-    /// shape (⛔<c>HPS-26</c>).
-    /// </para>
-    /// <para>
-    /// A step whose manifest advertised no hash is SKIPPED, not failed: below v19 the Revit
-    /// deliverables carried none at all, and calling those bundles corrupt makes every one of them
-    /// un-importable (HPS-27).
-    /// </para>
-    /// </remarks>
-    /// <returns><c>null</c> when everything checked out, or the reason to abort.</returns>
     public string? VerifyPlan(BundleImportPlan plan)
     {
         ArgumentNullException.ThrowIfNull(plan);
@@ -135,22 +76,6 @@ public sealed class LocalBundleArchive : IDisposable
         return null;
     }
 
-    /// <summary>
-    /// The pixel dimensions of an entry that is a PNG, or <c>null</c> when it is not one.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Handed to <see cref="BundleImportPlanner.Plan"/> so the drape's ground extent can be
-    /// corroborated against the image's own grid while the plan is still being made — before
-    /// anything is extracted, and while a refusal is still just a skipped step with a sentence
-    /// attached.
-    /// </para>
-    /// <para>
-    /// It reads <see cref="PngHeader.PrefixLength"/> bytes and stops. A drape is tens of megabytes
-    /// and this runs during planning, so decoding it — or even extracting it — would trade a free
-    /// refusal for an expensive one. Zip entry streams are forward-only, which is exactly enough.
-    /// </para>
-    /// </remarks>
     public ImageSize? ProbeImageSize(string entryName)
     {
         if (string.IsNullOrEmpty(entryName) || _archive.GetEntry(entryName) is not { } entry)
@@ -170,7 +95,6 @@ public sealed class LocalBundleArchive : IDisposable
                 int got = stream.Read(prefix[read..]);
                 if (got <= 0)
                 {
-                    // Short of a header is not a PNG, which is the same answer as the wrong magic.
                     return null;
                 }
 
@@ -179,20 +103,12 @@ public sealed class LocalBundleArchive : IDisposable
         }
         catch (InvalidDataException)
         {
-            // A corrupt deflate stream fails here rather than at extraction. Same answer: the grid
-            // cannot be read, so the caller refuses to place anything against it.
             return null;
         }
 
         return PngHeader.TryReadSize(prefix);
     }
 
-    /// <summary>Extracts one entry and returns its full path on disk.</summary>
-    /// <remarks>
-    /// The expected digest is a REQUIRED argument rather than an optional one. The hash was parsed
-    /// off the manifest and then consumed by nothing at all — an overload that let a caller not
-    /// mention it is how that happened, so there is no longer one.
-    /// </remarks>
     public string Extract(string entryName, ExtractionLifetime lifetime, string? expectedSha256)
     {
         if (Verify(entryName, expectedSha256) is { } failure)
@@ -206,13 +122,9 @@ public sealed class LocalBundleArchive : IDisposable
         string root = lifetime == ExtractionLifetime.Retained ? Layout.ExtractedRoot : _scratchDirectory;
         Directory.CreateDirectory(root);
 
-        // Mirror the entry's own sub-path rather than flattening to the leaf name: two entries can
-        // share a file name across folders, and a flattened extraction would have one silently
-        // overwrite the other.
         string relative = entry.FullName.Replace('\\', '/').TrimStart('/');
         string destination = Path.GetFullPath(Path.Combine(root, relative));
 
-        // Zip-slip guard: an entry named `../../evil` must not escape the directory we created.
         string rootFull = Path.GetFullPath(root) + Path.DirectorySeparatorChar;
         if (!destination.StartsWith(rootFull, StringComparison.OrdinalIgnoreCase))
         {
@@ -221,9 +133,6 @@ public sealed class LocalBundleArchive : IDisposable
 
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
 
-        // A retained file can be held open by the host that placed it (AutoCAD keeps an attached image
-        // open while any drawing shows it), so rewriting it on a second import of the order throws.
-        // When it is already the published file, byte for byte by its digest, it is the file to use.
         if (lifetime == ExtractionLifetime.Retained && !string.IsNullOrWhiteSpace(expectedSha256) && IsAlready(destination, expectedSha256))
         {
             return destination;
@@ -233,7 +142,6 @@ public sealed class LocalBundleArchive : IDisposable
         return destination;
     }
 
-    /// <summary>Whether <paramref name="path"/> exists and its SHA-256 is <paramref name="sha256"/>, read without taking a lock the host would refuse.</summary>
     private static bool IsAlready(string path, string sha256)
     {
         if (!File.Exists(path))
@@ -256,11 +164,6 @@ public sealed class LocalBundleArchive : IDisposable
         }
     }
 
-    /// <summary>
-    /// Disposes the archive and removes the TRANSIENT scratch directory only. The retained
-    /// directory is left alone on purpose — Revit links point into it, and <c>HPS-44</c> makes
-    /// eviction explicit and per-order.
-    /// </summary>
     public void Dispose()
     {
         _archive.Dispose();
@@ -273,23 +176,12 @@ public sealed class LocalBundleArchive : IDisposable
         }
         catch (IOException)
         {
-            // Leaving a temp directory behind is a far better outcome than throwing out of an
-            // import that otherwise succeeded.
         }
         catch (UnauthorizedAccessException)
         {
         }
     }
 
-    /// <summary>
-    /// Hashes one entry's bytes and compares to the manifest's declared digest, fail-closed.
-    /// </summary>
-    /// <remarks>
-    /// An absent or blank expected hex is a skip — that is a v18 bundle, which is valid-but-unverified
-    /// rather than corrupt. The comparison itself is <see cref="Sha256Digest.Equal"/>, which treats
-    /// two empties as NOT equal: "unknown equals unknown" would report a verified match on a bundle
-    /// nothing checked (⛔<c>HPS-27</c>, <c>HPS-28</c>).
-    /// </remarks>
     private string? Verify(string entryName, string? expectedSha256)
     {
         if (string.IsNullOrWhiteSpace(expectedSha256) || _verified.Contains(entryName))
@@ -320,16 +212,6 @@ public sealed class LocalBundleArchive : IDisposable
         return null;
     }
 
-    /// <summary>
-    /// Where the bundle is filed: under its <see cref="BundleManifest.FilingKey"/>, and under the
-    /// zip's path when it has none.
-    /// </summary>
-    /// <remarks>
-    /// The filing key, not the order id: a bundle from before MPB 1.7.0 names its packaging job
-    /// where a later one names the order, and every earlier import filed such a bundle — and stamped
-    /// its elements — under that id. Filing it under its path instead would make a re-import a
-    /// stranger to its own ground.
-    /// </remarks>
     private static BundleCacheLayout ResolveLayout(BundleManifest? manifest, string zipPath, string? cacheRoot)
     {
         string? filingKey = manifest?.FilingKey;
@@ -346,15 +228,6 @@ public sealed class LocalBundleArchive : IDisposable
             : BundleCacheLayout.ForOrder(filingKey, cacheRoot);
     }
 
-    /// <summary>
-    /// The lowercase hex sha256 of a zip's manifest member, found as <see cref="Open(string)"/> finds
-    /// it; empty when the zip holds none or cannot be read.
-    /// </summary>
-    /// <remarks>
-    /// A download view's response states this digest, and it is the root the per-file digests are
-    /// trusted from: a view with a tampered manifest would carry tampered digests that every file
-    /// then matches.
-    /// </remarks>
     public static string ManifestSha256(string zipPath)
     {
         try
@@ -374,10 +247,6 @@ public sealed class LocalBundleArchive : IDisposable
         }
     }
 
-    /// <summary>
-    /// Reads this zip again as a bundle of either major (<see cref="BundleReader"/>): a fresh reading
-    /// of what <see cref="Manifest"/> holds. <c>null</c> when it holds neither manifest.
-    /// </summary>
     public BundleManifest? ReadBundle() => BundleReader.Read(EntryNames, name => ReadEntryText(_archive, name));
 
     private static string? ReadEntryText(ZipArchive archive, string entryName)
@@ -391,10 +260,6 @@ public sealed class LocalBundleArchive : IDisposable
         return reader.ReadToEnd();
     }
 
-    /// <summary>
-    /// The manifest member <see cref="BundleReader"/> reads: the root <c>Manifest.json</c> of a 3.x
-    /// bundle, else the 2.x <c>Metadata/manifest.json</c>, found as the reader finds them.
-    /// </summary>
     private static ZipArchiveEntry? FindEitherManifest(ZipArchive archive)
     {
         BundleEntryIndex index = new(archive.Entries.Select(entry => entry.FullName));

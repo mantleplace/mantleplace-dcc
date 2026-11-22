@@ -2,27 +2,8 @@ using System.Text.Json;
 
 namespace MantlePlace.Core;
 
-/// <summary>
-/// What the platform's public Realtime route answers: where a plugin's socket is and the publishable
-/// key that opens it. Read, never invented: a body that does not say both is refused with its reason.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The route is public and unauthenticated, and the body is one JSON object with two strings:
-/// <c>url</c> (the socket endpoint, <c>wss://…/realtime/v1/websocket</c>, used as it is) and <c>publishableKey</c>. A
-/// publishable key is public by design, but it is still never logged, and this type never puts one in
-/// a reason.
-/// </para>
-/// <para>
-/// Pure: the fetch is <c>MantlePlace.Client</c>'s, so every malformed shape is pinned headlessly.
-/// </para>
-/// </remarks>
 public static class PublishedRealtime
 {
-    /// <summary>
-    /// Reads the route's body. <c>true</c> when both values are usable; otherwise <c>false</c> with the
-    /// reason in <paramref name="whyNot"/>, in a sentence that names neither value.
-    /// </summary>
     public static bool TryParse(string? body, out string location, out string publishableKey, out string whyNot)
     {
         location = string.Empty;

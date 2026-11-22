@@ -3,11 +3,6 @@ using MantlePlace.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 
-/// <summary>
-/// An AutoCAD import as the shared import window shows it (<c>HPS-60</c>): its steps in the order they
-/// run, each one's state in <c>HPS-51</c>'s words, and Cancel between steps. The shell only runs the
-/// step it is handed and posts the view.
-/// </summary>
 internal static class AutoCadImportRunTests
 {
     internal static int Run()

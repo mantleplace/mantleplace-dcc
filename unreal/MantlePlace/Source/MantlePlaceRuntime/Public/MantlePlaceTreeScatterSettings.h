@@ -11,10 +11,6 @@
 class UStaticMesh;
 class UTexture2D;
 
-/**
- * The tree-points columns the scatter binds by name: the contract's own names, which
- * `MantlePlace.Import.FoliageScatter.Columns` holds against FMantlePlaceTreePointsLogic::ColumnContract.
- */
 namespace MantlePlaceTreeScatterColumns
 {
 inline const TCHAR* Position() { return TEXT("Position"); }
@@ -94,7 +90,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scatter")
 	int32 ScatterSeed = 0;
 
-	//~Begin UPCGSettings interface
 #if WITH_EDITOR
 	virtual FName GetDefaultNodeName() const override { return FName(TEXT("MantlePlaceTreeScatter")); }
 	virtual FText GetDefaultNodeTitle() const override { return NSLOCTEXT("MantlePlaceTreeScatter", "NodeTitle", "Mantle Place Tree Scatter"); }
@@ -106,15 +101,12 @@ protected:
 	virtual TArray<FPCGPinProperties> InputPinProperties() const override { return Super::DefaultPointInputPinProperties(); }
 	virtual TArray<FPCGPinProperties> OutputPinProperties() const override { return Super::DefaultPointOutputPinProperties(); }
 	virtual FPCGElementPtr CreateElement() const override;
-	//~End UPCGSettings interface
 };
 
 class FMantlePlaceTreeScatterElement : public IPCGElement
 {
 public:
-	// The rasters and the meshes are UObjects read from their source data: the game thread only.
 	virtual bool CanExecuteOnlyOnMainThread(FPCGContext* Context) const override { return true; }
-	// A re-import replaces the textures under the same names; a cached result would outlive them.
 	virtual bool IsCacheable(const UPCGSettings* InSettings) const override { return false; }
 
 protected:

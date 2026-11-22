@@ -5,48 +5,10 @@
 #include "CoreMinimal.h"
 #include "MantlePlaceVaultTypes.generated.h"
 
-/**
- * The minimum bundle-manifest version every native consumer accepts.
- *
- * MPB 1.0.0 re-baselined the contract onto semantic versioning: the `version` field is the STRING
- * "1.0.0" where it used to be the integer 19, keys went snake_case, and everything host-specific
- * moved under `hosts.<hostId>`. The integer era (v7-v19) is pre-history — still published, never
- * read here.
- *
- * The floor is a clean break: everything below it is rejected outright and re-procured, never
- * dual-parsed (HPS-31). Crossing an era makes that stricter rather than looser, because an
- * integer-versioned bundle is not merely old, it is written in a dialect this reader does not
- * speak at all — `hosts.unreal` against a top-level `unreal` block.
- *
- * One home for the number: the importer's manifest gate, the bundle cache's validity decision, and
- * tools/manifest-conformance (which regexes this header) all read it here. The floor says how OLD a
- * bundle may be; the newest major this reader speaks is MantlePlaceMaxSupportedManifestMajor below.
- */
 inline const FString MantlePlaceMinSupportedManifestVersion = TEXT("1.0.0");
 
-/**
- * The newest MAJOR of the manifest this reader speaks. MPB 2.0 changed the bundle's layout, not the
- * pointer doctrine, and this reader locates every file through a pointer value, so it reads both
- * majors: 1.x as it always has, 2.x through the same pointers plus the neutral `file_entries`
- * (where a 2.0 bundle states what a PNG's pixels mean). A manifest whose major is above this is
- * refused with an "update the plugin" message rather than parsed best-effort, because a major is
- * exactly the promise that something this reader relies on may have changed meaning.
- *
- * Unreal was the second major's first reader; the conformance corpus's `manifest.reject.majorAhead`
- * case holds a 2.0 manifest for readers that stop at 1.x, so the suite restamps it one major above
- * this constant before driving it (MantlePlaceImportManifestTest.cpp).
- */
 inline constexpr int32 MantlePlaceMaxSupportedManifestMajor = 2;
 
-/**
- * A parsed MPB manifest version.
- *
- * `bValid` is false for everything that is not `MAJOR.MINOR.PATCH` — an absent version, an integer
- * from the pre-history, a partial "1.0", a pre-release tag. Those are all refusals, and the reader
- * must never coerce them into a number: the integer era's reader read an absent version as 0 and
- * refused it, and reading a STRING as 0 the same way would be an accident that happens to work
- * rather than a decision.
- */
 struct FMantlePlaceManifestVersion
 {
 	bool bValid = false;
@@ -54,24 +16,17 @@ struct FMantlePlaceManifestVersion
 	int32 Minor = 0;
 	int32 Patch = 0;
 
-	/** Parse `MAJOR.MINOR.PATCH`. Never throws; anything else comes back `bValid == false`. */
 	static FMantlePlaceManifestVersion Parse(const FString& Text)
 	{
 		FMantlePlaceManifestVersion Out;
 		TArray<FString> Parts;
-		Text.ParseIntoArray(Parts, TEXT("."), /*InCullEmpty=*/false);
+		Text.ParseIntoArray(Parts, TEXT("."), false);
 		if (Parts.Num() != 3)
 		{
 			return Out;
 		}
 		for (const FString& Part : Parts)
 		{
-			// `IsNumeric` accepts a leading sign and a decimal point; neither belongs in a semver
-			// component, and "1.-0.0" parsing as valid would be a silent wrong answer.
-			//
-			// A leading zero is rejected too ("01.0.0"), because semver forbids it and the
-			// platform's own publisher and gate do. A component that parsed here but not there
-			// would be a version this host imports and the contract does not admit exists.
 			if (Part.IsEmpty() || !Part.IsNumeric() || Part.Contains(TEXT("-")) || Part.Contains(TEXT("+"))
 			    || Part.Contains(TEXT(".")) || (Part.Len() > 1 && Part[0] == TEXT('0')))
 			{
@@ -90,7 +45,6 @@ struct FMantlePlaceManifestVersion
 		return bValid ? FString::Printf(TEXT("%d.%d.%d"), Major, Minor, Patch) : TEXT("(none)");
 	}
 
-	/** Total order over parsed versions. Only meaningful when both are valid. */
 	bool operator<(const FMantlePlaceManifestVersion& Other) const
 	{
 		return Major != Other.Major   ? Major < Other.Major
@@ -99,12 +53,6 @@ struct FMantlePlaceManifestVersion
 	}
 };
 
-/**
- * A manifest version as it should READ to a user: "1.0.0" for the MPB era, "v19" for the
- * pre-history. The semver era's value carries no marker of its own, and the integer era's always
- * read with a leading `v`, so rendering both verbatim would relabel every pre-history bundle in the
- * vault listing. Display only — nothing gates on this.
- */
 inline FString MantlePlaceDescribeManifestVersion(const FString& Version)
 {
 	if (Version.IsEmpty())
@@ -114,24 +62,12 @@ inline FString MantlePlaceDescribeManifestVersion(const FString& Version)
 	return FMantlePlaceManifestVersion::Parse(Version).bValid ? Version : FString::Printf(TEXT("v%s"), *Version);
 }
 
-/**
- * Is `Version` below `Floor`, across BOTH version families?
- *
- * The whole integer pre-history sorts below the whole semver era, so anything that is not a semver
- * string — an integer-era "19", an absent value, a malformed one — is below a semver floor. That
- * single rule is why the caller never has to know which era a stored version came from, which
- * matters most at the cache, where a sidecar written before the re-baseline sits on disk beside
- * one written after it.
- */
 inline bool MantlePlaceIsManifestVersionBelowFloor(const FString& Version, const FString& Floor)
 {
 	const FMantlePlaceManifestVersion Parsed = FMantlePlaceManifestVersion::Parse(Version);
 	const FMantlePlaceManifestVersion FloorParsed = FMantlePlaceManifestVersion::Parse(Floor);
 	if (!FloorParsed.bValid)
 	{
-		// An unparseable floor is a programming error, not bundle data. Refuse nothing rather than
-		// refuse everything: a cache that invalidated every entry on a typo'd constant would be a
-		// far worse failure than one that stopped enforcing a rule it can no longer read.
 		return false;
 	}
 	return !Parsed.bValid || Parsed < FloorParsed;
@@ -260,19 +196,16 @@ struct FMantlePlaceVaultExtra
 	bool bLocked = false;
 };
 
-/** What a locked Extra says in place of a download, in every surface of this plugin. */
 inline const TCHAR* MantlePlaceLockedExtrasWords()
 {
 	return TEXT("More Extras come with paid sites");
 }
 
-/** What the proof view of a free bundle says of the Extras it does not hold. */
 inline const TCHAR* MantlePlacePaidBuildsWords()
 {
 	return TEXT("Plan sheets and terrain tiles come with paid builds.");
 }
 
-/** The id the platform gives the terrain tiles Extra (`mpb3.extras[].id`), spelled exactly. */
 inline const TCHAR* MantlePlaceTerrainTilesExtraId()
 {
 	return TEXT("TerrainTiles");
@@ -386,13 +319,11 @@ struct FMantlePlaceVaultItem
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	TArray<FMantlePlaceVaultExtra> Extras;
 
-	/** True when the platform locks at least one of the listed Extras: the bundle is free. */
 	bool HasLockedExtras() const
 	{
 		return Extras.ContainsByPredicate([](const FMantlePlaceVaultExtra& Extra) { return Extra.bLocked; });
 	}
 
-	/** The listed Extra with this id, spelled exactly, or null when the platform lists none. */
 	const FMantlePlaceVaultExtra* FindExtra(const FString& ExtraId) const
 	{
 		return Extras.FindByPredicate(
@@ -560,7 +491,6 @@ struct FMantlePlaceMaterializeStart
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	TArray<FString> Tokens;
 
-	/** True when this joined a run rather than starting one. */
 	bool IsAlreadyRunning() const
 	{
 		return Outcome == EMantlePlaceMaterializeStartOutcome::Joined;

@@ -1,24 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    The windows every .NET host plugin opens, from one source: sign-in, the vault browser, About, the
-    notices, and the brand chrome and window styles they share. IMPURE (WPF), but not a host: it
-    references no host's API, so a host supplies only what is its own (the owner window, its name
-    where a label needs it, its commands), and the labels and their order are decided in the pure
-    core, where the headless suite holds them (SharedWindowsTests).
-
-    net8.0-windows, the floor every supported host runs: a host built for .NET 10 references it
-    as it references the core. Not built in CI, like the host shells that reference it: WPF needs the
-    Windows desktop runtime, and the suite reads its source instead (ShimWindowTests,
-    SharedWindowsTests). It is compiled by each host's build on a developer machine.
-  -->
-
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
     <RootNamespace>MantlePlace.Wpf</RootNamespace>
     <AssemblyName>MantlePlace.Wpf</AssemblyName>
     <UseWPF>true</UseWPF>
-    <!-- Windows-only by construction: the target framework says so, and every API here is WPF's. -->
     <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
 
@@ -27,12 +13,6 @@
     <ProjectReference Include="..\MantlePlace.Client\MantlePlace.Client.csproj" />
   </ItemGroup>
 
-  <!--
-    The monogram renders the windows draw, linked from where they are committed, beside the Revit
-    plugin's ribbon imagery, so no second copy of a binary is committed. Embedded and read as streams
-    (MarkImages), because a pack URI does not find an assembly AutoCAD loaded into a load context of
-    its own.
-  -->
   <ItemGroup>
     <EmbeddedResource Include="..\..\..\revit\src\MantlePlace.Revit.Addin\Resources\MantlePlaceMark_*.png"
                       LogicalName="MantlePlace.Wpf.Resources.%(Filename)%(Extension)" />

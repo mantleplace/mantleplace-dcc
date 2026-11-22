@@ -16,13 +16,8 @@
 #include "MantlePlaceRoadSplinesLogic.h"
 #include "MantlePlaceTreePointsLogic.h"
 
-// An MPB 3.x bundle read into the shape every artifact handler imports from: which promised file feeds
-// each step, its stated values multiplied into this host's convention, and every step a 3.0 bundle
-// cannot feed skipped with its reason. `MantlePlace.Import.ManifestThreeLogic`.
-
 namespace
 {
-/** A 3.0 manifest of one order: the site origin at (500000, 4000000) m and 100 m high, in metres. */
 FString Manifest(const FString& LocalUnit = TEXT("{\"name\": \"metre\", \"to_metres\": 1}"),
 	const FString& ElevationRaster = TEXT("\"width\": 1009, \"height\": 505, \"bands\": [\"height\"], \"data_type\": \"UInt16\","
 		" \"scale\": 0.01, \"offset\": -12.5, \"unit\": \"metre\", \"nodata\": null, \"frame\": \"local\","
@@ -61,7 +56,6 @@ FString Manifest(const FString& LocalUnit = TEXT("{\"name\": \"metre\", \"to_met
 })JSON"), *LocalUnit, *ElevationRaster, *NotHeld);
 }
 
-/** The read of a bundle that holds every catalog file, with `Text` as its Manifest.json. */
 FMantlePlaceBundleRead ReadOf(const FString& Text, const FString& Root = FString(), const TArray<FString>& Extra = TArray<FString>())
 {
 	TArray<FString> Names = { Root + TEXT("Manifest.json"), Root + TEXT("Elevation/Elevation.png"),
@@ -87,7 +81,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 {
-	// --- The engine's layout for a stated size -----------------------------------------------------
 	{
 		FMantlePlaceLandscapeLayout L;
 		TestTrue(TEXT("1009 x 1009 takes a layout"), FMantlePlaceManifestThreeLogic::ChooseLandscapeLayout(1009, 1009, L));
@@ -102,7 +95,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 			FMantlePlaceManifestThreeLogic::ChooseLandscapeLayout(7 * 33 + 1, 8, L));
 	}
 
-	// --- A full read, inside a wrapper folder ------------------------------------------------------
 	{
 		const FString Text = Manifest();
 		const FMantlePlaceBundleRead Read = ReadOf(Text, TEXT("Bundle/"));
@@ -117,12 +109,10 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the origin's easting"), M.Georef.OriginEastingM, 500000.0);
 		TestEqual(TEXT("the origin's height is the mesh ground"), M.Georef.GroundOrthometricHM, 100.0);
 		TestEqual(TEXT("the site datum, verbatim"), M.SiteVerticalDatum, FString(TEXT("EPSG:3855")));
-		// The streamed terrain's georeference is set from the manifest's own longitude and latitude, verbatim.
 		TestTrue(TEXT("the origin's geographic position is read"), M.Georef.bHasGeographicOrigin);
 		TestEqual(TEXT("the origin's longitude, verbatim"), M.Georef.OriginLongitudeDeg, -97.7);
 		TestEqual(TEXT("the origin's latitude, verbatim"), M.Georef.OriginLatitudeDeg, 30.3);
 
-		// The heightmap: stated numbers in centimetres, nothing else.
 		const FMantlePlaceHeightmapBlock& H = M.Heightmap;
 		TestTrue(TEXT("the landscape is fed"), H.bPresent);
 		TestEqual(TEXT("found at its archive entry"), H.Path, FString(TEXT("Bundle/Elevation/Elevation.png")));
@@ -139,14 +129,12 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the grid's centre north"), H.GridCentreNorthM, 8.0);
 		TestEqual(TEXT("the resolution check holds"), H.ComponentCountX * H.GetQuadsPerComponent() + 1, H.Resolution);
 
-		// The spawn corner is the stated rectangle's centre less half the span, in UE order (X north).
 		const FVector Spawn = M.GetLandscapeSpawnLocation();
 		const FVector2D Span = M.GetAoiSizeUeCm();
 		TestEqual(TEXT("north span is 4 components of 126 quads at 2 m"), Span.X, 4.0 * 126.0 * 200.0);
 		TestEqual(TEXT("spawn north"), Spawn.X, 800.0 - Span.X / 2.0, 1e-6);
 		TestEqual(TEXT("spawn east"), Spawn.Y, -Span.Y / 2.0, 1e-6);
 
-		// The drape, in the origin's grid as a 2.x block holds it.
 		TestTrue(TEXT("the drape is fed"), M.Drape.bPresent);
 		TestEqual(TEXT("drape left"), M.Drape.LeftM, 499000.0);
 		TestEqual(TEXT("drape top"), M.Drape.TopM, 4001000.0);
@@ -155,7 +143,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the buildings are fed"), M.Buildings.bPresent);
 		TestEqual(TEXT("buildings path"), M.Buildings.Path, FString(TEXT("Bundle/Basemap/Buildings.glb")));
 
-		// Terms, by archive entry.
 		const FMantlePlaceFileLicensing* Terms = M.FileLicensing.Find(TEXT("Bundle/Basemap/Buildings.glb"));
 		if (TestNotNull(TEXT("the buildings' terms are read"), Terms))
 		{
@@ -166,7 +153,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("a missing role reads as an ODbL database"),
 			Unstated != nullptr && Unstated->Role == EMantlePlaceOdblRole::Database);
 
-		// Every step it cannot feed is skipped with its reason.
 		const FString* TreesSkip = M.FormatSkips.Find(TEXT("foliage_points"));
 		TestTrue(TEXT("trees not held show the stated reason verbatim"),
 			TreesSkip != nullptr && TreesSkip->Contains(TEXT("The AOI has no tree cover.")));
@@ -179,7 +165,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("its digest"), M.RoadSplines.SiteCsvSha256, FString(TEXT("ee")));
 		TestEqual(TEXT("the site height to add"), M.RoadSplines.SiteHeightM, 100.0);
 
-		// The paint layers: one grayscale weight map per material, named by its file, in the order the reader lists the files.
 		const FMantlePlaceLandscapeLayer* Weights = M.FindLandscapeLayer(TEXT("material_weights"));
 		if (TestNotNull(TEXT("the Materials weight maps are a paint-layer legend"), Weights))
 		{
@@ -194,7 +179,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 				TestEqual(TEXT("Water from its own file"), Bands[1].ImagePath, FString(TEXT("Bundle/Materials/Water.png")));
 				TestEqual(TEXT("a grayscale band is channel 0"), Bands[1].Channel, 0);
 			}
-			// A grayscale map decodes to RGBA with its band in every channel; the plane is that band.
 			FMantlePlaceRgbaImage Water{ TEXT("Bundle/Materials/Water.png"), 101, 51 };
 			FMantlePlaceRgbaImage Grass{ TEXT("Bundle/Materials/Grass.png"), 101, 51 };
 			Water.Pixels.Init(200, 101 * 51 * 4);
@@ -217,7 +201,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("the landscape is not skipped"), M.FormatSkips.Contains(MantlePlaceArtifactId::Landscape()));
 		TestFalse(TEXT("no Cesium terrain is claimed"), M.Cesium.bHasTerrain);
 
-		// In every import mode, each step is planned or listed Not Run with its reason; the log says the same.
 		const MantlePlaceArtifacts::FHandlers Handlers = MantlePlaceArtifacts::MakeAll();
 		for (const EMantlePlaceImportMode Mode : { EMantlePlaceImportMode::Landscape, EMantlePlaceImportMode::Mesh, EMantlePlaceImportMode::Both })
 		{
@@ -252,7 +235,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- Public-record layers: drawn where the order's frame is this host's, each with its credit --------
 	{
 		const FString RecordEntries = TEXT(R"JSON(
     "Records/Parcels.dxf": {"family": "georeferenced", "sha256": "p1", "count": {"kind": "features", "value": 12}, "license": "CC0-1.0",
@@ -333,7 +315,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("public records are planned"), RecordsRow != INDEX_NONE
 			&& Steps.Steps()[RecordsRow].State == EMantlePlaceImportStepState::Waiting);
 
-		// The same files in a foot grid: the frame is stated verbatim and refused by name, never converted (HPS-53).
 		const FMantlePlaceBundleRead FeetRead = ReadOf(Imperial, FString(), Held);
 		FMantlePlaceVaultManifest Feet;
 		TestTrue(TEXT("a foot-grid manifest converts"), FMantlePlaceManifestThreeLogic::ToVaultManifest(FeetRead, Imperial, Feet, Error));
@@ -348,7 +329,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- Trees in the local site frame ------------------------------------------------------------
 	{
 		const FString Text = Manifest(TEXT("{\"name\": \"metre\", \"to_metres\": 1}"),
 			TEXT("\"width\": 1009, \"height\": 1009, \"data_type\": \"UInt16\", \"scale\": 0.01, \"offset\": 0,"
@@ -375,7 +355,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("a file the download lacks is skipped as missing"),
 			M.FormatSkips.Contains(MantlePlaceArtifactId::Landscape()) && !M.Heightmap.bPresent);
 
-		// The reader the import calls takes the stated frame as this host's and offsets as they are.
 		TArray<FMantlePlaceTreePointRow> Rows;
 		FString TreesError;
 		const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
@@ -390,7 +369,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- Roads.csv in the local site frame ---------------------------------------------------------
 	{
 		TArray<FMantlePlaceRoadSpline> Splines;
 		int32 Seen = 0, Unreadable = 0;
@@ -422,7 +400,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("naming the column: ") + Error, Error.Contains(TEXT("class")));
 	}
 
-	// A 3.0 table has no `name` column: it imports, the road unnamed.
 	{
 		TArray<FMantlePlaceRoadSpline> Splines;
 		int32 Seen = 0, Unreadable = 0;
@@ -443,19 +420,16 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("naming it: ") + Error, Error.Contains(TEXT("`y`")));
 	}
 
-	// --- Fail closed on a unit it does not place --------------------------------------------------
 	{
 		const FString Text = Manifest(TEXT("{\"name\": \"US survey foot\", \"to_metres\": 0.3048006096}"));
 		FMantlePlaceVaultManifest M;
 		FString Error;
-		// The reader refuses a local frame that is not in metres before the conversion is reached, naming the unit.
 		TestFalse(TEXT("a site frame not in metres is refused"),
 			FMantlePlaceManifestThreeLogic::ToVaultManifest(ReadOf(Text), Text, M, Error));
 		TestTrue(TEXT("naming the unit: ") + Error, Error.Contains(TEXT("US survey foot")));
 		TestFalse(TEXT("and is not valid"), M.bValid);
 	}
 
-	// --- A raster unit stated as "m" is the metre; an unknown unit is a named skip -----------------
 	for (const TCHAR* UnitText : { TEXT("m"), TEXT("foot") })
 	{
 		const bool bMetre = FCString::Strcmp(UnitText, TEXT("m")) == 0;
@@ -479,7 +453,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- A raster that states no rectangle is a named skip, never a guess -------------------------
 	{
 		const FString Text = Manifest(TEXT("{\"name\": \"metre\", \"to_metres\": 1}"),
 			TEXT("\"width\": 1009, \"height\": 1009, \"data_type\": \"UInt16\", \"scale\": 0.01, \"offset\": 0,"
@@ -494,7 +467,6 @@ bool FMantlePlaceManifestThreeLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the mesh still imports"), M.Mesh.bPresent);
 	}
 
-	// --- A 2.x grid is centred on the origin, as before -------------------------------------------
 	{
 		FMantlePlaceVaultManifest Two;
 		Two.Heightmap.SectionSizeQuads = 63;
@@ -523,9 +495,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceManifestThreeAbsentFilesTest::RunTest(const FString& Parameters)
 {
-	// A file the platform refused as not in the bundle is held against the downloaded manifest: a manifest
-	// that lists it (held, or catalogued and missing from the zip) contradicts the refusal, and the import
-	// fails naming it, rather than reading a platform fault as a layer the site lacks.
 	const TArray<FString> Refused = { TEXT("Basemap/Roads.csv") };
 	const FString RoadsEntry =
 		TEXT("\"Basemap/Roads.csv\": {\"family\": \"host-ready\", \"sha256\": \"ee\", \"count\": {\"kind\": \"rows\", \"value\": 12}},");
@@ -535,7 +504,6 @@ bool FMantlePlaceManifestThreeAbsentFilesTest::RunTest(const FString& Parameters
 		" \"scale\": 0.01, \"offset\": -12.5, \"unit\": \"metre\", \"nodata\": null, \"frame\": \"local\","
 		" \"rectangle\": [-1008, -500, 1008, 516], \"cell_size\": [2, 2]");
 
-	// Catalogued and held: the refusal is contradicted.
 	{
 		const FMantlePlaceBundleRead Read = ReadOf(Manifest());
 		TestEqual(TEXT("a held file the platform refused is named"),
@@ -544,7 +512,6 @@ bool FMantlePlaceManifestThreeAbsentFilesTest::RunTest(const FString& Parameters
 			FMantlePlaceManifestThreeLogic::ListedAmong(Read, { TEXT("basemap/roads.CSV") }).Num(), 1);
 	}
 
-	// Catalogued but missing from the zip: still listed as present, still a contradiction.
 	{
 		const FString Text = Manifest();
 		const FMantlePlaceBundleRead Read = FMantlePlaceBundleReaderLogic::Read(
@@ -555,7 +522,6 @@ bool FMantlePlaceManifestThreeAbsentFilesTest::RunTest(const FString& Parameters
 			FMantlePlaceManifestThreeLogic::ListedAmong(Read, Refused).Num(), 1);
 	}
 
-	// Stated not held (no_data), or not named at all: the refusal stands and nothing is named.
 	{
 		const FString Text = Manifest(DefaultUnit, DefaultRaster, RoadsNotHeld).Replace(*RoadsEntry, TEXT(""));
 		TestFalse(TEXT("the fixture really drops the catalog entry"), Text.Contains(TEXT("\"Basemap/Roads.csv\": {")));
@@ -569,8 +535,6 @@ bool FMantlePlaceManifestThreeAbsentFilesTest::RunTest(const FString& Parameters
 		TestEqual(TEXT("nothing refused, nothing named"),
 			FMantlePlaceManifestThreeLogic::ListedAmong(ReadOf(Manifest()), TArray<FString>()).Num(), 0);
 
-		// The layer the site lacks is shown to the curator: the import window lists its step Not Run with the
-		// manifest's reason, and the result text the window shows names it too.
 		FMantlePlaceVaultManifest M;
 		FString Error;
 		TestTrue(TEXT("a 3.0 manifest without roads converts"), FMantlePlaceManifestThreeLogic::ToVaultManifest(Read, Text, M, Error));
@@ -593,4 +557,4 @@ bool FMantlePlaceManifestThreeAbsentFilesTest::RunTest(const FString& Parameters
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

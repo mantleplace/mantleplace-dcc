@@ -7,37 +7,10 @@ using MantlePlace.PlatformApi;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Drives the shared corpus' <c>platform</c> and <c>client</c> groups through the generated
-/// Platform API client: the Quote, the order refusals and <c>client_update_required</c>.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Each case is one exchange: the request a host sends and the answer the platform gives, both
-/// held to the served spec by <c>check_manifest_conformance.py</c>. A case is replayed twice over
-/// a handler that answers with the case's response. Through <see cref="PlatformTransport"/>, the
-/// way every Revit call is sent, it asserts the request: the verb, the route and query, the client
-/// header, the bearer, the <c>Idempotency-Key</c> and the body. Through the generated
-/// <see cref="PlatformApiClient"/> alone, it asserts the answer is one the generated types read:
-/// the success type for a success, the typed <c>ApiException&lt;T&gt;</c> for a refusal, never the
-/// untyped exception a body the types cannot hold produces.
-/// </para>
-/// <para>
-/// An order body is sent as the case's JSON, the transport's documented path for a body, rather
-/// than serialised from the generated body type: the generated <c>payment</c> enum writes its C#
-/// member name (<c>Credit</c>), not the spec's value (<c>credit</c>).
-/// </para>
-/// <para>
-/// Generated type names carry a number that moves when the spec gains an operation, so none is
-/// named here: a body type is found from the operation's signature, and a result is read by its
-/// JSON names.
-/// </para>
-/// </remarks>
 internal static class PlatformConformanceTests
 {
     private const string Base = "https://test.example";
 
-    /// <summary>Stands in for the key a case leaves out, once the client has refused to send without one.</summary>
     private const string PlaceholderKey = "corpus-placeholder-key";
 
     private static readonly HashSet<string> ConsumedExpectationKeys =
@@ -134,7 +107,6 @@ internal static class PlatformConformanceTests
             key = PlaceholderKey;
         }
 
-        // The request, as the transport sends it.
         Recorder handler = new(status, answerBody);
         List<ClientUpdateNotice> notices = [];
         PlatformTransport transport = new(Base, clientHeader, handler, notices.Add);
@@ -155,7 +127,6 @@ internal static class PlatformConformanceTests
         run.Equal(answer.Status, status, "the answer's status, as sent");
         run.Equal(notices.Count, status == ClientUpdateNotice.Status ? 1 : 0, "the update notice is raised for a 426 client_update_required only");
 
-        // The answer, as the generated types read it.
         (int seenStatus, object? typed) = ReadTyped(operation, key, status, answerBody);
         run.Equal(seenStatus, status, "the generated client saw the status");
         if (typed is null)
@@ -186,7 +157,6 @@ internal static class PlatformConformanceTests
 
         if (ConformanceCorpus.WantsString(corpusCase, "coverage", out string coverage))
         {
-            // The generated enum reads the spec's value; written back it is its C# member name.
             run.True(string.Equals(quote["coverage"]?.ToString(), coverage, StringComparison.OrdinalIgnoreCase), "coverage " + coverage);
         }
 
@@ -247,7 +217,6 @@ internal static class PlatformConformanceTests
         }
     }
 
-    /// <summary>Runs the operation on the generated client alone and returns what its types made of the answer.</summary>
     private static (int Status, object? Typed) ReadTyped(
         Func<PlatformApiClient, string?, CancellationToken, Task> operation,
         string? key,
@@ -263,7 +232,6 @@ internal static class PlatformConformanceTests
         }
         catch (ApiException exception)
         {
-            // ApiException<T> carries the body read as the spec's type; a bare ApiException means it could not be.
             object? typed = exception.GetType().IsGenericType
                 ? exception.GetType().GetProperty("Result")?.GetValue(exception)
                 : null;
@@ -271,7 +239,6 @@ internal static class PlatformConformanceTests
         }
     }
 
-    /// <summary>The generated order call, its body type found from its own signature.</summary>
     private static Task PlaceOrder(PlatformApiClient api, string? key, CancellationToken cancellationToken)
     {
         MethodInfo method = typeof(PlatformApiClient).GetMethods()
@@ -321,7 +288,6 @@ internal static class PlatformConformanceTests
 
     private sealed record Seen(string Method, string Url, string Authorization, string ClientHeader, string IdempotencyKey, string Body);
 
-    /// <summary>Records each request and answers every one with the case's response.</summary>
     private sealed class Recorder(int status, string body) : HttpMessageHandler
     {
         internal List<Seen> Requests { get; } = [];

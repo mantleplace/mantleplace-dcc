@@ -8,41 +8,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.AutoCad.Addin;
 
-/// <summary>What an import did: the plan, the text that says what happened, and whether anything went in.</summary>
 internal sealed record OrderImportResult(AutoCadImportPlan Plan, string Summary, bool PlacedAnything);
 
-/// <summary>
-/// Places a planned order in a drawing, one step at a time: the shell half of <see cref="AutoCadImportPlanner"/>.
-/// </summary>
-/// <remarks>
-/// <para>
-/// ⛔ <b>Every number placed is the bundle's.</b> Contour vertices and heights go in as the file holds
-/// them and the aerial at its published insertion; the drawing's unit setting is never read and never
-/// set, and no coordinate is converted, offset or reprojected (root CLAUDE.md, the boundary that keeps
-/// this client thin). The degrees-to-radians step is AutoCAD's API taking an angle, not a placement value.
-/// </para>
-/// <para>
-/// <b>Everything is checked before anything is drawn</b> (HPS-26): <see cref="Verify"/>, the run's first
-/// step, finds each placed part's file and matches its bytes to its published digest, and a mismatch
-/// refuses the whole import with nothing in the drawing. Each part is then one step
-/// (<see cref="Place"/>), one transaction, which is what lets the import window's Cancel stop the run
-/// between parts and never inside one (<see cref="AutoCadImportRun"/>, <c>HPS-60</c>). The aerial goes in
-/// before the contours so the linework draws over the image, and the public-record layers and the site
-/// linework go in last, over both.
-/// </para>
-/// <para>
-/// The aerial is an external reference, as every AutoCAD raster image is, so its file is extracted to the
-/// order's retained cache folder (<see cref="ExtractionLifetime.Retained"/>), which a later import of
-/// another order does not touch. The contours, record and linework drawings are read and dropped, and so
-/// is the surface's LandXML once Civil 3D has built the surface from it.
-/// </para>
-/// <para>
-/// <b>Civil 3D is observed through its part alone.</b> When the presence test lets the part load, the part
-/// reads the drawing's coordinate zone (never sets it) and builds the surface; when it does not (plain
-/// AutoCAD, or Civil 3D's "as AutoCAD" launcher), the plan is plain AutoCAD's and says the surface needs
-/// Civil 3D. A part that fails to load is the second case, not a crash.
-/// </para>
-/// </remarks>
 internal sealed class OrderImporter : IDisposable
 {
     private readonly Document _document;
@@ -63,23 +30,14 @@ internal sealed class OrderImporter : IDisposable
         DeliveryLine = deliveryLine;
     }
 
-    /// <summary>The plan, not refused.</summary>
     internal AutoCadImportPlan Plan { get; }
 
-    /// <summary>Whether the Civil 3D part is on, which is what builds the surface.</summary>
     internal bool Civil3d => _civil3d is not null;
 
-    /// <summary>The order's unit system, linear unit and delivery CRS, for the import window's second line.</summary>
     internal string? DeliveryLine { get; }
 
-    /// <summary>
-    /// Opens the zip, observes the drawing and plans the order, drawing nothing; or says why nothing will be
-    /// imported (<paramref name="refused"/>, and <c>null</c> returned).
-    /// </summary>
     internal static OrderImporter? Prepare(Document document, string zipPath, PresenceVerdict presence, out OrderImportResult? refused)
     {
-        // A received export and Import Bundle both open the zip here, so a file that is not a bundle is
-        // refused in one set of words whichever way it came, before the drawing is read.
         if (!LocalBundleImport.TryOpen(zipPath, out LocalBundleArchive? opened, out string? refusal))
         {
             refused = Refused(new AutoCadImportPlan { Refusal = refusal });
@@ -98,7 +56,7 @@ internal sealed class OrderImporter : IDisposable
                 {
                     zone = DrawingObservations.Zone(Civil3dPartLoader.ReadZoneCode(civil3d, database));
                 }
-#pragma warning disable CA1031 // A zone that cannot be read refuses the import; it never takes AutoCAD down.
+#pragma warning disable CA1031
                 catch (Exception ex)
 #pragma warning restore CA1031
                 {
@@ -110,7 +68,6 @@ internal sealed class OrderImporter : IDisposable
                 }
             }
 
-            // A 3.x bundle from its catalog and frames, a 2.x one from its hosts.autocad block.
             AutoCadBlockRead read = AutoCadBlockReader.Read(opened.Manifest, opened.ManifestText);
             AutoCadImportPlan plan = AutoCadImportPlanner.Plan(read, DrawingObservations.Geolocation(database), zone);
             if (plan.IsRefused)
@@ -132,16 +89,10 @@ internal sealed class OrderImporter : IDisposable
         }
     }
 
-    /// <summary>
-    /// The first step: finds every placed part's file and checks it against its published digest, drawing
-    /// nothing. <c>false</c> when a file fails its check, which refuses the whole import; a file the bundle
-    /// does not hold fails only its own part.
-    /// </summary>
     internal bool Verify()
     {
         foreach (PlannedPart part in Plan.Parts.Where(p => p.Place && (p.Kind != AutoCadPart.Surface || Civil3d)))
         {
-            // The records are several files, one per layer; every other part is one.
             IEnumerable<(string Path, string Sha256, PlannedFile? File)> wanted = part.Kind == AutoCadPart.Records
                 ? part.Files.Select(f => (f.Path, f.Sha256, (PlannedFile?)f))
                 : [(part.Path, part.Sha256, null)];
@@ -184,15 +135,10 @@ internal sealed class OrderImporter : IDisposable
         return true;
     }
 
-    /// <summary>
-    /// One step: places <paramref name="kind"/> in its own transaction, under the drawing's lock. <c>false</c>
-    /// when it did not go in; what it said, placed or not, is in the closing report.
-    /// </summary>
     internal bool Place(AutoCadPart kind)
     {
         if (_outcomes.ContainsKey(kind))
         {
-            // Its file was not in the bundle: the verification already said so.
             return false;
         }
 
@@ -222,8 +168,6 @@ internal sealed class OrderImporter : IDisposable
         }
     }
 
-    /// <summary>What the import did, for the window's report, the command line and the web.</summary>
-    /// <param name="notReached">What each part the run never reached says, in place of the plan's sentence.</param>
     internal OrderImportResult Result(IReadOnlyDictionary<AutoCadPart, string>? notReached)
     {
         if (_integrityRefusal is not null)
@@ -244,7 +188,6 @@ internal sealed class OrderImporter : IDisposable
 
     private static OrderImportResult Refused(AutoCadImportPlan plan) => new(plan, plan.Summary(), false);
 
-    /// <summary>Runs one part; a part AutoCAD refuses is reported and the others still go in.</summary>
     private static string Run(AutoCadPart kind, Func<string?> place, string? placedSentence, ref bool placedAnything)
     {
         try
@@ -267,20 +210,10 @@ internal sealed class OrderImporter : IDisposable
         }
         catch (Exception refused) when (refused is ArgumentException or InvalidOperationException or NotSupportedException)
         {
-            // What Civil 3D's managed API throws for a file it will not build from.
             return AutoCadImportPlanner.FailedSentence(kind, $"the host refused it ({refused.GetType().Name}: {refused.Message}).");
         }
     }
 
-    /// <summary>
-    /// The surface as a Civil 3D TIN surface on its layer, built by Civil 3D from the block's LandXML. The
-    /// zone check has already shown the drawing's zone to be the order's, or the drawing to have none. For
-    /// a 3.x order the file's own units and coordinate system are held to the frame the manifest states for
-    /// it first, so a file in another frame builds nothing rather than a surface in the wrong place.
-    /// The drawing's Civil 3D drawing units are then held to the order's, for any order: Civil 3D converts
-    /// the file to the drawing's units as it reads it, so in a drawing of the other units nothing is built
-    /// either, and no layer is made for it.
-    /// </summary>
     private static string BuildSurface(Database database, Type civil3d, string landXmlPath, PlannedPart part, AutoCadImportPlan plan)
     {
         string orderId = plan.OrderId;
@@ -293,7 +226,6 @@ internal sealed class OrderImporter : IDisposable
             }
         }
 
-        // Civil 3D converts the file's unit to the drawing's as it reads it: only a drawing in the order's units gets the surface.
         if (LandXmlSurface.DrawingUnitsProblem(plan, Civil3dPartLoader.ReadDrawingUnits(civil3d, database)) is { } unitsProblem)
         {
             throw new PartRefusedException(unitsProblem + ".");
@@ -314,7 +246,6 @@ internal sealed class OrderImporter : IDisposable
         return AutoCadImportPlanner.SurfacePlacedSentence(part, name, points);
     }
 
-    /// <summary>The contours as lightweight polylines on their layer, each at its published height.</summary>
     private static string PlaceContours(Database database, string dxfPath, PlannedPart part)
     {
         IReadOnlyList<PublishedContour> contours = ReadPolylines(dxfPath, "contours");
@@ -325,12 +256,6 @@ internal sealed class OrderImporter : IDisposable
         return AutoCadImportPlanner.ContoursPlacedSentence(part, placed);
     }
 
-    /// <summary>
-    /// Each public-record layer's polylines on that layer's own layer, as its file holds them. Every file is
-    /// read before anything is drawn. A file the reader refuses (a <c>POINT</c> entity is the usual one) is left
-    /// out on its own, named in what the user is told, and the other layers still go in; only a set with no
-    /// readable layer refuses the part.
-    /// </summary>
     private static string PlaceRecords(Database database, IReadOnlyList<(PlannedFile File, string Path)> files, PlannedPart part)
     {
         AutoCadRecordSet set = AutoCadRecordSet.Read([.. files.Select(f => f.File)], f => File.OpenText(files.First(x => ReferenceEquals(x.File, f)).Path));
@@ -351,7 +276,6 @@ internal sealed class OrderImporter : IDisposable
         return AutoCadImportPlanner.RecordsPlacedSentence(part, placed, set.Refused);
     }
 
-    /// <summary>The site linework's polylines under its layer, each on the layer the drawing puts it on.</summary>
     private static string PlaceLinework(Database database, string dxfPath, PlannedPart part)
     {
         IReadOnlyList<PublishedContour> polylines = ReadPolylines(dxfPath, "site linework");
@@ -364,7 +288,6 @@ internal sealed class OrderImporter : IDisposable
         return AutoCadImportPlanner.LineworkPlacedSentence(part, placed, layers);
     }
 
-    /// <summary>A drawing of flat polylines, read whole; a file the reader refuses refuses the part, by name.</summary>
     private static IReadOnlyList<PublishedContour> ReadPolylines(string dxfPath, string drawing)
     {
         using StreamReader reader = File.OpenText(dxfPath);
@@ -373,10 +296,6 @@ internal sealed class OrderImporter : IDisposable
             : polylines!;
     }
 
-    /// <summary>
-    /// Lightweight polylines into model space, vertices and elevation as the file holds them, each on the layer
-    /// <paramref name="layerFor"/> names. Returns how many went in; a polyline of fewer than two vertices is no line.
-    /// </summary>
     private static int AppendPolylines(Database database, Transaction transaction, IReadOnlyList<PublishedContour> polylines, Func<PublishedContour, string> layerFor)
     {
         BlockTableRecord model = (BlockTableRecord)transaction.GetObject(SymbolUtilityServices.GetBlockModelSpaceId(database), OpenMode.ForWrite);
@@ -415,7 +334,6 @@ internal sealed class OrderImporter : IDisposable
         return placed;
     }
 
-    /// <summary>The aerial at its published insertion: lower-left corner, ground size, rotation about that corner.</summary>
     private static string? PlaceAerial(Database database, string imagePath, PlannedPart part, string orderId)
     {
         AerialInsertion insertion = part.Insertion ?? throw new PartRefusedException("the plan carries no insertion for it.");
@@ -446,8 +364,6 @@ internal sealed class OrderImporter : IDisposable
             ShowImage = true,
         };
 
-        // AutoCAD's own rotation, about the published corner: the plugin hands it the angle and works
-        // out nothing.
         if (insertion.RotationDeg != 0)
         {
             image.TransformBy(Matrix3d.Rotation(insertion.RotationDeg * Math.PI / 180.0, Vector3d.ZAxis, corner));
@@ -490,10 +406,8 @@ internal sealed class OrderImporter : IDisposable
         return name;
     }
 
-    /// <summary>An order id as a dictionary key: letters, digits, dash and underscore kept, the rest a dash.</summary>
     private static string SymbolSafe(string text) =>
         string.Concat(text.Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '-'));
 
-    /// <summary>A part that cannot be placed, with the reason the user is shown.</summary>
     private sealed class PartRefusedException(string message) : Exception(message);
 }

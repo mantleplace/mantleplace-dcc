@@ -2,11 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The shared import window's state (<see cref="ImportWindowState"/>): which buttons it shows, what a
-/// press or a close does at each point of a run, the steps and their order, Cancel between steps, and
-/// the step's clock. The window is WPF and CI never builds it, so everything it decides is here.
-/// </summary>
 internal static class ImportWindowStateTests
 {
     internal static int Run()
@@ -219,8 +214,6 @@ internal static class ImportWindowStateTests
 
         run.Case("a host whose steps are its own names its rows, and its status line says that name with no estimate", () =>
         {
-            // The kind a named row carries is not read for its words or its cost: AutoCAD's steps are
-            // not Revit's, and a measured cost keyed on a Revit kind must not be said beside them.
             Dictionary<ImportStepKind, TimeSpan> measured = new() { [default] = TimeSpan.FromSeconds(150) };
             ImportWindowState state = new(offersChecklist: false, "AutoCAD", measured);
             ImportRunView view = ImportRunView.From(

@@ -2,29 +2,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Whether one surface lies on another, measured vertically rather than eyeballed.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The question this answers came from a screenshot: 23 site-boundary subdivisions cut into one
-/// terrain, each drawing its own contour lines, and the contours do not line up with the continuous
-/// ground beneath them. Two explanations fit that picture and they call for opposite responses. If
-/// every subdivision vertex sits <em>on</em> the ground to within a millimetre, the surfaces agree
-/// and the contour mismatch is Revit generating contours per element — nothing to fix, something to
-/// document. If the vertices deviate, the subdivisions are genuinely different surfaces and that is
-/// a defect.
-/// </para>
-/// <para>
-/// ⛔ The arithmetic lives here rather than in the shim for <c>HPS-02</c>'s reason, and for a
-/// sharper one: this session already watched a plausible-sounding claim about Revit survive two
-/// weeks in a comment because nothing asserted it. A number that decides between "fix it" and
-/// "document it" has to be produced by code a test can drive without launching Revit.
-/// </para>
-/// </remarks>
 internal static class SurfaceAgreementTests
 {
-    /// <summary>A unit square at z = 0, as two triangles.</summary>
     private static readonly SurfacePoint[] FlatVertices =
     [
         new(0.0, 0.0, 0.0),
@@ -63,9 +42,6 @@ internal static class SurfaceAgreementTests
 
         run.Case("the deviation is absolute, so below counts as much as above", () =>
         {
-            // ⛔ Signed deltas would cancel across a surface that wanders either side of the ground,
-            // and "mean deviation 0.0" on a surface that is wrong everywhere is the exact shape of
-            // reassuring number this probe exists to avoid producing.
             SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(
                 FlatVertices,
                 FlatTriangles,
@@ -77,9 +53,6 @@ internal static class SurfaceAgreementTests
 
         run.Case("the ground's height is interpolated across a sloped triangle, not snapped", () =>
         {
-            // A single triangle rising to 3 m at one corner. Sampled at its centroid the ground is
-            // at exactly 1 m — the average of 0, 0 and 3 — so a sample there deviates by nothing.
-            // Snapping to the nearest vertex instead would report 1 m or 2 m and invent a defect.
             SurfacePoint[] vertices = [new(0.0, 0.0, 0.0), new(3.0, 0.0, 0.0), new(0.0, 3.0, 3.0)];
             SurfaceTriangle[] triangles = [new(0, 1, 2)];
 
@@ -92,10 +65,6 @@ internal static class SurfaceAgreementTests
 
         run.Case("a sample outside the footprint is counted, not measured", () =>
         {
-            // A subdivision that reaches past the ground it was cut from is a different finding
-            // from one that floats above it, and folding the two together would hide both. It also
-            // must not be scored as a zero deviation, which would make the summary look better the
-            // further out the sample lay.
             SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(
                 FlatVertices,
                 FlatTriangles,
@@ -108,10 +77,6 @@ internal static class SurfaceAgreementTests
 
         run.Case("a point on a shared edge belongs to the surface, not to neither triangle", () =>
         {
-            // The diagonal of the flat square is shared by both triangles. A strict inside test
-            // drops every vertex that happens to land on an edge — which on a mesh whose samples
-            // come from the same point set is most of them — and the probe would then report a
-            // surface as missing that it sits exactly on.
             SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(
                 FlatVertices, FlatTriangles, [new SurfacePoint(5.0, 5.0, 0.0), new SurfacePoint(0.0, 0.0, 0.0)]);
 
@@ -132,8 +97,6 @@ internal static class SurfaceAgreementTests
 
         run.Case("a triangle index outside the vertex list is skipped rather than thrown on", () =>
         {
-            // The shim feeds this from Revit's own tessellation. A malformed face there must degrade
-            // to a thinner measurement, because a probe that throws leaves the reader with nothing.
             SurfaceTriangle[] triangles = [new(0, 1, 99)];
 
             SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(
@@ -151,10 +114,6 @@ internal static class SurfaceAgreementTests
 
         run.Case("a long list is strided, and keeps both of its ends", () =>
         {
-            // ⛔ The ends are the finding. A subdivision that reaches past the ground it was cut
-            // from does so at its extremes, so a sample that stops short of the last vertex is a
-            // sample that cannot see the thing most worth seeing. Taking a prefix instead would
-            // sample one part of a tessellation-ordered list, which is not a random part.
             List<SurfacePoint> source = [];
             for (int i = 0; i < 1000; i++)
             {
@@ -171,12 +130,6 @@ internal static class SurfaceAgreementTests
 
         run.Case("a mesh far larger than one index cell measures every one of its own vertices", () =>
         {
-            // ⛔ The failure this guards is silent and reads as the defect being hunted: a triangle
-            // filed in the wrong index cell makes a sample that sits exactly on the surface report
-            // as off the footprint, or — worse — as a deviation. So the surface is big enough to
-            // span many cells, it slopes in both axes so a wrong triangle gives a wrong height
-            // rather than the same one, and every vertex of it is offered back as a sample. All of
-            // them must land, and all must agree to the millimetre.
             const int side = 60;
             List<SurfacePoint> vertices = [];
             for (int row = 0; row <= side; row++)
@@ -207,10 +160,6 @@ internal static class SurfaceAgreementTests
 
         run.Case("a sample beyond a many-celled mesh is still outside it", () =>
         {
-            // The complement of the case above. An index that clamps a query into the nearest cell
-            // would make anything outside the surface match its edge triangles and report a
-            // deviation instead of an absence — quietly turning "this subdivision overruns its
-            // ground" into "this subdivision is the wrong height".
             const int side = 40;
             List<SurfacePoint> vertices = [];
             for (int row = 0; row <= side; row++)
@@ -286,15 +235,6 @@ internal static class SurfaceAgreementTests
 
         run.Case("the noise floor is the reference mesh's own chord error, measured", () =>
         {
-            // ⛔ The claim this whole arm rests on: a control taken off the surface a mesh
-            // approximates reads that mesh's chords falling away from it, and nothing else. Testing
-            // it needs a surface with chords to fall — a flat mesh has none, and would let a reading
-            // of zero pass for a measurement.
-            //
-            // An arch across x, z = sin(pi x / 10), tessellated coarsely at x = 0, 5, 10: between
-            // x = 0 and x = 5 the mesh runs straight from z = 0 to z = 1, so at x = 2.5 its chord
-            // sits at 0.5 while the surface is at sin(pi/4) = 0.7071. The sag between them is the
-            // floor, and it is arithmetic rather than an eyeball.
             SurfacePoint[] arch =
             [
                 new(0.0, 0.0, 0.0), new(5.0, 0.0, 1.0), new(10.0, 0.0, 0.0),
@@ -315,9 +255,6 @@ internal static class SurfaceAgreementTests
 
         run.Case("a control sample the reference surface does not cover is reported, not dropped", () =>
         {
-            // ⛔ A floor measured over a corner of a surface is a floor about that corner. Silently
-            // averaging one and calling it the mesh's is how a deviation gets judged against a
-            // yardstick taken somewhere else.
             TessellationNoiseFloor floor = SurfaceAgreementCheck.MeasureNoiseFloor(
                 FlatVertices, FlatTriangles,
                 [new SurfacePoint(5.0, 5.0, 0.02), new SurfacePoint(500.0, 500.0, 0.0)]);
@@ -331,9 +268,6 @@ internal static class SurfaceAgreementTests
 
         run.Case("a control that only landed on the mesh's own vertices establishes nothing", () =>
         {
-            // ⛔ Interpolation at a vertex is exact by construction, so this control reads 0.000 m
-            // while having measured no chord at all. A floor of zero and a floor that was never
-            // taken produce the same number and must not produce the same verdict.
             TessellationNoiseFloor floor = SurfaceAgreementCheck.MeasureNoiseFloor(
                 FlatVertices, FlatTriangles, FlatVertices);
 
@@ -370,9 +304,6 @@ internal static class SurfaceAgreementTests
 
         run.Case("agreement within tolerance survives a floor far larger than it", () =>
         {
-            // ⛔ Tolerance wins over the floor. A surface agreeing to a millimetre has agreed
-            // however coarsely its neighbour's chords are drawn: the floor bounds what a
-            // disagreement has to clear, never what an agreement is allowed to be.
             SurfaceAgreement agreement = SurfaceAgreementCheck.Compare(
                 FlatVertices, FlatTriangles, [new SurfacePoint(5.0, 5.0, 0.0004)]);
 
@@ -413,6 +344,5 @@ internal static class SurfaceAgreementTests
         return run.Report("surface agreement");
     }
 
-    /// <summary>A floor of <paramref name="metres"/>, taken from samples that were not vertices.</summary>
     private static TessellationNoiseFloor FloorOf(double metres) => new(8, 0, 0, metres);
 }

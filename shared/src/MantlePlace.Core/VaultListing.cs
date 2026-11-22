@@ -3,10 +3,8 @@ using System.Text.Json;
 
 namespace MantlePlace.Core;
 
-/// <summary>Where a bundle stands, as an open vocabulary (<c>HPS-22</c>).</summary>
 public enum BundleStatus
 {
-    /// <summary>Not a parse error — the platform added a word this build has not met.</summary>
     Unknown,
     Available,
     RefreshPending,
@@ -14,26 +12,10 @@ public enum BundleStatus
     Failed,
 }
 
-/// <summary>Which layer families a listing row advertises. Only meaningful when known.</summary>
 public readonly record struct BundleLayers(bool Imagery, bool Basemap, bool Elevation);
 
-/// <summary>One downloadable format and its recorded size.</summary>
-/// <param name="Format">Format token as the platform spells it.</param>
-/// <param name="ByteSize">
-/// <c>0</c> means UNRECORDED, not an empty file. A host that hides zero-size formats hides half the
-/// download menu.
-/// </param>
 public readonly record struct BundleDownloadFormat(string Format, long ByteSize);
 
-/// <summary>
-/// One row of the vault listing.
-/// </summary>
-/// <remarks>
-/// ⛔<c>HPS-20</c>: every optional integrity fact is nullable, and <c>null</c> means <em>unknown</em>
-/// — never <em>absent</em> and never <em>zero</em>. A host that coerces a null
-/// <see cref="SizeBytes"/> to <c>0</c> later compares a real 134 MB download against an expected
-/// size of zero and declares a mismatch on a bundle it never knew the size of.
-/// </remarks>
 public sealed class VaultBundle
 {
     public required string OrderId { get; init; }
@@ -46,17 +28,8 @@ public sealed class VaultBundle
 
     public BundleStatus Status { get; init; }
 
-    /// <summary><c>null</c> when the row said nothing — not "all false".</summary>
     public BundleLayers? Layers { get; init; }
 
-    /// <summary>
-    /// The listed bundle's manifest version; <c>null</c> when the listing reported none.
-    /// </summary>
-    /// <remarks>
-    /// A string spanning both families — the vault lists bundles at rest, and one cut before the
-    /// MPB re-baseline reports the integer 19 while one cut after reports "1.0.0". Surfaced, never
-    /// gated on: the import gate is the one place a version decides anything.
-    /// </remarks>
     public string? ManifestVersion { get; init; }
 
     public long? SizeBytes { get; init; }
@@ -67,48 +40,22 @@ public sealed class VaultBundle
 
     public IReadOnlyList<BundleDownloadFormat> DownloadFormats { get; init; } = [];
 
-    /// <summary>
-    /// The order's extent in degrees, as the vault record states it; <c>null</c> when the row carried
-    /// none, or not all four bounds as numbers. Unknown, never <c>0,0,0,0</c> (<c>HPS-20</c>): it is what
-    /// Open in Curator hands the web curator to draw.
-    /// </summary>
     public CuratorExtent? Extent { get; init; }
 
-    /// <summary>
-    /// The levels a 3.0 order offers, with the platform's recommendation; <c>null</c> on a 2.x order,
-    /// whose download and levels are as they were (<see cref="DownloadLevels"/>).
-    /// </summary>
     public LevelOffer? Levels { get; init; }
 
-    /// <summary>Whether this row can be downloaded right now.</summary>
     public bool IsDownloadable => Status == BundleStatus.Available;
 }
 
-/// <summary>A parsed listing, plus what was skipped getting there.</summary>
 public sealed class VaultListing
 {
     public IReadOnlyList<VaultBundle> Bundles { get; init; } = [];
 
-    /// <summary>
-    /// One line per malformed row. Surfaced rather than swallowed: ⛔<c>HPS-21</c> keeps the vault
-    /// usable when one row is odd, and a silent skip would hide platform corruption indefinitely.
-    /// </summary>
     public IReadOnlyList<string> Warnings { get; init; } = [];
 }
 
-/// <summary>Reading a vault listing response.</summary>
 public static class VaultListingReader
 {
-    /// <summary>
-    /// Parses a listing body.
-    /// </summary>
-    /// <remarks>
-    /// ⛔<c>HPS-21</c>, and the distinction is the whole rule: a row that is not an object, or that
-    /// lacks a non-empty <c>id</c>, is skipped with a warning and the call SUCCEEDS. A missing or
-    /// non-array top-level <c>bundles</c> is a contract violation and fails closed. Collapsing the
-    /// two either hides corruption or tells a paying curator their vault is empty.
-    /// </remarks>
-    /// <returns><c>null</c> on success, or the message to show.</returns>
     public static string? TryParse(string body, out VaultListing listing)
     {
         listing = new VaultListing();
@@ -131,8 +78,6 @@ public static class VaultListingReader
                 return "The vault listing response was not valid JSON.";
             }
 
-            // An explicit platform error outranks the shape check: "your token expired" is more
-            // useful than "this is not a vault listing", and both are true.
             if (PlatformErrors.TryRead(root, out PlatformError error))
             {
                 return error.Message;
@@ -178,15 +123,6 @@ public static class VaultListingReader
         }
     }
 
-    /// <summary>
-    /// <c>HPS-22</c>: an unrecognised status word is <see cref="BundleStatus.Unknown"/>, never a
-    /// parse error. Matching is case-insensitive.
-    /// </summary>
-    /// <remarks>
-    /// A host that switches on exact strings silently drops every bundle the day the platform adds
-    /// a synonym — and it drops them from a paying curator's vault, which is the worst possible
-    /// place to be strict.
-    /// </remarks>
     public static BundleStatus ParseStatus(string? status) => (status ?? string.Empty).Trim() switch
     {
         var word when word.Equals("available", StringComparison.OrdinalIgnoreCase) => BundleStatus.Available,
@@ -214,10 +150,6 @@ public static class VaultListingReader
         Extent = ReadExtent(row),
     };
 
-    /// <summary>
-    /// All four bounds or nothing: a partial extent drawn from three of four would be a guess the
-    /// curator could not tell from a fact.
-    /// </summary>
     private static CuratorExtent? ReadExtent(JsonElement row)
         => row.Object("extent") is { } extent
             && extent.OptionalDouble("west") is { } west
@@ -227,11 +159,6 @@ public static class VaultListingReader
                 ? new CuratorExtent(west, south, east, north)
                 : null;
 
-    /// <summary>
-    /// <c>null</c> when the row's <c>layers</c> is absent or null — nothing is known, and no flag
-    /// may be read. Reading "the object is present" as "all three true" passes a laxer check and is
-    /// wrong.
-    /// </summary>
     private static BundleLayers? ReadLayers(JsonElement row)
         => row.Object("layers") is { } layers
             ? new BundleLayers(layers.Bool("imagery"), layers.Bool("basemap"), layers.Bool("elevation"))
@@ -283,9 +210,6 @@ public static class VaultListingReader
         return parsed;
     }
 
-    /// <summary>
-    /// A file size outgrows <see cref="int"/> at 2 GB, and bundles do.
-    /// </summary>
     private static long? ReadOptionalLong(JsonElement parent, string field)
         => parent.TryGetProperty(field, out JsonElement value) && value.ValueKind == JsonValueKind.Number
             ? (long)value.GetDouble()

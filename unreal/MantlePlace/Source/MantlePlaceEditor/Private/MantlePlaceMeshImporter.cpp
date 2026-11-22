@@ -26,9 +26,6 @@ namespace MantlePlaceMeshImporter
 		UAssetImportTask* Task = NewObject<UAssetImportTask>();
 		Task->Filename = GlbFile;
 		Task->DestinationPath = DestPath;
-		// Named on the way in, never renamed afterwards -- a rename here would purge the import's
-		// undo transaction. See MantlePlaceImportNaming::ImportNameFor. This reaches the glTF's
-		// StaticMesh only; anything embedded alongside it still falls to RenameToConvention below.
 		Task->DestinationName = MantlePlaceImportNaming::StaticMeshName(GlbFile);
 		Task->bAutomated = true;
 		Task->bReplaceExisting = true;
@@ -38,11 +35,6 @@ namespace MantlePlaceMeshImporter
 		Tasks.Add(Task);
 		Module.Get().ImportAssetTasks(Tasks);
 
-		// Load every imported object (mesh + embedded textures/materials) before renaming, since
-		// renaming invalidates the path strings. The StaticMesh arrives already named (above), so
-		// RenameToConvention is a no-op for it; it is here only for embedded sub-assets, which
-		// DestinationName cannot reach. No bundle has shipped one yet -- if one does, the import's
-		// undo transaction is what pays, so fix it upstream rather than leaving the rename.
 		TArray<UObject*> Imported;
 		for (const FString& Path : Task->ImportedObjectPaths)
 		{
@@ -56,8 +48,6 @@ namespace MantlePlaceMeshImporter
 			MantlePlaceImportNaming::RenameToConvention(Obj);
 		}
 
-		// Interchange returns the mesh plus its embedded assets in an unspecified order, so
-		// select the StaticMesh explicitly rather than trusting index 0.
 		for (UObject* Obj : Imported)
 		{
 			if (UStaticMesh* Mesh = Cast<UStaticMesh>(Obj))
@@ -70,22 +60,8 @@ namespace MantlePlaceMeshImporter
 		return nullptr;
 	}
 
-	/**
-	 * The mesh's Nanite settings, applied in one rebuild: Nanite on when the bundle recommends it, and a
-	 * fallback that keeps every triangle on any Nanite mesh. Complex collision is cooked from the render
-	 * LOD0, which for a Nanite mesh is its fallback mesh, reduced by default (27,123 of 255,024 triangles
-	 * on a 0.25 km2 terrain, up to 0.88 m off the surface Nanite draws). A fallback that keeps every
-	 * triangle makes the collision the drawn surface. Interchange turns Nanite on for a glTF by default,
-	 * so this is every terrain mesh. A fallback reduced to a bounded error is no cheaper: on a 64 km2,
-	 * 1,000,000-triangle terrain even a 2 m bound kept all but 22 triangles.
-	 */
 	static void SetNaniteSettings(UStaticMesh* Mesh, bool bEnableNanite)
 	{
-		// Through the accessors: UStaticMesh::NaniteSettings is UE_DEPRECATED(5.7) and goes private in
-		// the next release, so touching the member directly is a compile error there rather than the
-		// C4996 it is here. NotifyNaniteSettingsChanged() is the targeted PostEditChangeProperty for this
-		// property -- a bare PostEditChange() rebuilds more than the Nanite data needs -- and it rebuilds
-		// the mesh, so it runs once, and only when a setting changed.
 		FMeshNaniteSettings Settings = Mesh->GetNaniteSettings();
 		bool bChanged = false;
 		if (bEnableNanite && !Settings.bEnabled)
@@ -108,7 +84,6 @@ namespace MantlePlaceMeshImporter
 		}
 	}
 
-	/** Collide as the mesh's own triangles: complex as simple, with Interchange's simple hull removed. */
 	static void SetSurfaceCollision(UStaticMesh* Mesh)
 	{
 		Mesh->Modify();
@@ -126,7 +101,6 @@ namespace MantlePlaceMeshImporter
 		Body->CollisionTraceFlag = CTF_UseComplexAsSimple;
 		Body->InvalidatePhysicsData();
 		Body->CreatePhysicsMeshes();
-		// The collision was chosen, not generated: a rebuild of the mesh keeps it.
 		Mesh->bCustomizedCollision = true;
 	}
 
@@ -137,8 +111,6 @@ namespace MantlePlaceMeshImporter
 		bool bEnableNanite,
 		FString& OutError)
 	{
-		// Separate subfolders keep the terrain's and the buildings' imported UStaticMesh names --
-		// and their embedded textures and materials -- from colliding.
 		const MantlePlaceImportNaming::ESubfolder Subfolder = bEnableNanite
 			? MantlePlaceImportNaming::ESubfolder::Mesh
 			: MantlePlaceImportNaming::ESubfolder::Buildings;
@@ -171,8 +143,6 @@ namespace MantlePlaceMeshImporter
 			return nullptr;
 		}
 
-		// Interchange lands glTF with East on +X / South on +Y; the world frame is North on +X.
-		// GetMeshRotation() is the +90 yaw that reconciles them (a rotation, not a mirror).
 		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>(
 			Manifest.GetMeshLocation(), FMantlePlaceVaultManifest::GetMeshRotation());
 		if (Actor == nullptr)
@@ -183,8 +153,7 @@ namespace MantlePlaceMeshImporter
 
 		Actor->SetMobility(EComponentMobility::Static);
 		Actor->GetStaticMeshComponent()->SetStaticMesh(Mesh);
-		ApplyCollision(Actor, MantlePlaceTerrainCollisionLogic::ForTerrainMesh(/*bLandscapeBuilt*/ false));
-		// Labelled, tagged and filed by the caller. See MantlePlaceLandscapeImporter::Import.
+		ApplyCollision(Actor, MantlePlaceTerrainCollisionLogic::ForTerrainMesh(false));
 		return Actor;
 	}
 
@@ -205,9 +174,6 @@ namespace MantlePlaceMeshImporter
 			return nullptr;
 		}
 
-		// Buildings share the terrain's Local Projected Frame (centroid ground at z=0), so the identical
-		// GetMeshLocation() + GetMeshRotation() transform lands them resting on the terrain. No Nanite
-		// (trivial geometry) and no imagery drape (massing is untextured).
 		AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>(
 			Manifest.GetMeshLocation(), FMantlePlaceVaultManifest::GetMeshRotation());
 		if (Actor == nullptr)
@@ -219,7 +185,6 @@ namespace MantlePlaceMeshImporter
 		Actor->SetMobility(EComponentMobility::Static);
 		Actor->GetStaticMeshComponent()->SetStaticMesh(Mesh);
 		ApplyCollision(Actor, MantlePlaceTerrainCollisionLogic::ForBuildings());
-		// Labelled, tagged and filed by the caller.
 		return Actor;
 	}
 
@@ -235,7 +200,6 @@ namespace MantlePlaceMeshImporter
 		Component->SetCollisionProfileName(Collision == EMantlePlaceMeshCollision::Surface
 			? UCollisionProfile::BlockAll_ProfileName
 			: UCollisionProfile::NoCollision_ProfileName);
-		// What the import turned off is marked, so Prepare for handover restores that and nothing else.
 		if (Collision == EMantlePlaceMeshCollision::None)
 		{
 			Actor->Tags.AddUnique(MantlePlaceImportNaming::CollisionOffTag());
@@ -252,7 +216,6 @@ namespace MantlePlaceMeshImporter
 		if (Component == nullptr || !Actor->Tags.Contains(MantlePlaceImportNaming::CollisionOffTag())
 			|| Component->GetCollisionProfileName() != UCollisionProfile::NoCollision_ProfileName)
 		{
-			// Not a mesh the import left without collision, or collision someone has set since: theirs.
 			return false;
 		}
 		ApplyCollision(Actor, EMantlePlaceMeshCollision::Surface);

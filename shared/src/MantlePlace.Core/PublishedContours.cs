@@ -1,72 +1,29 @@
 namespace MantlePlace.Core;
 
-/// <summary>A point of a placed contour, in frame-local metres.</summary>
 public readonly record struct ContourPoint(double EastM, double NorthM);
 
-/// <summary>One published contour ready to draw: one element, holding one or more runs of line.</summary>
 public sealed class PlacedContour
 {
-    /// <summary>The elevation as the file wrote it, for <see cref="PublishedContours.ElementName"/>.</summary>
     public required string ElevationText { get; init; }
 
-    /// <summary>The absolute height every point of the contour sits at, in metres.</summary>
     public required double ZMetres { get; init; }
 
-    /// <summary>
-    /// The runs of line the crop window left, each at least two points. A contour the window cuts
-    /// stays one contour in several pieces, so it stays one element.
-    /// </summary>
     public required IReadOnlyList<IReadOnlyList<ContourPoint>> Pieces { get; init; }
 }
 
-/// <summary>What placing a contours file produced, and what it left out and why.</summary>
 public sealed class ContourPlacement
 {
     public required IReadOnlyList<PlacedContour> Contours { get; init; }
 
-    /// <summary>Contours with nothing inside the crop window.</summary>
     public int OutsideWindow { get; init; }
 
-    /// <summary>Contours with no two points further apart than Revit's short-curve tolerance.</summary>
     public int TooShort { get; init; }
 }
 
-/// <summary>
-/// Brings published contours into the site's frame, clips them at the terrain's crop window, and
-/// drops the vertices Revit could not draw a segment between (ADR 0013). Pure.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <b>X/Y</b> go through <see cref="SiteFrame.TryPlace"/> in the frame the host block's
-/// <c>file_frame</c> states, and nothing else (<c>HPS-33</c>). <b>Z</b> is the published elevation
-/// converted by the pointer's vertical unit, which is stated separately from the horizontal one and
-/// may differ from it. ⛔ Nothing is added to Z: the lines will not sit exactly on a toposolid Revit
-/// re-triangulated, and an offset to lift them clear would be a placement value computed here.
-/// </para>
-/// <para>
-/// <b>Clipping</b> is exact at the window's edges, so the published contours end where the terrain
-/// ends. The crossing point is interpolated in plan only; a contour's Z is one value.
-/// </para>
-/// <para>
-/// <b>Short segments.</b> Revit refuses a line shorter than its short-curve tolerance. The road
-/// centrelines drop such a segment and leave a gap, which a run of separate lines tolerates; a
-/// contour is far denser, so here a vertex within tolerance of the last one <em>kept</em> is skipped
-/// instead, and the line stays continuous. That drops a vertex and derives none. The last vertex of
-/// a piece is always kept, so a clipped end stays on the edge. A polygon ring takes the same rule,
-/// closed (<see cref="SiteRings"/>).
-/// </para>
-/// </remarks>
 public static class PublishedContours
 {
     private const string NamePrefix = "Published contour ";
 
-    /// <summary>
-    /// The element name: the elevation exactly as the file published it, then its unit.
-    /// </summary>
-    /// <remarks>
-    /// Not an elevation label drawn in a view — those are a follow-up. It is what Properties and a
-    /// schedule show, so a curator can find one contour without them.
-    /// </remarks>
     public static string ElementName(string elevationText, LinearUnit verticalUnit)
     {
         ArgumentNullException.ThrowIfNull(elevationText);
@@ -74,14 +31,6 @@ public static class PublishedContours
         return NamePrefix + elevationText + " " + unit;
     }
 
-    /// <summary>
-    /// Places every contour, or returns <c>null</c> with a stated reason when the frame cannot place
-    /// the file at all.
-    /// </summary>
-    /// <param name="horizontal">The file's X/Y, as the host block's <c>file_frame</c> and the pointer's unit state them.</param>
-    /// <param name="verticalUnit">The pointer's vertical unit.</param>
-    /// <param name="window">The terrain's crop window, or <c>null</c> to leave the contours unclipped, as the terrain is then.</param>
-    /// <param name="shortCurveToleranceM">Revit's short-curve tolerance, in metres.</param>
     public static ContourPlacement? TryPlace(
         IReadOnlyList<PublishedContour> contours,
         SiteFrame frame,
@@ -156,13 +105,6 @@ public static class PublishedContours
         return new ContourPlacement { Contours = placed, OutsideWindow = outsideWindow, TooShort = tooShort };
     }
 
-    /// <summary>
-    /// The runs of <paramref name="line"/> inside <paramref name="window"/>, cut exactly at its edges.
-    /// </summary>
-    /// <remarks>
-    /// A closed line that starts inside and is cut comes out with its first and last runs meeting at
-    /// the start vertex; they are one run of line on the ground, so they are joined.
-    /// </remarks>
     private static List<List<ContourPoint>> Clip(List<ContourPoint> line, SurfaceCropWindow window, bool closed)
     {
         List<List<ContourPoint>> pieces = [];
@@ -201,9 +143,6 @@ public static class PublishedContours
         return pieces;
     }
 
-    /// <summary>Liang–Barsky: the part of one segment inside the window, if any.</summary>
-    /// <param name="entered">Whether the kept part begins on an edge rather than at <paramref name="a"/>.</param>
-    /// <param name="left">Whether the kept part ends on an edge rather than at <paramref name="b"/>.</param>
     private static bool TryClipSegment(
         ContourPoint a,
         ContourPoint b,
@@ -246,10 +185,6 @@ public static class PublishedContours
         return true;
     }
 
-    /// <summary>
-    /// A crossing point held inside the window, so a rounding error in <c>a + t·d</c> cannot leave a
-    /// clipped end a hair past the edge it was cut at.
-    /// </summary>
     private static ContourPoint OnEdge(double east, double north, SurfaceCropWindow window)
         => new(Math.Clamp(east, window.WestM, window.EastM), Math.Clamp(north, window.SouthM, window.NorthM));
 
@@ -257,7 +192,6 @@ public static class PublishedContours
     {
         if (p == 0.0)
         {
-            // Parallel to this edge: inside it or wholly outside.
             return q >= 0.0;
         }
 
@@ -284,10 +218,6 @@ public static class PublishedContours
         return true;
     }
 
-    /// <summary>
-    /// The piece with every vertex within tolerance of the last kept one skipped, or <c>null</c> when
-    /// fewer than two points would remain.
-    /// </summary>
     private static List<ContourPoint>? Thin(List<ContourPoint> piece, double tolerance)
     {
         if (piece.Count < 2)
@@ -304,8 +234,6 @@ public static class PublishedContours
             }
         }
 
-        // The true end displaces any kept vertex too close to it, so a clipped end stays on the edge.
-        // The first vertex is never displaced, for the same reason at the other end.
         ContourPoint last = piece[^1];
         while (kept.Count > 1 && Distance(kept[^1], last) <= tolerance)
         {

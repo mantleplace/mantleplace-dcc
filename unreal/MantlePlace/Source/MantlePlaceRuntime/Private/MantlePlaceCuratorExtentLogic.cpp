@@ -2,18 +2,15 @@
 
 #include "MantlePlaceCuratorExtentLogic.h"
 
-#include "MantlePlaceAuthLogic.h"  // IsValidBaseUrl
-#include "MantlePlaceVaultLogic.h" // NormalizeBaseUrl
+#include "MantlePlaceAuthLogic.h"
+#include "MantlePlaceVaultLogic.h"
 
 namespace
 {
-	/** The curator keeps four decimals (about 11 m); a link carries no more than it keeps. */
 	constexpr double BoundScale = 10000.0;
 
-	/** Added before a floor / subtracted before a ceil, so 12.3456 stays 12.3456 despite binary error. */
 	constexpr double RoundingSlack = 1e-6;
 
-	/** A latitude this close to a pole has no east-west metre worth the name. */
 	constexpr double MaxBoxLatitude = 89.9;
 
 	bool IsFiniteDegrees(double Longitude, double Latitude)
@@ -23,14 +20,12 @@ namespace
 			&& Latitude >= -90.0 && Latitude <= 90.0;
 	}
 
-	/** Metres in one degree of latitude at this latitude (WGS84, the standard series). */
 	double MetresPerDegreeLatitude(double LatitudeDeg)
 	{
 		const double Phi = FMath::DegreesToRadians(LatitudeDeg);
 		return 111132.954 - 559.822 * FMath::Cos(2.0 * Phi) + 1.175 * FMath::Cos(4.0 * Phi);
 	}
 
-	/** Metres in one degree of longitude at this latitude (WGS84, the standard series). */
 	double MetresPerDegreeLongitude(double LatitudeDeg)
 	{
 		const double Phi = FMath::DegreesToRadians(LatitudeDeg);
@@ -71,8 +66,6 @@ namespace
 			Box.South = FMath::Min(Box.South, Point.Latitude);
 			Box.North = FMath::Max(Box.North, Point.Latitude);
 		}
-		// A level that straddles the antimeridian reads as nearly the whole world west to east. The
-		// curator wants West < East, so it is refused rather than drawn across the wrong way round.
 		if (!Box.IsValid() || (Box.East - Box.West) > 180.0)
 		{
 			return false;
@@ -142,8 +135,6 @@ bool FMantlePlaceCuratorExtentLogic::FromExtentBox(const FMantlePlaceExtentBoxSt
 	Extent.East = Box.CenterLongitude + HalfLongitude;
 	Extent.South = Box.CenterLatitude - HalfLatitude;
 	Extent.North = Box.CenterLatitude + HalfLatitude;
-	// A box that leaves the world (across the antimeridian or past a pole) has no W,S,E,N the
-	// curator can draw; it is refused rather than clipped to a smaller box than the user placed.
 	if (!Extent.IsValid())
 	{
 		return false;
@@ -228,7 +219,6 @@ FString FMantlePlaceCuratorExtentLogic::FormatBound(double Value, bool bRoundUp)
 		{
 			Digits.LeftChopInline(1);
 		}
-		// Whole is 0 for -0.5, which would print as 0.5: the sign has to be put back by hand.
 		Text = ((Units < 0 && Whole == 0) ? FString(TEXT("-0")) : Text) + TEXT(".") + Digits;
 	}
 	return Text;
@@ -249,7 +239,6 @@ FString FMantlePlaceCuratorExtentLogic::BuildCuratorUrl(const FString& BaseUrl, 
 	FString Url = FMantlePlaceVaultLogic::NormalizeBaseUrl(BaseUrl) + TEXT("/curator");
 	if (Resolved.IsSet() && Resolved.Extent.IsValid())
 	{
-		// Digits, minus signs, dots and commas only: nothing here needs percent-encoding.
 		Url += TEXT("#aoi=") + FormatToken(Resolved.Extent) + TEXT("&from=") + From();
 	}
 	return Url;

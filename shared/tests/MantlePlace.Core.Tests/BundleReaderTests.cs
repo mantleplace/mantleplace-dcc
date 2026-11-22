@@ -5,14 +5,8 @@ namespace MantlePlace.Core.Tests;
 
 using CorpusCase = ConformanceCorpus.CorpusCase;
 
-/// <summary>
-/// <see cref="BundleReader"/> beyond the corpus's answer sheet: which path a manifest takes, the
-/// refusals a 3.x reading makes, that no 3.x path reads a per-host block, and that a 2.x bundle reads
-/// exactly as <see cref="BundleManifestReader.Parse"/> reads it.
-/// </summary>
 internal static class BundleReaderTests
 {
-    /// <summary>Where the 3.x reader's source is, which must never name a per-host block.</summary>
     private const string ThreeReaderFolder = "shared/src/MantlePlace.Core";
 
     private const string ThreeReaderFile = "ManifestThreeReader.cs";
@@ -315,12 +309,10 @@ internal static class BundleReaderTests
         });
     }
 
-    /// <summary>The two frames of a metric order, as the served 3.0.0 schema names them (<c>spec/format.md</c> §9.4).</summary>
     private const string DefaultFrames = """
         {"georeferenced": {"horizontal_crs": {"code": "EPSG:32618"}, "vertical_crs": {"code": "EPSG:3855"}, "geoid_model": "EGM2008", "horizontal_unit": {"name": "metre", "to_metres": 1}, "vertical_unit": {"name": "metre", "to_metres": 1}, "axis_order": "east-north", "grid_rotation_deg": 0.67}, "local": {"origin": {"longitude": -73.975, "latitude": 40.755, "ellipsoidal_height_m": -12.5, "height_m": 20.0, "projected": {"crs": {"code": "EPSG:32618"}, "x": 586500.0, "y": 4512000.0, "unit": {"name": "metre", "to_metres": 1}}}, "vertical_crs": {"code": "EPSG:3855"}, "geoid_model": "EGM2008", "unit": {"name": "metre", "to_metres": 1}, "axes": {"x": "east", "y": "north", "z": "up"}, "grid_rotation_deg": 0.67}}
         """;
 
-    /// <summary>An order in feet: the horizontal unit is the US survey foot, the vertical the international foot, and the axes run north then east.</summary>
     private const string FeetFrames = """
         {"georeferenced": {"horizontal_crs": {"code": "EPSG:2263"}, "vertical_crs": {"code": "EPSG:6360"}, "geoid_model": null, "horizontal_unit": {"name": "US survey foot", "to_metres": 0.3048006096012192}, "vertical_unit": {"name": "foot", "to_metres": 0.3048}, "axis_order": "north-east", "grid_rotation_deg": -1.2}, "local": {"origin": {"longitude": -73.975, "latitude": 40.755, "ellipsoidal_height_m": -12.5, "height_m": 20.0, "projected": {"crs": {"code": "EPSG:2263"}, "x": 988000.5, "y": 214000.25, "unit": {"name": "US survey foot", "to_metres": 0.3048006096012192}}}, "vertical_crs": {"code": "EPSG:3855"}, "unit": {"name": "metre", "to_metres": 1}, "axes": {"x": "east", "y": "north", "z": "up"}, "grid_rotation_deg": -1.2}}
         """;
@@ -389,10 +381,6 @@ internal static class BundleReaderTests
     private static BundleManifest? Read(Dictionary<string, string> files) =>
         BundleReader.Read(files.Keys, entry => files.TryGetValue(entry, out string? text) ? text : null);
 
-    /// <summary>
-    /// Every public fact of a reading but its <see cref="BundleManifest.Contents"/>, as JSON: the
-    /// comparison that says a reading is the same one.
-    /// </summary>
     private static string Describe(BundleManifest? manifest)
     {
         if (manifest is null)

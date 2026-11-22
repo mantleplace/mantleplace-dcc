@@ -1,18 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""Adjacent bundles in one scene, in Blender with no window: generate, import, measure the seams.
-
-    blender --background --factory-startup --python-exit-code 1 \
-        --python blender/tests/headless/run_adjacent.py
-
-The pure suite (`blender/tests/test_anchor.py`) proves the decision; this proves Blender carries it
-out. It needs no bundle from anywhere: it writes three small 2.x bundles into a scratch folder, each
-a 100 m square of terrain at the centre of its own site origin, ordered side by side, and deletes
-them when it ends. Nothing it generates is committed (root CLAUDE.md, Binaries). The square is a
-`.usda` layer rather than a `.usdz`, which the manifest pointer allows, so the script needs no USD
-library. It prints one line per check, the measured edge offsets in metres, and exits nonzero on the
-first failure.
-"""
 
 import copy
 import hashlib
@@ -33,7 +20,6 @@ from mantleplace_blender import shim  # noqa: E402
 from mantleplace_blender.core.bundle import BundleRefused  # noqa: E402
 
 TILE_M = 100.0
-#: A measured seam may differ from zero by this much: the 32-bit float spacing at these distances.
 TOLERANCE_M = 0.001
 
 FRAME = {
@@ -70,7 +56,6 @@ def check(condition, message):
 
 def write_bundle(folder, name, x, y, z=110.672, crs="EPSG:32614", z_reference="ellipsoidal",
                  projected=True):
-    """One generated 2.x bundle: a square of terrain whose site origin is (x, y, z) in `crs`."""
     layer = LAYER.format(h=TILE_M / 2).encode("utf-8")
     frame = copy.deepcopy(FRAME)
     frame["horizontal_crs"] = {"code": crs}
@@ -101,7 +86,6 @@ def fresh_scene():
 
 
 def import_one(path):
-    """Import through the shim and return the result and the world box of the terrain it added."""
     result = shim.import_bundle(bpy.context, path, include_features=False)
     terrain = [o for o in result.objects if o.type == "MESH"]
     check(len(terrain) == 1, f"{os.path.basename(path)} brought in one terrain mesh")
@@ -118,8 +102,8 @@ def main():
     with tempfile.TemporaryDirectory(prefix="mantleplace-adjacent-") as folder:
         east0, north0 = 620050.0, 3348864.5
         a = write_bundle(folder, "a", east0, north0)
-        b = write_bundle(folder, "b", east0 + TILE_M, north0)               # east of a
-        c = write_bundle(folder, "c", east0, north0 + TILE_M)               # north of a
+        b = write_bundle(folder, "b", east0 + TILE_M, north0)
+        c = write_bundle(folder, "c", east0, north0 + TILE_M)
         other_crs = write_bundle(folder, "crs", east0 + 2 * TILE_M, north0, crs="EPSG:32615")
         other_z = write_bundle(folder, "z", east0 + 2 * TILE_M, north0, z_reference="orthometric")
         no_projected = write_bundle(folder, "np", east0 + 2 * TILE_M, north0, projected=False)
@@ -172,7 +156,6 @@ def main():
             check(len(warnings) == 1, f"{label}: exactly one warning")
             check(scene["mantleplace_site_origin"].to_dict() == anchor, f"{label}: the anchor is untouched")
 
-        # A bundle the importer refuses outright leaves the anchor and the objects alone.
         before = len(bpy.data.objects)
         bad = os.path.join(folder, "bad.zip")
         with zipfile.ZipFile(bad, "w") as archive:

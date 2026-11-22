@@ -3,14 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The one record per machine of which orders have been announced, shared by every Revit on it.
-/// </summary>
-/// <remarks>
-/// Two Revit processes open at once both see a new order. The first to claim it announces it; the
-/// other finds it claimed and stays silent. A duplicate notice is a smaller failure than a lost one,
-/// so a record that cannot be written still announces.
-/// </remarks>
 internal static class AnnouncedOrderStoreTests
 {
     private const string Email = "curator@example.com";
@@ -33,7 +25,6 @@ internal static class AnnouncedOrderStoreTests
             }
             catch (IOException)
             {
-                // A leftover temp folder is not a test failure.
             }
         }
 

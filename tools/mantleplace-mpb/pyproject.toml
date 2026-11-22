@@ -15,7 +15,6 @@ license-files = ["LICENSE"]
 authors = [{ name = "Mantle Place LLC" }]
 keywords = ["mpb", "mantleplace", "geospatial", "site-context", "gis", "bundle", "validator"]
 requires-python = ">=3.10"
-# Standard library only, on purpose: no GDAL, no PROJ, nothing compiled. It runs wherever Python does.
 dependencies = []
 classifiers = [
     "Development Status :: 4 - Beta",

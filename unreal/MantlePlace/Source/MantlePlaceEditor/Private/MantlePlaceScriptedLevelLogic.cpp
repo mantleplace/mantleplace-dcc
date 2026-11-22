@@ -12,7 +12,6 @@ FString FMantlePlaceScriptedLevelLogic::Refusal(const FMantlePlaceVaultItem& Ite
 			"recommends; to name one, pass Max, Med or Min.");
 	}
 
-	// A 2.x order has no levels: its request is the view request it has always been, so a level has nothing to name.
 	if (!Item.bHasLevels || Item.Levels.Num() == 0)
 	{
 		return FString::Printf(TEXT("This order offers no levels (it is not an MPB 3.0 order), so the %s level "

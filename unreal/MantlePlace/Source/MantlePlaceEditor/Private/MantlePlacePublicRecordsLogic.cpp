@@ -18,7 +18,6 @@ const TCHAR* const KnownDisplayNames[] = {
 
 static_assert(UE_ARRAY_COUNT(KnownFamilies) == UE_ARRAY_COUNT(KnownDisplayNames), "one display name per known family");
 
-/** The names an MPB 3.x file table gives a family a 2.x manifest keyed otherwise (format.md section 12), and the key each stands for. */
 struct FFamilyAlias
 {
 	const TCHAR* Name;
@@ -30,7 +29,6 @@ const FFamilyAlias FamilyAliases[] = {
 	{ TEXT("heritage"), TEXT("historic") },
 };
 
-/** The position in the published order, or INDEX_NONE for a family this reader has not met. */
 int32 KnownIndex(const FString& Family)
 {
 	for (const FFamilyAlias& Alias : FamilyAliases)
@@ -55,26 +53,23 @@ FString Shown(const FString& Value)
 	return Value.IsEmpty() ? FString(TEXT("(not stated)")) : FString::Printf(TEXT("\"%s\""), *Value);
 }
 
-/** One DXF group-code/value pair. */
 struct FDxfPair
 {
 	int32 Code = 0;
 	FString Value;
 };
 
-/** What one entity has accumulated between its `0` record and the next. */
 struct FDxfEntity
 {
 	FString Type;
 	int32 Flags = 0;
-	TArray<FVector2D> Points; // LWPOLYLINE: every 10/20 pair; VERTEX: the one; LINE: the start
+	TArray<FVector2D> Points;
 	double EndX = 0.0;
 	double EndY = 0.0;
 	bool bHasEnd = false;
-	TArray<FDxfPair> Raw; // HATCH only: every pair after the type, read in order by ReadHatchBoundaries
+	TArray<FDxfPair> Raw;
 };
 
-/** Where the next pair with `Code` is, from `From`, or INDEX_NONE. */
 int32 FindCode(const TArray<FDxfPair>& Pairs, int32 From, int32 Code)
 {
 	for (int32 Index = From; Index < Pairs.Num(); ++Index)
@@ -87,13 +82,6 @@ int32 FindCode(const TArray<FDxfPair>& Pairs, int32 From, int32 Code)
 	return INDEX_NONE;
 }
 
-/**
- * The boundary loops of one HATCH, each as a closed outline in the file's own coordinates. A polyline path
- * (92 flag bit 2) gives its vertices; an edge path gives its LINE edges, joined in the order the file lists
- * them. An arc, ellipse or spline edge, or a path that does not read as stated, makes the whole hatch
- * unreadable (false, nothing kept): half an outline is not drawn. A polyline path's arc bulges (code 42)
- * are not read, as for an LWPOLYLINE: the vertices are joined straight, never re-derived.
- */
 bool ReadHatchBoundaries(const TArray<FDxfPair>& Raw, TArray<FMantlePlaceRecordPolyline>& OutRings)
 {
 	OutRings.Reset();
@@ -114,7 +102,7 @@ bool ReadHatchBoundaries(const TArray<FDxfPair>& Raw, TArray<FMantlePlaceRecordP
 		const int32 Flags = FCString::Atoi(*Raw[At].Value);
 		++At;
 		FMantlePlaceRecordPolyline Ring;
-		Ring.bClosed = true; // a hatch boundary is a closed loop by definition
+		Ring.bClosed = true;
 		At = FindCode(Raw, At, 93);
 		if (At == INDEX_NONE)
 		{
@@ -124,7 +112,6 @@ bool ReadHatchBoundaries(const TArray<FDxfPair>& Raw, TArray<FMantlePlaceRecordP
 		++At;
 		if ((Flags & 2) != 0)
 		{
-			// A polyline path: Count vertices, each a 10/20 pair (a 42 bulge between them is not read).
 			int32 YsRead = 0;
 			for (; At < Raw.Num() && YsRead < Count; ++At)
 			{
@@ -145,7 +132,6 @@ bool ReadHatchBoundaries(const TArray<FDxfPair>& Raw, TArray<FMantlePlaceRecordP
 		}
 		else
 		{
-			// An edge path: Count edges, each opened by its type in code 72. Only a straight edge (1) is read.
 			FVector2D LastEnd = FVector2D::ZeroVector;
 			for (int32 Edge = 0; Edge < Count; ++Edge)
 			{
@@ -156,7 +142,7 @@ bool ReadHatchBoundaries(const TArray<FDxfPair>& Raw, TArray<FMantlePlaceRecordP
 				++At;
 				FVector2D Start = FVector2D::ZeroVector;
 				FVector2D End = FVector2D::ZeroVector;
-				int32 Have = 0; // a bit per coordinate read: 10, 20, 11, 21
+				int32 Have = 0;
 				for (; At < Raw.Num() && Have != 15; ++At)
 				{
 					switch (Raw[At].Code)
@@ -175,7 +161,6 @@ bool ReadHatchBoundaries(const TArray<FDxfPair>& Raw, TArray<FMantlePlaceRecordP
 				Ring.Points.Add(Start);
 				LastEnd = End;
 			}
-			// The last edge ends where the first began; a file that leaves it open still closes.
 			if (Ring.Points.Num() > 0 && !LastEnd.Equals(Ring.Points[0], 1e-9))
 			{
 				Ring.Points.Add(LastEnd);
@@ -233,7 +218,7 @@ void FMantlePlacePublicRecordsLogic::OrderLayers(TArray<FMantlePlaceRecordLayer>
 		const bool bKnownB = IndexB != INDEX_NONE;
 		if (bKnownA != bKnownB)
 		{
-			return bKnownA; // the families the layout names come first
+			return bKnownA;
 		}
 		if (bKnownA)
 		{
@@ -265,7 +250,6 @@ FMantlePlaceRecordFrame FMantlePlacePublicRecordsLogic::StatedFrame(
 	Frame.Crs = Crs;
 	if (bHasUnitFactor)
 	{
-		// A factor of exactly 1 is the metre. Any other is stated as it is and refused by CanPlaceFrame.
 		Frame.HorizontalUnit = UnitToMetres == 1.0
 		                           ? FString(TEXT("m"))
 		                           : (UnitName.IsEmpty() ? FString::Printf(TEXT("%.10g m per unit"), UnitToMetres)
@@ -331,7 +315,7 @@ bool FMantlePlacePublicRecordsLogic::ParseDxf(
 	}
 
 	TArray<FString> Lines;
-	Text.ParseIntoArrayLines(Lines, /*bCullEmpty*/ false);
+	Text.ParseIntoArrayLines(Lines, false);
 	TArray<FDxfPair> Pairs;
 	Pairs.Reserve(Lines.Num() / 2);
 	for (int32 Index = 0; Index + 1 < Lines.Num(); Index += 2)
@@ -349,8 +333,8 @@ bool FMantlePlacePublicRecordsLogic::ParseDxf(
 	bool bExpectSectionName = false;
 	bool bSawEntities = false;
 	FDxfEntity Entity;
-	bool bInPolyline = false;      // between a POLYLINE record and its SEQEND
-	bool bPolylineSkipped = false; // a polyface or 3D mesh: its vertices are not a line
+	bool bInPolyline = false;
+	bool bPolylineSkipped = false;
 	FMantlePlaceRecordPolyline Poly;
 
 	auto Keep = [&OutLines](FMantlePlaceRecordPolyline Line)
@@ -381,13 +365,12 @@ bool FMantlePlacePublicRecordsLogic::ParseDxf(
 		else if (Entity.Type == TEXT("POLYLINE"))
 		{
 			bInPolyline = true;
-			bPolylineSkipped = (Entity.Flags & (16 | 64)) != 0; // 3D mesh (16), polyface mesh (64)
+			bPolylineSkipped = (Entity.Flags & (16 | 64)) != 0;
 			Poly = FMantlePlaceRecordPolyline();
 			Poly.bClosed = (Entity.Flags & 1) != 0;
 		}
 		else if (Entity.Type == TEXT("VERTEX"))
 		{
-			// 16 is a spline frame control point: not on the curve, so not a vertex of the line.
 			if (bInPolyline && !bPolylineSkipped && (Entity.Flags & 16) == 0 && Entity.Points.Num() > 0)
 			{
 				Poly.Points.Add(Entity.Points[0]);
@@ -425,7 +408,6 @@ bool FMantlePlacePublicRecordsLogic::ParseDxf(
 		}
 		else if (Entity.Type == TEXT("HATCH"))
 		{
-			// A filled area: its boundary loops are the outlines. The fill is not drawn.
 			TArray<FMantlePlaceRecordPolyline> Rings;
 			if (ReadHatchBoundaries(Entity.Raw, Rings))
 			{
@@ -497,9 +479,6 @@ bool FMantlePlacePublicRecordsLogic::ParseDxf(
 			Entity.Flags = FCString::Atoi(*Pair.Value);
 			break;
 		case 10:
-			// LWPOLYLINE repeats the pair per vertex; VERTEX and LINE carry one. A POLYLINE's own 10/20/30
-			// is a dummy elevation record, which Finish does not read for that type. An arc segment's
-			// bulge (code 42) is not read: the vertices are joined straight, never re-derived.
 			Entity.Points.Add(FVector2D(FCString::Atod(*Pair.Value), 0.0));
 			break;
 		case 20:
@@ -549,7 +528,7 @@ bool FMantlePlacePublicRecordsLogic::AnyVertexOnSite(
 {
 	if (SpanUeCm.X <= 0.0 || SpanUeCm.Y <= 0.0)
 	{
-		return true; // no published span: no evidence either way
+		return true;
 	}
 	for (const FMantlePlaceRecordPolyline& Line : Lines)
 	{
@@ -579,7 +558,6 @@ TArray<FString> FMantlePlacePublicRecordsLogic::DescribeLayer(const FMantlePlace
 	FString Credit = Layer.Credit;
 	if (Credit.IsEmpty())
 	{
-		// No credit line of the layer's own: the source its file entries name is the credit.
 		for (const FMantlePlaceRecordFile& File : Layer.Files)
 		{
 			if (!File.Source.IsEmpty())
@@ -625,7 +603,6 @@ FString FMantlePlacePublicRecordsLogic::DescribePointer(const FString& Family, c
 	}
 	else
 	{
-		// no_open_source, and a reason this reader does not know: the record is not in the bundle either way.
 		Why = Pointer.Basis.IsEmpty()
 		          ? FString(TEXT("no open source covers it"))
 		          : FString::Printf(TEXT("no open source covers it (%s)"), *Pointer.Basis);
@@ -653,7 +630,6 @@ FString FMantlePlacePublicRecordsLogic::DescribeSkippedSource(const FMantlePlace
 	}
 	else
 	{
-		// source_failed, and a reason this reader does not know.
 		Why = TEXT("the source did not answer");
 	}
 	return FString::Printf(
@@ -675,8 +651,6 @@ TArray<FString> FMantlePlacePublicRecordsLogic::DescribeNotDelivered(const FMant
 	{
 		Out.Add(DescribeSkippedSource(Source));
 	}
-	// A 3.x download's promised files it does not hold: one line per family and stated reason, the
-	// reason shown as the manifest wrote it and never matched on (it can grow).
 	TArray<FString> Seen;
 	for (const FMantlePlaceRecordNotHeld& First : Block.NotHeld)
 	{

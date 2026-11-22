@@ -58,7 +58,6 @@ bool FMantlePlaceLiveGateLogic::RmsWithinTolerance(const FMantlePlaceDzStatistic
 
 FString FMantlePlaceLiveGateLogic::DrapeSkipLine(const FMantlePlaceVaultManifest& Manifest)
 {
-	// Only the drape handler, asked through the importer's own report, so another step's skip never reads as this one's.
 	MantlePlaceArtifacts::FHandlers Drape;
 	for (TUniquePtr<IMantlePlaceArtifactHandler>& Handler : MantlePlaceArtifacts::MakeAll())
 	{

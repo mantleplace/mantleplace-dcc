@@ -1,29 +1,11 @@
 namespace MantlePlace.Core;
 
-/// <summary>One line of a key on a drawn plan — a zone key or a land plan's: its text, and the swatch beside it, or none for a heading.</summary>
 public sealed record KeyRow(string Text, RegionStyle? Style);
 
-/// <summary>
-/// What the zone key inside a hazard plan says: a row for each zone and threshold the plan shows, in
-/// the published words, under a heading that says the plan is context. Pure.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Only what was drawn is listed. A zone the flood map names and this plan does not show — a hole's
-/// subtype, or a zone clipped out of the area — would be a row explaining nothing on the page.
-/// </para>
-/// <para>
-/// Every row is the manifest's own text. A zone is its <c>fld_zone</c> and <c>zone_subty</c> as
-/// published; a threshold is the number as written, in degrees, after the comparison MPB 1.4.0
-/// states for <c>elevation.steep_slope.threshold_deg</c>: the slope "at or above which ground is
-/// steep". The words are the schema's; the number is the bundle's.
-/// </para>
-/// </remarks>
 public static class ZoneKey
 {
     private const string Separator = " — ";
 
-    /// <summary>A flood zone's row: the zone, and its subtype after a dash when it has one.</summary>
     public static string FloodRowText(string zone, string subtype)
     {
         ArgumentNullException.ThrowIfNull(zone);
@@ -33,18 +15,11 @@ public static class ZoneKey
         return subtype.Length > 0 ? named + Separator + subtype : named;
     }
 
-    /// <summary>Steep ground's row, for a threshold as the manifest wrote it.</summary>
     public static string SteepRowText(string threshold)
         => string.IsNullOrEmpty(threshold)
             ? "Steep ground" + Separator + "threshold not stated"
             : "Steep ground" + Separator + "at or above " + threshold + "°";
 
-    /// <summary>
-    /// The rows for the flood zones drawn: each (zone, subtype) once, in the order the flood map lists
-    /// its zones, then in the order they were drawn.
-    /// </summary>
-    /// <param name="drawn">The rings drawn, holes included; a hole claims nothing.</param>
-    /// <param name="map">The flood map's facts, for its zone order, or <c>null</c>.</param>
     public static IReadOnlyList<KeyRow> FloodRows(IEnumerable<SiteFeature> drawn, FloodMap? map)
     {
         ArgumentNullException.ThrowIfNull(drawn);
@@ -74,14 +49,6 @@ public static class ZoneKey
         ];
     }
 
-    /// <summary>
-    /// The lines above the flood rows: whose map it is, that it is context and not a determination,
-    /// and the panels to verify a zone against.
-    /// </summary>
-    /// <remarks>
-    /// A panel the platform could not name is not guessed at: without panels the study ids are said,
-    /// and without either, that none was published.
-    /// </remarks>
     public static IReadOnlyList<string> FloodHeading(FloodMap? map)
     {
         List<string> lines =
@@ -108,13 +75,6 @@ public static class ZoneKey
         return lines;
     }
 
-    /// <summary>
-    /// The rows for the steep ground drawn: one per threshold its features state, in the order drawn.
-    /// </summary>
-    /// <param name="drawn">The rings drawn.</param>
-    /// <param name="manifestThreshold">
-    /// <c>elevation.steep_slope.threshold_deg</c> as written, for a feature that states none.
-    /// </param>
     public static IReadOnlyList<KeyRow> SteepRows(IEnumerable<SiteFeature> drawn, string? manifestThreshold)
     {
         ArgumentNullException.ThrowIfNull(drawn);

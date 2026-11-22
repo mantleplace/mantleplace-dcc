@@ -1,16 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The published manifest schema series: which document a manifest is held to, and fetching it.
-
-A manifest is validated against the schema of the version it **declares**, never against the
-newest one. The series is served at `<base>/<key>.json`, where the key is `vN` for the integer
-pre-history and the bare semver string for the MPB era, and beside it the append-only freeze
-ledger `frozen.lock.json` lists the sha256 of every published version. The ledger answers "is this
-version published at all", and it is checked against the bytes fetched, so a schema that is not
-the published one is refused rather than trusted.
-
-`schema_dir` reads the same two kinds of file from a local directory, for an offline run.
-"""
 
 from __future__ import annotations
 
@@ -28,9 +17,6 @@ _USER_AGENT = "mantleplace-mpb"
 
 
 class SchemaProblem(Exception):
-    """A schema could not be had. `cannot_check` separates "the bundle is wrong" from "we could
-    not find out"."""
-
     def __init__(self, code: str, message: str, cannot_check: bool) -> None:
         super().__init__(message)
         self.code = code
@@ -38,11 +24,6 @@ class SchemaProblem(Exception):
 
 
 def version_key(value: object) -> str | None:
-    """`19` (a JSON number) -> `v19`; `"1.14.0"` (a JSON string) -> `1.14.0`; anything else None.
-
-    The JSON type tells the two version families apart, so `"19"`, `"1.14"`, a `v` prefix and a
-    pre-release tag are all not versions.
-    """
     if isinstance(value, bool):
         return None
     if isinstance(value, int) and value >= 0:
@@ -53,21 +34,12 @@ def version_key(value: object) -> str | None:
 
 
 def _sort_key(key: str) -> tuple[int, tuple[int, ...]]:
-    """The whole integer era precedes the whole semver era; numeric order within each."""
     if key.startswith("v") and key[1:].isdigit():
         return (0, (int(key[1:]),))
     return (1, tuple(int(part) for part in key.split(".")))
 
 
 class SchemaSource:
-    """The published series, from the network or a local directory.
-
-    `staged=True` also admits a **staged** version: one served for readers before it is frozen,
-    so the ledger does not name it yet. Only the next release can be staged, so the version must
-    sort above every version the ledger names; its bytes have no recorded sha256 to be checked
-    against, and `is_staged` says which versions were read that way.
-    """
-
     def __init__(self, schema_dir: str | Path | None = None, base_url: str = DEFAULT_BASE_URL,
                  timeout: float = 20.0, staged: bool = False) -> None:
         self.schema_dir = Path(schema_dir) if schema_dir is not None else None
@@ -81,13 +53,11 @@ class SchemaSource:
         self._served: dict[str, bool] = {}
 
     def allowing_staged(self) -> "SchemaSource":
-        """The same series, admitting a staged version."""
         if self.staged:
             return self
         return SchemaSource(self.schema_dir, self.base_url, self.timeout, staged=True)
 
     def is_staged(self, key: str) -> bool:
-        """Whether `key` was read as a staged version: served, and not in the ledger."""
         return key in self._staged_keys
 
     def url(self, key: str) -> str:
@@ -96,7 +66,6 @@ class SchemaSource:
         return f"{self.base_url}/{key}.json"
 
     def ledger(self) -> dict[str, str] | None:
-        """The freeze ledger, or None where an offline directory carries none."""
         if not self._ledger_read:
             raw = self._get(LEDGER_NAME, optional=self.schema_dir is not None)
             if raw is not None:
@@ -141,10 +110,6 @@ class SchemaSource:
         return schema
 
     def served(self, key: str) -> bool:
-        """Whether the series serves a schema for `key` at all, staged or frozen.
-
-        Raises `SchemaProblem` (could not check) when the answer is neither yes nor no.
-        """
         if key not in self._served:
             try:
                 self._served[key] = self._get(f"{key}.json", optional=True,

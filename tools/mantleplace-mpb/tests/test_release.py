@@ -1,12 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The package's version is the conformance suite's, and the release workflow publishes by trust.
-
-The version `pip install mantleplace-mpb` reports says which MPB the validator and reader were
-held to. These tests keep that true: a corpus case written for a newer manifest version fails
-here until the package is raised with it, and a release tag that names another version is
-refused before anything is published.
-"""
 
 from __future__ import annotations
 
@@ -17,7 +10,7 @@ from pathlib import Path
 
 try:
     import tomllib
-except ImportError:  # Python 3.10: the metadata test is skipped, the rest still runs
+except ImportError:
     tomllib = None  # type: ignore[assignment]
 
 from helpers import write_corpus_index  # noqa: F401  (also puts src/ on sys.path)
@@ -49,8 +42,6 @@ class TheVersionIsTheSuites(unittest.TestCase):
             self.assertEqual("1.14.0", release_check.suite_version(index))
 
     def test_a_version_the_corpus_only_refuses_is_not_the_suites(self) -> None:
-        """A reject case pins what a reader refuses: a 1.x reader given 2.0.0 refuses it, and a
-        suite holding that case is still written against 1.x."""
         with tempfile.TemporaryDirectory() as tmp:
             index = write_corpus_index(Path(tmp), ["1.15.0"], rejects=["2.0.0", "1.999.0"])
             self.assertEqual("1.15.0", release_check.suite_version(index))

@@ -3,18 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The reader takes a 2.0 bundle as well as every 1.x one: the 2.0 layout is reached through its
-/// pointers alone, matched to the archive regardless of case, and never through a folder name.
-/// </summary>
-/// <remarks>
-/// <para>
-/// 2.0 moves files between folders and renames them (<c>spec/changelog.md</c>, 2.0.0), and removes
-/// <c>hosts.revit.vectors</c>: a projected-CRS reader reads each vector layer's <c>-Projected</c> twin,
-/// which <c>layout.projected_variants</c> names, in place of the 1.x carrier. Bundles already in a vault
-/// keep their 1.x version, so the 1.x path stays beside it.
-/// </para>
-/// </remarks>
 internal static class ManifestMajorTwoTests
 {
     private const string PointsCsvPath = "Elevation/SurfacePoints.csv";
@@ -215,8 +203,6 @@ internal static class ManifestMajorTwoTests
             run.False(plan.Skipped.Any(skip => skip.ReasonCode == SkipReasonCode.EntryNotInArchive), "no pointer names a missing file");
         });
     }
-
-    // ------------------------------------------------------------------ fixtures
 
     private static string TwoManifest(string version = "2.0.0", string revitExtra = "", string extraTwins = "")
     {

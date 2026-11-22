@@ -12,14 +12,6 @@ class STextBlock;
 class SVerticalBox;
 class SWindow;
 
-/**
- * The import window's content: the `Bundle Import` heading and the run's elapsed time, one row per
- * step with its state word (HPS-51) and, for a step that did not run, why; the status line naming the
- * step in flight and how long it has run; a 3.0 order's level control (`Fidelity Level`, the levels with
- * their sizes, `Download`), shown only while it is offered; `Cancel` and `Close`. Every word it shows is
- * decided by FMantlePlaceImportSteps and FMantlePlaceLevelChoice, which headless tests read: this only
- * lays them out.
- */
 class SMantlePlaceImportWindow : public SCompoundWidget
 {
 public:
@@ -31,13 +23,10 @@ public:
 
 	void Construct(const FArguments& InArgs);
 
-	/** Rebuild the rows from the steps. */
 	void Refresh();
 
-	/** The import's closing message, shown under the steps once the run is over. */
 	void SetResult(const FString& Message);
 
-	/** Show a 3.0 order's level control under the status line; Download confirms it. */
 	void SetLevelChoice(TSharedRef<FMantlePlaceLevelChoice> Choice);
 
 private:
@@ -55,40 +44,17 @@ private:
 	TSharedPtr<FMantlePlaceLevelChoice> LevelChoice;
 };
 
-/**
- * Opens the import window on an import flow's steps and keeps it truthful while the editor's own thread
- * is the one importing.
- *
- * The bundle import is synchronous: from its integrity check to its last step the editor's thread is
- * inside it, and nothing repaints and no click lands unless something ticks Slate. So at each step
- * boundary (every change of the steps) this ticks Slate once, which repaints the rows and delivers a
- * click on Cancel; the click asks the steps to cancel, and the importer stops at its next boundary.
- *
- * Ticking Slate delivers every queued click, not only ours, and a click on the level in the middle of
- * an import would land inside its undo transaction. So for the synchronous run the window is a modal
- * slow-task window, the engine's own arrangement for a cancellable progress dialog: input reaches it
- * alone, and Slate is ticked only while it is the active modal window. Outside that run (the download,
- * which is minutes and asynchronous, and the finished summary) it is an ordinary window and the editor
- * stays usable. A window cannot change modality, so the content moves between two windows at the
- * same place when the run starts and when it ends.
- *
- * Under automation or an unattended run there is no window: the steps run and log the same.
- */
 class FMantlePlaceImportWindowHost : public TSharedFromThis<FMantlePlaceImportWindowHost>
 {
 public:
-	/** Open a window on Steps, or return null where no window may open. OnCancel is the import's own cancel. */
 	static TSharedPtr<FMantlePlaceImportWindowHost> Open(TSharedRef<FMantlePlaceImportSteps> Steps, FSimpleDelegate OnCancel);
 
 	~FMantlePlaceImportWindowHost();
 
-	/** The import's closing message. */
 	void SetResult(const FString& Message);
 
-	/** Show a 3.0 order's level control in the window. False when the window is gone, so nobody can choose. */
 	bool ShowLevelChoice(TSharedRef<FMantlePlaceLevelChoice> Choice);
 
-	/** Close the window, whatever the run is doing (the vault panel is going away). */
 	void Close();
 
 private:

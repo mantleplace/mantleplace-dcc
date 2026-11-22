@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The checks past the schema: the pointer rule, sha256, file frames and ODbL roles.
-
-Each reads the manifest defensively (the schema check runs first, but a manifest that fails it
-is still checked here) and records findings on the report. None of them derives a placement
-value: a frame is checked for being whole and self-consistent, never reprojected or recomputed.
-"""
 
 from __future__ import annotations
 
@@ -17,17 +11,10 @@ from .archive import MANIFEST_PATH, Bundle, unsafe
 from .report import Report
 from .schema_subset import escape
 
-#: Top-level blocks whose `path` values are not pointers into this archive: `completeness`
-#: records the paths a check looked for and did NOT find; `files`, `view` and `bundle` describe
-#: storage and the sidecar; `platform` is outside the contract; the source pointers name
-#: upstream records. `layout` and `file_entries` are read on their own terms below.
 _NOT_POINTER_BLOCKS = frozenset({"completeness", "files", "view", "bundle", "platform",
                                  "source_pointers", "source_pointers_unavailable", "layout",
                                  "file_entries"})
 
-#: Extensions by what the bytes hold. A raster, a mesh or a rendered sheet is rasterized,
-#: meshed, extruded or baked output, which is what a Produced Work is; a vector or tabular data
-#: file keeps its features recoverable, so it is never one.
 RASTER = frozenset({"tif", "tiff", "png", "jpg", "jpeg", "webp", "jp2"})
 MESH = frozenset({"glb", "gltf", "obj", "usd", "usda", "usdc", "usdz", "fbx", "ifc", "stl", "ply",
                   "terrain"})
@@ -36,10 +23,8 @@ SIDECARS = frozenset({"mtl", "pgw", "tfw", "jgw", "pngw", "wld", "prj", "ovr", "
 DATA = frozenset({"gpkg", "shp", "shx", "dbf", "cpg", "sbn", "sbx", "geojson", "fgb", "csv",
                   "tsv", "dxf", "dwg", "kml", "kmz", "gml", "landxml", "parquet", "sqlite"})
 PRODUCED_WORK_FORMATS = RASTER | MESH | RENDERED | SIDECARS
-#: Files that carry coordinates, so a file entry for one is expected to state its frame.
 GEOSPATIAL = RASTER | MESH | (DATA - {"shx", "dbf", "cpg", "sbn", "sbx"})
 
-#: A frame written whole states these; a raster's also states how its pixels sit.
 FRAME_CORE = ("horizontal_crs", "unit_to_metres", "axis_order", "axis_mapping", "coordinate_mode")
 FRAME_RASTER = ("pixel_convention", "row_order")
 _AXIS_LINE = {"east": "east-west", "west": "east-west", "north": "north-south",
@@ -53,7 +38,6 @@ def extension(path: str) -> str:
 
 
 def _walk_paths(node: object, where: str) -> Iterator[tuple[str, dict]]:
-    """Every object below `node` that carries a string `path`, with its JSON Pointer."""
     if isinstance(node, dict):
         if isinstance(node.get("path"), str):
             yield where, node
@@ -65,12 +49,9 @@ def _walk_paths(node: object, where: str) -> Iterator[tuple[str, dict]]:
 
 
 def pointers(manifest: dict) -> list[tuple[str, str]]:
-    """(JSON Pointer, archive path) for every pointer value the manifest publishes."""
     found: list[tuple[str, str]] = []
     layout = manifest.get("layout")
     if isinstance(layout, dict):
-        # A string value is a pointer. A list is not: the one the schema publishes,
-        # `mesh_formats`, lists format names (`glb`, `obj`), and each format's file has its own pointer.
         found.extend((f"/layout/{escape(key)}", value) for key, value in layout.items()
                      if isinstance(value, str))
     for key, value in manifest.items():
@@ -84,7 +65,6 @@ def pointers(manifest: dict) -> list[tuple[str, str]]:
 
 
 def _outside_view(manifest: dict, path: str) -> bool:
-    """Whether a bundle stored as parts says another part holds `path`, so this archive may not."""
     view, files = manifest.get("view"), manifest.get("files")
     if not isinstance(view, dict) or not isinstance(files, dict):
         return False
@@ -94,20 +74,12 @@ def _outside_view(manifest: dict, path: str) -> bool:
     entry = files.get(path)
     if isinstance(entry, dict):
         return entry.get("part") not in parts
-    # A folder pointer: outside the view when every file under it is held by a part the view
-    # leaves out, and at least one such file exists.
     prefix = path.rstrip("/") + "/"
     under = [e for name, e in files.items() if name.startswith(prefix)]
     return bool(under) and all(isinstance(e, dict) and e.get("part") not in parts for e in under)
 
 
 def check_pointers(manifest: dict, bundle: Bundle, report: Report, fold_case: bool = False) -> None:
-    """Every pointer names a file or folder in the bundle.
-
-    With `fold_case` (a 2.0 bundle), a pointer is matched to an entry regardless of case, as a
-    2.0 reader matches it (format §10.3, rule 6), and a match only regardless of case is the
-    writer's error, `name.case-mismatch`, rather than a missing file.
-    """
     report.ran.append("pointers")
     layout = manifest.get("layout")
     if isinstance(layout, dict) and isinstance(layout.get("manifest"), str) \
@@ -139,13 +111,6 @@ def check_pointers(manifest: dict, bundle: Bundle, report: Report, fold_case: bo
 
 
 def check_hashes(manifest: dict, bundle: Bundle, report: Report, fold_case: bool = False) -> None:
-    """Verify every sha256 the manifest states for a file this bundle holds.
-
-    A file named only by a pointer with no hash of its own takes the hash the manifest's format
-    tables state for the same path. A file with no hash anywhere is counted as unknown: a missing
-    optional hash is not a corrupt file, and the report says which it was rather than claiming a
-    verification it did not make.
-    """
     report.ran.append("sha256")
     stated: dict[str, set[str]] = {}
     for key, value in manifest.items():
@@ -198,7 +163,7 @@ def check_frames(manifest: dict, report: Report) -> None:
         where = f"/file_entries/{escape(path)}/frame"
         frame = entry.get("frame")
         if isinstance(frame, dict) and frame.get("placed") is False:
-            continue  # 2.0: a file with no spatial frame says so, and states nothing else.
+            continue
         if not isinstance(frame, dict):
             if "frame" not in entry and ext in GEOSPATIAL:
                 report.add("frames", "frame.absent", "warning",
@@ -244,13 +209,6 @@ def check_frames(manifest: dict, report: Report) -> None:
 
 def check_roles(manifest: dict, bundle: Bundle, report: Report, fold_case: bool = False,
                 unstated: bool = True, member: str = "file_entries") -> None:
-    """Every file's ODbL role, against its format and its sources.
-
-    A missing role reads as `database`, the stricter duty, so it is reported rather than
-    refused while the field is optional. With `unstated` false (a 3.x bundle, whose catalog check
-    already fails a file with no entry), a file with no entry is not reported here a second time.
-    `member` is the catalog's name: `file_entries` before 3.x, `catalog` in it.
-    """
     report.ran.append("roles")
     raw = manifest.get(member)
     if not isinstance(raw, dict):

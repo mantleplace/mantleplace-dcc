@@ -3,11 +3,6 @@ using System.Text.Json;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The Realtime (Phoenix) frames the connected host speaks, encoded and decoded with no socket: every
-/// outgoing frame the export contract needs, and every incoming one it acts on (the platform export
-/// contract, sections 1 and 3).
-/// </summary>
 internal static class RealtimeFramesTests
 {
     private const string Topic = "realtime:vault:user-1";
@@ -308,7 +303,6 @@ internal static class RealtimeFramesTests
         return run.Report("Realtime frames");
     }
 
-    /// <summary>An unsigned token with the given claims: the client reads, never verifies, it.</summary>
     internal static string Jwt(string claims)
         => Base64Url("""{"alg":"HS256","typ":"JWT"}""") + "." + Base64Url(claims) + ".sig";
 

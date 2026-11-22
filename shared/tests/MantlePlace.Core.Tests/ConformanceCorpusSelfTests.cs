@@ -4,23 +4,6 @@ namespace MantlePlace.Core.Tests;
 
 using CorpusCase = ConformanceCorpus.CorpusCase;
 
-/// <summary>
-/// Runs this host's corpus reader over <c>tools/manifest-conformance/corpus/self-test/</c> — the
-/// deliberately broken index and case fixtures every host reader must REJECT (HPS-46). The
-/// inversion is the whole point: a fixture the reader ACCEPTS fails this suite, because a reader
-/// that tolerates a broken corpus is how a conformance suite comes to report green while asserting
-/// nothing. "The reader is correct" is this case set, not a one-off mutation run.
-/// </summary>
-/// <remarks>
-/// Every fixture is driven through the REAL reader — <see cref="ConformanceCorpus.LoadGroup(string,
-/// string, out List{CorpusCase})"/>, the <c>Wants*</c> accessors,
-/// <see cref="ConformanceCorpus.UnassertedExpectations"/> and
-/// <see cref="ConformanceCorpus.UnindexedCaseFiles"/> — never a stand-in re-implemented here. A
-/// check that cannot fail reads as assurance it does not provide, and a self-test that re-derives
-/// the answer it is meant to verify is exactly that check. The group load collects rot rather than
-/// stopping at the first break, so one load proves all three structural fixtures and still hands
-/// back the cases that DID load for the per-case fixtures below.
-/// </remarks>
 internal static class ConformanceCorpusSelfTests
 {
     internal static int Run()
@@ -37,9 +20,6 @@ internal static class ConformanceCorpusSelfTests
 
         string selfTestRoot = Path.Combine(corpusRoot, "self-test");
 
-        // The structural fixtures — missing file, undeclared malformed bytes, duplicate id — are
-        // all proven off ONE load, which must fail AND name every break: a reader that stopped at
-        // the first would leave the other fixture classes unproven.
         string? rot = ConformanceCorpus.LoadGroup("manifest", selfTestRoot, out List<CorpusCase> loaded);
 
         run.Case("selfTest.missingFile: a case whose file is gone fails the group load", () =>
@@ -75,8 +55,6 @@ internal static class ConformanceCorpusSelfTests
                     + "id-dispatched suites");
         });
 
-        // The per-case fixtures, driven off the cases that DID load out of the rotten index. They
-        // prove the asserted-keys mechanics an allow-list reader gets wrong.
         run.Case("selfTest.unknownExpectationKey: a reserved key no host consumes is reported", () =>
         {
             if (Find(loaded, "selfTest.unknownExpectationKey") is not { } corpusCase)
@@ -107,8 +85,6 @@ internal static class ConformanceCorpusSelfTests
                 return;
             }
 
-            // The same accessor the real suite runs for orderId: it must read nothing from a
-            // number, and that nothing must then be reported rather than counted as covered.
             run.False(
                 ConformanceCorpus.WantsString(corpusCase, "orderId", out _),
                 "WantsString reads nothing from a number");
@@ -131,8 +107,6 @@ internal static class ConformanceCorpusSelfTests
                 return;
             }
 
-            // Drive it exactly as a top-level-only tracker would: assert both top-level keys, walk
-            // the row, read what the host knows how to read.
             run.True(ConformanceCorpus.WantsString(corpusCase, "orderId", out _), "the top-level orderId reads");
             run.True(
                 ConformanceCorpus.WantsRows(corpusCase, "items", out IReadOnlyList<ExpectationNode> rows),
@@ -142,15 +116,10 @@ internal static class ConformanceCorpusSelfTests
             ExpectationNode row = rows[0];
             run.Equal(row.Str("orderId"), "ord-selftest-nested", "items[0].orderId reads");
 
-            // An explicit null is a VALUE and counts as read — otherwise `sha256: null`, the row
-            // ⛔HPS-27 exists for, becomes the one leaf a suite skips for free.
             run.True(row.Str("sha256") is null, "items[0].sha256 is null, so there is no value to assert");
 
-            // The coercion half (one level down): `status` is a number. A strictly typed read
-            // gets NOTHING from it. UE's TryGetStringField would hand back "404" and mark it read.
             run.True(row.Str("status") is null, "a strictly typed read gets nothing from a number");
 
-            // The crux: the top level is entirely satisfied, so a reader that stops there is green.
             run.Equal(
                 ConformanceCorpus.UnassertedExpectations(
                     corpusCase, ManifestConformanceTests.ConsumedExpectationKeys).Count,
@@ -184,15 +153,12 @@ internal static class ConformanceCorpusSelfTests
                 "and nothing else — broken-index-*/ carry their own index.json and are nested "
                     + "corpora, not orphans");
 
-            // Cross-check against the index's own declaration: the self-test corpus must be
-            // broken in exactly its declared ways, no more and no fewer.
             List<string> declared = DeclaredOrphanFiles(selfTestRoot);
             swept.Sort(StringComparer.Ordinal);
             declared.Sort(StringComparer.Ordinal);
             run.Equal(string.Join(", ", swept), string.Join(", ", declared), "sweep matches `orphanFiles`");
         });
 
-        // The broken-index siblings: each must FAIL to load, never resolve to zero cases.
         run.Case("broken-index-json: an unparseable index fails, never resolves to zero cases", () =>
         {
             string? error = ConformanceCorpus.LoadGroup(
@@ -217,10 +183,6 @@ internal static class ConformanceCorpusSelfTests
     private static CorpusCase? Find(List<CorpusCase> cases, string id)
         => cases.Find(c => string.Equals(c.Id, id, StringComparison.Ordinal));
 
-    /// <summary>
-    /// The self-test index's own <c>orphanFiles</c> declaration — what the sweep is cross-checked
-    /// against. Read directly because it is the fixture's statement of intent, not reader output.
-    /// </summary>
     private static List<string> DeclaredOrphanFiles(string selfTestRoot)
     {
         List<string> declared = [];

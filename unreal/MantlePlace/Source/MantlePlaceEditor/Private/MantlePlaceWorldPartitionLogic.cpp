@@ -61,7 +61,6 @@ bool MantlePlaceWorldPartitionLogic::CellHoldsPriorScatter(const FBox2D& Cell, c
 	}
 	for (const FBox2D& Footprint : ScatterFootprints)
 	{
-		// Strictly: FBox2D::Intersect counts a shared edge, and a cell beside the AOI holds none of it.
 		if (Footprint.bIsValid && Cell.Min.X < Footprint.Max.X && Footprint.Min.X < Cell.Max.X
 			&& Cell.Min.Y < Footprint.Max.Y && Footprint.Min.Y < Cell.Max.Y)
 		{

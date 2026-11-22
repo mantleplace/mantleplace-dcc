@@ -7,10 +7,6 @@
 #include "MantlePlaceHLODLogic.h"
 #include "MantlePlaceImportNaming.h"
 
-// The HLOD decisions, asserted without a world: which families get an HLOD layer, of which type,
-// what the layer is called and where it lives, when a build is refused, and what the import log
-// says. The world-side round trip is MantlePlace.Import.WorldPartition.HLODs.
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceHLODLogicTest,
 	"MantlePlace.Import.HLOD.Logic",
@@ -21,7 +17,6 @@ bool FMantlePlaceHLODLogicTest::RunTest(const FString& Parameters)
 	using namespace MantlePlaceHLODLogic;
 	using Family = EMantlePlaceLayerFamily;
 
-	// --- Families: landscape proxies (Terrain) and buildings, nothing else -----------------------
 	{
 		TestTrue(TEXT("Terrain gets an HLOD layer"), HasHLOD(Family::Terrain));
 		TestTrue(TEXT("Buildings get an HLOD layer"), HasHLOD(Family::Buildings));
@@ -33,20 +28,17 @@ bool FMantlePlaceHLODLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("exactly two HLOD families"), HLODFamilies().Num(), 2);
 	}
 
-	// --- Assignment happens in World Partition only, and only for an HLOD family -------------------
 	{
 		TestTrue(TEXT("a partitioned level assigns Buildings"), ShouldAssign(true, Family::Buildings));
 		TestFalse(TEXT("a non-partitioned level assigns nothing"), ShouldAssign(false, Family::Terrain));
 		TestFalse(TEXT("Roads are never assigned"), ShouldAssign(true, Family::Roads));
 	}
 
-	// --- Type: simplified, since a bundle's meshes are few, large and unique ------------------------
 	for (const Family HLODFamily : HLODFamilies())
 	{
 		TestTrue(TEXT("an HLOD family's layer is a simplified mesh"), LayerType(HLODFamily) == EHLODLayerType::MeshSimplify);
 	}
 
-	// --- Naming and scoping: HLOD_<family>, shared, beside the Data Layers -------------------------
 	{
 		using namespace MantlePlaceImportNaming;
 		const FString Root = TEXT("/Game/MantlePlace");
@@ -59,7 +51,6 @@ bool FMantlePlaceHLODLogicTest::RunTest(const FString& Parameters)
 			Package.StartsWith(ImportRoot(Root, TEXT("aaaaaaaa-1111")) + TEXT("/")));
 	}
 
-	// --- Build refusals: never a build that silently leaves the import out -------------------------
 	{
 		TestTrue(TEXT("a saved partitioned level builds"), ExplainBuildRefusal(true, true, 0).IsEmpty());
 		TestTrue(TEXT("a non-partitioned level is refused"), ExplainBuildRefusal(false, true, 0).Contains(TEXT("not partitioned")));
@@ -69,7 +60,6 @@ bool FMantlePlaceHLODLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("and the refusal says what to do"), Unsaved.Contains(TEXT("File > Save All")));
 	}
 
-	// --- The import log: the cost, and the note naming both ways to build -------------------------
 	{
 		TestEqual(TEXT("the cost line"), DescribeBuildCost(12, 83.46), FString(TEXT("HLODs built: 12 HLOD actor(s) in 83.5 s.")));
 		TestTrue(TEXT("no note outside World Partition"), PostImportNote(false, 5).IsEmpty());
@@ -86,4 +76,4 @@ bool FMantlePlaceHLODLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

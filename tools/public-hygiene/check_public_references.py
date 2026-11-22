@@ -109,39 +109,20 @@ import re
 import subprocess
 import sys
 
-# The suffixes worth reading. A reference can only mislead where a human or GitHub renders it.
 TEXT_SUFFIXES = frozenset(
     {".cs", ".md", ".py", ".yml", ".yaml", ".json", ".ps1", ".txt", ".props", ".csproj", ".slnx"}
 )
 
-# ⛔ Exactly one path, spelled out. A gate for forbidden strings has to contain forbidden strings.
-# Widening this to the directory would exempt the gate's own script, whose prose is ordinary prose
-# and should be held to the rule like anything else.
 SELF_EXEMPT = frozenset({"tools/public-hygiene/test_check_public_references.py"})
 
 ISSUE_REFERENCE = re.compile(r"#\d+")
 DECISION_REFERENCE = re.compile(r"\bD-[A-Z]{2}\b")
 
-# Metadata-surface patterns. QUALIFIED_REFERENCE needs a word character hard against the hash, so
-# it never overlaps the bare form the metadata surface allows; a single-letter qualifier is a
-# language (`C#12`, `F#7` — the Revit half of this tree is C#), not a repository, and is waved
-# through where the pattern is applied. PRIVATE_SIBLING is structural — the stem plus "not this
-# repository" — and case-insensitive, because GitHub repo names are and English capitalizes at
-# sentence start. Its negative lookahead carries the two tracked artifact FILENAMES
-# (`.mantleplace-import.log`, `mantleplace-terrain*.log`) that legitimate commit messages must be
-# able to name — bound to the `.log` shape, so a hypothetical sibling repository sharing the stem
-# still trips. The trailing (?!#) hands the qualified form to QUALIFIED_REFERENCE so one token is
-# one finding.
 QUALIFIED_REFERENCE = re.compile(r"\b[\w.-]+(?:/[\w.-]+)?#\d+")
 PRIVATE_SIBLING = re.compile(
     r"(?i)\bmantleplace-(?!dcc\b|import\.log|terrain[\w-]*\.log)[a-z][a-z0-9-]*\b(?!#)"
 )
 
-# Agent tooling that is not published here. Structural: the project's stem is the only literal. A
-# catalogue is `@` + the stem (optionally with a hyphenated tail); the trailing lookahead keeps an
-# email address at the stem's own domain (`@stem.com`) out, and the leading class keeps an npm scope
-# or a version pin out because neither is followed by the stem. The command pattern needs the slash
-# NOT to be mid-path or mid-URL, and a letter after the colon so a port number is never one.
 PLUGIN_AT_CATALOGUE = re.compile(r"(?i)\b[\w.-]+@mantleplace(?:-[a-z0-9]+)*(?![\w-]|\.[a-z0-9])")
 NAMESPACED_COMMAND = re.compile(
     r"(?i)(?:(?<![\w/.:~])/mantleplace(?:-[a-z0-9]+)*"
@@ -149,14 +130,6 @@ NAMESPACED_COMMAND = re.compile(
     r":[a-z][\w-]*"
 )
 
-# File surface only. A tracked tree carries product strings a commit message never does.
-#
-# The brand casing: `MantlePlace-Surface`, `MantlePlace-Terms` are PascalCase strings the plugins
-# write into a user's project (layer names, archive names, bundle terms). The allowance is a CLOSED
-# set of the exact brand strings this tree carries, in exact case, matched as a whole token or as a
-# documented prefix (`MantlePlace-Surface-x`, `MantlePlace-Revit-1.2.0.zip`): the character after the
-# tail must not continue the word. Any other tail, capitalised or not, is a sibling name and trips;
-# a new product string is added here on purpose, with the tree that writes it.
 BRAND_TAILS = frozenset(
     {
         "Terms",
@@ -173,11 +146,6 @@ BRAND_TAILS = frozenset(
 )
 BRAND_CASED = re.compile(r"MantlePlace-(?:" + "|".join(sorted(BRAND_TAILS)) + r")(?![A-Za-z0-9])")
 
-# Tracked identifiers, matched as the WHOLE token the pattern captures, never as a prefix: a longer
-# name sharing one of these is a different name and trips. Each is a string this tree itself writes
-# or publishes: the published reader package and its distribution folder, an Autodesk bundle folder
-# name, and test-only temporary-directory prefixes. Naming no private repository is the test for an
-# entry; a case in the test corpus pins that a longer name still trips.
 FILE_ARTIFACT_NAMES = frozenset(
     {
         "mantleplace-mpb",
@@ -197,66 +165,21 @@ FILE_ARTIFACT_NAMES = frozenset(
 SHORTNAME_REFERENCE = re.compile(r"\b[Nn]at(?=\s+(?:(?i:PR|issue)\s+)?#\d+)")
 OWN_REPOSITORY = frozenset({"mantleplace-dcc", "mantleplace/mantleplace-dcc"})
 
-# ---------------------------------------------------------------------------------------------
-# The second rule this gate enforces: a published rule id must resolve.
-#
-# `HPS-NN` is a stable public identifier and stays as prose — that is the distinction drawn above,
-# rule ids are fine and links to them are not. It only holds while the text behind the id is
-# published, and for a while it was not: two READMEs written for strangers told a reader that
-# sign-in opens the system browser, that the refresh token is stored per-OS-user, and that a
-# download is verified before it is renamed into place — each claim followed by an identifier that
-# resolved nowhere they could reach. The claim and the identifier both looked authoritative and one
-# of them was a dead end.
-#
-# So the ids are checked the way the citations are: a rule cited anywhere in this repository must
-# be STATED in the published standard. A rule nothing checks decays silently, which is how the file
-# rule became a gate in the first place; this is the same argument one layer along.
 PUBLISHED_STANDARD = "docs/host-plugin-standard.md"
 RULE_REFERENCE = re.compile(r"\bHPS-\d+[a-z]?\b")
 
-# ⛔ A DEFINITION, not a mention. The id in backticks, at the start of a statement — line start,
-# optionally a list marker, an eye-catcher and bold — followed by the em dash every rule statement
-# uses. A looser test ("the id appears somewhere in the document") would let a passing reference to
-# a rule's precedent license citing a rule nobody ever wrote, which is the dangling reference in a
-# different disguise.
-#
-# ⚠️ Note what this file CANNOT do that the rest of it can: quote an example. A refused issue
-# reference is written inside a code span here, because a code span is how the rule documents
-# itself and is exempt. That escape does not exist for a rule id, because a code span is the NORMAL
-# citation form — exempting one would gut the check. So the examples live in the test corpus, which
-# is the one path SELF_EXEMPT names, and this comment says so rather than leaving the next reader
-# to rediscover it by tripping the gate with a worked example.
 RULE_DEFINITION = re.compile(r"(?m)^\s*(?:[-*]\s+)?(?:⛔\s*)?(?:\*\*)?`(HPS-\d+[a-z]?)`\s+—")
 
-# The standard states the rules, so every id in it resolves by construction. A forward reference
-# inside it is a drafting matter for review, not a dangling citation for a gate.
 RULE_SELF_EXEMPT = frozenset({PUBLISHED_STANDARD})
 
-# The shape rule for branch names: a path segment that opens with an issue number — bare, or
-# dressed as `#88`, "issue-88" or "gh-88", which are the retry shapes a developer reaches for when
-# the bare number is refused. Anchored to the segment start so version digits inside a word
-# (ue5-8, net10, mpb-1.0.0) stay legal.
 NUMERIC_SEGMENT = re.compile(r"(?i)(?:^|/)(?:#|(?:issue|gh)-?)?\d+(?:[-_/]|$)")
 
-# Structural exemptions, each anchored to the character sequence immediately before the match so
-# that "looks like an exemption somewhere on the line" cannot launder a real violation.
 HOST_ORDINAL = re.compile(r"(?i)\bhost $")
 HTML_ENTITY = re.compile(r"&$")
 CSS_COLOUR = re.compile(r":$")
 CSS_DIGITS = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})\b")
 
 
-# ⛔ What a finding says when it is going to be POSTED somewhere public rather than printed into a
-# CI log. The tracker gate reports by commenting on the offending issue, and a report that quoted
-# the refused token would make that comment a second, permanent copy of the very thing it refused —
-# so editing the issue would no longer clean it up, which is the entire point of noticing. The
-# category is enough to act on; the Actions log keeps the exact token, because the reader there is
-# us.
-# Each finding's own sentence already names the category — "cites an issue in another repository",
-# "is a decision-log id" — so a category placeholder would only restate it, and stutter doing so.
-# The placeholder therefore says no more than that something was refused, and the sentence after it
-# does the explaining. The branch rule is the exception: its sentence is about the NAME's shape, so
-# it needs a subject rather than nothing.
 REDACTIONS = {
     "issue": "a refused token",
     "qualified": "a refused token",
@@ -324,10 +247,6 @@ def exempt(line: str, start: int, spans: list[tuple[int, int]]) -> bool:
     if HOST_ORDINAL.search(before) or HTML_ENTITY.search(before):
         return True
 
-    # Read forward from the '#' in the LINE, not within the matched token. The token is whatever
-    # `#\d+` captured, and that stops at the first non-digit — so `#0B0C10` arrives here as `#0`,
-    # fails the hex shape and gets refused. Every colour that happens to be all digits passed,
-    # which is how this survived until the first brand colour with a letter in it.
     return bool(CSS_COLOUR.search(before) and CSS_DIGITS.match(line[start:]))
 
 
@@ -357,9 +276,6 @@ def violations_in_text(
     for number, line in enumerate(text.splitlines(), start=1):
         spans = code_spans(line) + link_spans(line)
 
-        # Agent tooling first, on every surface and with no code-span exemption. Its spans are kept
-        # so the sibling name inside `plugin-x@catalogue` or `/plugin-x:command` is not reported a
-        # second time: one token is one finding.
         tooling: list[tuple[int, int]] = []
         for pattern, kind, what in (
             (
@@ -411,8 +327,6 @@ def violations_in_text(
                 if qualifier in OWN_REPOSITORY:
                     continue
                 if len(qualifier) == 1:
-                    # `C#12`, `F#7`: a language version, not a repository. No real repository is
-                    # cited by a single letter.
                     continue
                 if inside_url(line, match.start()):
                     continue
@@ -446,7 +360,6 @@ def violations(path: pathlib.Path, relative: str, redact: bool = False) -> list[
     try:
         text = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
-        # Not text after all, so nothing renders. Silence here is correct, not a gap.
         return []
 
     return violations_in_text(text, relative, surface="file", redact=redact)
@@ -520,8 +433,6 @@ def commit_messages(log_arguments: list[str]) -> list[tuple[str, str]]:
             text=True,
         ).stdout
     except subprocess.CalledProcessError as error:
-        # Fail closed, but say why: swallowing git's own "unknown revision"/"bad object" line
-        # leaves a refused push with no diagnosis and --no-verify as the only discoverable exit.
         sys.stderr.write(error.stderr)
         sys.stderr.write(
             "The commit-range arguments did not resolve, so nothing was checked and this refuses "
@@ -575,9 +486,6 @@ def main(argv: list[str]) -> int:
     )
     arguments = parser.parse_args(argv)
 
-    # ⛔ Dispatch on "was the flag given", never on truthiness. An empty value falling through to
-    # the tree scan would print "OK: 208 file(s)" for a branch name that was never checked — a
-    # false green from the gate whose whole job is refusing false greens.
     if arguments.stdin:
         found = violations_in_text(
             sys.stdin.read(), arguments.label, surface="metadata", redact=arguments.redact
@@ -593,8 +501,6 @@ def main(argv: list[str]) -> int:
     if arguments.commit_msg_file is not None:
         if not arguments.commit_msg_file:
             parser.error("--commit-msg-file was given an empty value; nothing was checked")
-        # errors="replace": an undecodable byte (i18n.commitEncoding, a Windows editor) must not
-        # crash the hook — the ASCII patterns still scan, same stance as the file surface's guard.
         raw = pathlib.Path(arguments.commit_msg_file).read_text(
             encoding="utf-8", errors="replace"
         )
@@ -625,9 +531,6 @@ def main(argv: list[str]) -> int:
     else:
         paths = tracked_files(root)
 
-    # The published standard, read once. Absent, every rule id in the tree is unresolved — which is
-    # the correct reading of "the document is gone" and is exactly what the gate should say, rather
-    # than passing quietly because it could not find its own reference.
     standard = root / PUBLISHED_STANDARD
     defined = defined_rule_ids(standard.read_text(encoding="utf-8")) if standard.is_file() else set()
 

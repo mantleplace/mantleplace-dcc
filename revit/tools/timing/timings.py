@@ -85,10 +85,10 @@ class Step:
     kind: str
     start: datetime
     end: datetime | None = None
-    took: float | None = None  # the log's own "(Kind took N s.)"
+    took: float | None = None
     not_run: bool = False
     cut_off: bool = False
-    end_exact: bool = False  # end is a real clock reading (cutoff, harness ended_at), not a floored log second
+    end_exact: bool = False
     log_commits: list[tuple[datetime, str, float, str]] = field(default_factory=list)
     commits: list["Commit"] = field(default_factory=list)
 
@@ -101,7 +101,7 @@ class Commit:
     status: str
     name_source: str = "journal"
     depth: int = 1
-    reported: bool = True  # False: the journal named the transaction but printed no DOPT timing (Revit omits it below ~0.05 s)
+    reported: bool = True
 
     @property
     def start(self) -> datetime:
@@ -284,7 +284,6 @@ def assign(steps: list[Step], commits: list[Commit], cutoff: datetime | None):
             if step.not_run or step.end is None:
                 if not step.cut_off and step.end is None:
                     continue
-            # the step's end stamp is a floored second: its true end is anywhere before the next second starts
             whole_second_end = step.end if (step.cut_off or step.end_exact) else step.end + timedelta(seconds=1)
             if step.start <= c.end < whole_second_end:
                 strict = si if strict is None else strict
@@ -355,9 +354,6 @@ def window_section(path: Path) -> list[str]:
     out = ["## Window readings", ""]
     out.append(f"- {len(samples)} readings in `window.txt`; {len(hung)} taken while the window was not responding (IsHungAppWindow), when the last reading is repeated and `stale_s` counts up.")
     if stale_values:
-        # `stale_s` is the age of the newest completed reading at each 5 s sample, so its maximum stops one sample
-        # short of the next fresh reading. The reading's own time (elapsed - stale_s) gives the span between two
-        # completed readings, which is what the window actually went without.
         made_at: list[float] = []
         for r in samples:
             t, age = maybe_num(col(r, 0)), maybe_num(col(r, 10))
@@ -395,7 +391,7 @@ def window_section(path: Path) -> list[str]:
 def revit_line(run_dir: Path, result: dict) -> str:
     if result.get("revit_build"):
         return f"{result.get('revit_name', '?')} build {result['revit_build']} ({result.get('revit_subversion', result.get('revit_version', '?'))})"
-    harness = run_dir / "harness.txt"  # a run cut off before it wrote result.json still logged this line
+    harness = run_dir / "harness.txt"
     if harness.exists():
         m = re.search(r"Revit (\S+) (.*?) build (\S+), pid", read_text(harness))
         if m:
@@ -421,14 +417,12 @@ def main(run_dir: Path, out_name: str = "timings.md") -> None:
     jpath = run_dir / "journal.txt"
     if jpath.exists():
         journal_info, commits = parse_journal(jpath)
-    # What runs after the last step's own end line (the smooth-shading commit, the summary) is real wall clock
-    # of the import, so it gets a row of its own, ending when the harness saw the importer let go.
     if steps and steps[-1].end is not None and not steps[-1].cut_off and result.get("ended_at"):
         tail_start = steps[-1].end
         tail_end = datetime.fromisoformat(result["ended_at"])
         tail_commits = []
         last_kind = steps[-1].kind
-        for stamp, text in reversed(stamped):  # file order: only what follows the last "(Kind took N s.)" line
+        for stamp, text in reversed(stamped):
             e = STEP_END.match(text)
             if e and e[1] == last_kind:
                 break
@@ -541,7 +535,6 @@ def main(run_dir: Path, out_name: str = "timings.md") -> None:
     rows = []
     previous_end = None
     for step in steps:
-        # the gap before a commit runs from the previous commit's end, or from the step's start if that is later
         for c in step.commits:
             floor = max(step.start, previous_end) if previous_end else step.start
             c._gap = max(0.0, (c.start - floor).total_seconds())  # type: ignore[attr-defined]
@@ -558,7 +551,6 @@ def main(run_dir: Path, out_name: str = "timings.md") -> None:
     if loose:
         out += ["", f"Commits outside every step ({len(loose)}): " + "; ".join(f"{hms(c.end)} {fmt(c.seconds)} s {c.name or '(unnamed)'}" for c in loose[:12]) + (" …" if len(loose) > 12 else "")]
 
-    # journal vs the plugin log's own commit lines (Revit's own transactions, such as an IFC import, are not the plugin's)
     mismatched = []
     for i, s in enumerate(steps, 1):
         mine = [c for c in s.commits if c.name and c.name.startswith("Mantle Place:")]

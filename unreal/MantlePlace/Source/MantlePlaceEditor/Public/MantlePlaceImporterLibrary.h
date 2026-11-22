@@ -7,9 +7,9 @@
 #include "MantlePlaceImportTypes.h"
 #include "MantlePlaceImporterLibrary.generated.h"
 
-struct FMantlePlaceVaultManifest; // MantlePlaceImportManifest.h (out-param of ReadVaultManifest)
-struct FMantlePlaceImportSelection; // MantlePlaceArtifactHandler.h (editor-internal)
-class FMantlePlaceImportSteps;      // MantlePlaceImportStepsLogic.h (editor-internal)
+struct FMantlePlaceVaultManifest;
+struct FMantlePlaceImportSelection;
+class FMantlePlaceImportSteps;
 
 /**
  * Entry point for the local-zip vault-package importer. The Editor Utility Widget calls
@@ -35,50 +35,16 @@ public:
 		const FString& ZipPath,
 		EMantlePlaceImportMode Mode = EMantlePlaceImportMode::Landscape);
 
-	/**
-	 * The same import, driven by an explicit selection of artifacts rather than the three-way Mode:
-	 * the entry point a per-layer selection UI calls. ImportVaultPackage is this with
-	 * FMantlePlaceImportSelection::FromMode(Mode). Not a UFUNCTION - the selection is a plain struct.
-	 */
 	static FMantlePlaceImportResult ImportVaultPackageWithSelection(
 		const FString& ZipPath, const FMantlePlaceImportSelection& Selection, FMantlePlaceImportSteps* Steps = nullptr);
 
-	/**
-	 * ImportVaultPackage, watched by an import window: the bundle's steps are added to Steps as the
-	 * bundle is read, each moves through its states as it runs, and a cancel Steps holds takes effect at
-	 * the next step boundary (FMantlePlaceImportSteps). Steps is finished when this returns. Not a
-	 * UFUNCTION - the steps are a plain class.
-	 */
 	static FMantlePlaceImportResult ImportVaultPackageWithSteps(
 		const FString& ZipPath, EMantlePlaceImportMode Mode, FMantlePlaceImportSteps* Steps);
 
-	/**
-	 * Read + parse a bundle .zip's Metadata/manifest.json WITHOUT importing anything. Lets the local
-	 * import flow decide, before importing, whether the bundle already ships its Unreal formats
-	 * (OutManifest.bValid) or must be materialized on demand first (OutManifest.OrderId is the join key
-	 * back to the vault order). Not a UFUNCTION - FMantlePlaceVaultManifest is a plain (non-Blueprint) struct.
-	 *
-	 * @return  false + OutError only for a structural failure (missing file / unreadable zip / no
-	 *          manifest.json). A bundle that parses but has no `unreal` block returns TRUE with
-	 *          OutManifest.bValid == false and OutError holding the user-facing guidance.
-	 */
 	static bool ReadVaultManifest(const FString& ZipPath, FMantlePlaceVaultManifest& OutManifest, FString& OutError);
 
-	/**
-	 * The lowercase-hex sha256 of a bundle zip's `Metadata/manifest.json` member, as stored. A download
-	 * view states this digest: the manifest is the root every per-file digest is trusted from, so a view
-	 * whose manifest does not match it is discarded. Not a UFUNCTION (plain out-params).
-	 *
-	 * @return  false + OutError when the zip is missing, unreadable, or has no manifest member.
-	 */
 	static bool ReadManifestSha256(const FString& ZipPath, FString& OutSha256, FString& OutError);
 
-	/**
-	 * Of `Names`, the ones a downloaded bundle's manifest lists (FMantlePlaceManifestThreeLogic::ListedAmong).
-	 * Not a UFUNCTION (plain out-params).
-	 *
-	 * @return  false + OutError when the zip is missing or unreadable, or its manifest cannot be read.
-	 */
 	static bool FindListedFiles(const FString& ZipPath, const TArray<FString>& Names, TArray<FString>& OutListed, FString& OutError);
 
 	/**

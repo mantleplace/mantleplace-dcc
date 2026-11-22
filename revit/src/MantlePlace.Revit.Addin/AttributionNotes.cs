@@ -4,29 +4,13 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-/// <summary>
-/// Writes the "Mantle Place Attribution" drafting view and the provenance record on Project
-/// Information. Both are the manifest's words, copied, and every decision about them is
-/// <see cref="AttributionView.Decide"/>'s; this carries it out.
-/// </summary>
-/// <remarks>
-/// Shared by the import's attribution step and by Prepare for handover, which has to leave the credit
-/// in a project whose ODbL content it removed. Each caller opens the transaction.
-/// </remarks>
 internal static class AttributionNotes
 {
-    /// <summary>
-    /// How wide the note wraps, in paper feet: about 180 mm, the width of an A4 or Letter sheet's
-    /// text block, so the view drops onto a sheet without the note running off it.
-    /// </summary>
     internal const double AttributionNoteWidthFeet = 0.59;
 
-    /// <summary>The paper gap left under the lowest note when another is added beneath it, in feet.</summary>
     internal const double AttributionNoteGapFeet = 0.02;
 
 
-    /// <summary>Carries out <see cref="AttributionView.Decide"/>.</summary>
-    /// <returns>The line to say, and the text the record is to carry.</returns>
     internal static (string Line, string RecordedText) WriteAttributionView(
         Document document,
         ProjectProvenance provenance,
@@ -35,7 +19,6 @@ internal static class AttributionNotes
         const string name = AttributionView.ViewName;
         int count = provenance.Sources.Count;
 
-        // Templates included: Revit refuses a name any view already has, template or not.
         View? existing = new FilteredElementCollector(document)
             .OfClass(typeof(View))
             .Cast<View>()
@@ -84,7 +67,6 @@ internal static class AttributionNotes
                 ViewDrafting? view = plan.CreateView ? CreateAttributionView(document) : existing as ViewDrafting;
                 if (view is null)
                 {
-                    // Nothing was written, so the record must not claim a note exists.
                     return ("This project has no drafting view type, so the attribution view was not made.",
                         string.Empty);
                 }
@@ -99,8 +81,6 @@ internal static class AttributionNotes
                     plan.TextToRecord);
 
             default:
-                // An action added to the core and never carried out here would otherwise write nothing
-                // while the record claimed a note; stop the step instead.
                 throw new InvalidOperationException(
                     $"This build of the plugin does not know how to carry out the attribution action "
                     + $"'{plan.Action}'. Update the Mantle Place plugin.");
@@ -123,9 +103,6 @@ internal static class AttributionNotes
         return view;
     }
 
-    /// <summary>
-    /// A new note, under whatever notes the view already holds so none is written on top of another.
-    /// </summary>
     private static void AddAttributionNote(Document document, ViewDrafting view, IReadOnlyList<TextNote> existingNotes, string text)
     {
         ElementId typeId = document.GetDefaultElementTypeId(ElementTypeGroup.TextNoteType);
@@ -144,10 +121,6 @@ internal static class AttributionNotes
     }
 
 
-    /// <summary>
-    /// The record the project holds, whole, or <c>null</c> when it holds none — a project this add-in
-    /// never imported into. The sources are the manifest's own words as they were stored.
-    /// </summary>
     internal static ProjectProvenance? ReadProvenance(Document document, Schema schema)
     {
         Entity entity = document.ProjectInformation.GetEntity(schema);
@@ -165,7 +138,6 @@ internal static class AttributionNotes
         };
     }
 
-    /// <summary>The stored record of what the plugin last wrote into the attribution view, or <c>null</c> when there is none.</summary>
     internal static RecordedAttribution? ReadRecorded(Document document, Schema schema)
     {
         Entity entity = document.ProjectInformation.GetEntity(schema);
@@ -193,14 +165,6 @@ internal static class AttributionNotes
         document.ProjectInformation.SetEntity(entity);
     }
 
-    /// <summary>
-    /// The provenance schema, from this session if a document already brought it in, and built from
-    /// the core's constants otherwise.
-    /// </summary>
-    /// <remarks>
-    /// Read access is public, so any tool can ask which bundle a project came from; write access is
-    /// this vendor's, so only this add-in can say. Why the GUID is permanent is ADR 0011.
-    /// </remarks>
     internal static Schema ProvenanceSchema()
     {
         if (Schema.Lookup(ProvenanceStorage.SchemaGuid) is { } existing)

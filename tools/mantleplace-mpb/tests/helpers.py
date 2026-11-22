@@ -1,8 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""Synthetic bundles and synthetic schemas for the suite. Nothing here is a copy of the published
-schema: the published series is fetched at run time, and these tests pin the validator's own
-behaviour against small schemas written for the purpose."""
 
 from __future__ import annotations
 
@@ -12,12 +9,10 @@ import sys
 import zipfile
 from pathlib import Path
 
-# Run from a checkout without installing: the package source sits beside this folder.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 SCHEMA_2020_12 = "https://json-schema.org/draft/2020-12/schema"
 
-#: Stands in for a published schema: it requires what every published one does at the top.
 SYNTHETIC_SCHEMA = {
     "$schema": SCHEMA_2020_12,
     "type": "object",
@@ -29,11 +24,9 @@ SYNTHETIC_SCHEMA = {
 }
 
 
-#: The same, for the 2.0 major: the version it pins is the only difference.
 SYNTHETIC_SCHEMA_2 = {**SYNTHETIC_SCHEMA, "properties": {**SYNTHETIC_SCHEMA["properties"],
                                                         "version": {"const": "2.0.0"}}}
 
-#: Stands in for the 3.0 schema: the members a 3.x manifest is read by, and no `layout`.
 SYNTHETIC_SCHEMA_3 = {
     "$schema": SCHEMA_2020_12,
     "type": "object",
@@ -53,10 +46,6 @@ def sha256(data: bytes) -> str:
 
 def write_schema_dir(root: Path, schemas: dict[str, dict] | None = None,
                      ledger: dict[str, str] | None = None, staged: tuple[str, ...] = ()) -> Path:
-    """A schema directory as `--schema-dir` reads it: `<key>.json` plus `frozen.lock.json`.
-
-    A key in `staged` is served (its `<key>.json` is written) and left out of the ledger.
-    """
     root.mkdir(parents=True, exist_ok=True)
     schemas = schemas if schemas is not None else {"1.14.0": SYNTHETIC_SCHEMA}
     frozen = {}
@@ -81,7 +70,6 @@ def manifest(**extra: object) -> dict:
 
 
 def bundle_files(document: dict | None = None) -> dict[str, bytes]:
-    """The two files every bundle has: its README and its manifest."""
     return {
         "README.md": b"A synthetic bundle.\n",
         "Metadata/manifest.json": json.dumps(document or manifest(), indent=2).encode("utf-8"),
@@ -98,8 +86,6 @@ def make_folder(root: Path, files: dict[str, bytes]) -> Path:
 
 def make_zip(path: Path, files: dict[str, bytes], prefix: str = "",
              methods: dict[str, int] | None = None) -> Path:
-    """A zip of `files`, DEFLATE-compressed as a conforming bundle is; `methods` names the zip
-    method (`zipfile.ZIP_STORED` and the like) of the members that differ."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
         for name, data in files.items():
@@ -109,8 +95,6 @@ def make_zip(path: Path, files: dict[str, bytes], prefix: str = "",
 
 
 def write_corpus_index(root: Path, versions: list[object], rejects: list[object] = ()) -> Path:
-    """A corpus `index.json` with one accept case per entry of `versions` (None: a case declaring
-    none), and one reject case per entry of `rejects`."""
     cases = []
     for number, (version, expect) in enumerate(
             [(v, "accept") for v in versions] + [(v, "reject") for v in rejects]):
@@ -125,7 +109,6 @@ def write_corpus_index(root: Path, versions: list[object], rejects: list[object]
 
 
 def geopackage(*tables: str) -> bytes:
-    """A GeoPackage that holds one feature table per name, as the validator reads one."""
     from mantleplace_mpb.corpus import geopackage_bytes
 
     return geopackage_bytes(list(tables))

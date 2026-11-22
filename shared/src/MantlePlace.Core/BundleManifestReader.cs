@@ -3,23 +3,12 @@ using System.Text.Json;
 
 namespace MantlePlace.Core;
 
-/// <summary>
-/// Reads <c>Metadata/manifest.json</c> into a <see cref="BundleManifest"/>. Pure: no file system,
-/// no Revit API, no network — text in, facts out (HPS-02).
-/// </summary>
 public static class BundleManifestReader
 {
-    /// <summary>Host key this reader claims in the shared conformance corpus.</summary>
     public const string HostKey = "revit";
 
     internal const string NotJsonMessage = "manifest.json is not valid JSON.";
 
-    /// <summary>
-    /// Layout keys for the artifacts this plugin imports. The manifest's <c>layout</c> table is the
-    /// pointer of record: schema-required and schema-declared, while the <c>elevation.*</c> and
-    /// <c>buildings.ifc</c> detail blocks ride <c>additionalProperties</c>. Those
-    /// blocks are read for frame metadata, and for the path only as a fallback (HPS-32).
-    /// </summary>
     private const string LayoutPointsCsv = "points_csv";
     private const string LayoutSurfaceDxf = "surface_dxf";
     private const string LayoutBuildingsIfc = "buildings_ifc";
@@ -28,53 +17,21 @@ public static class BundleManifestReader
     private const string LayoutTreePoints = "tree_points";
     private const string LayoutImageryDrape = "imagery_drape";
 
-    /// <summary>MPB 2.0's map of each original vector file to its twin in the order's projected CRS.</summary>
     private const string LayoutProjectedVariants = "projected_variants";
 
-    /// <summary>MPB 2.0's pointers to the two hazard layers, each a GeoPackage of one table.</summary>
     private const string LayoutFloodZones = "flood_zones";
     private const string LayoutSteepSlope = "steep_slope";
 
-    /// <summary>
-    /// What <see cref="BundleArtifact.HorizontalFrame"/> reads on a layer whose coordinates are
-    /// WGS84 lon/lat rather than a projected CRS.
-    /// </summary>
     internal const string GeographicFrame = "EPSG:4326";
 
-    /// <summary>
-    /// What <see cref="BundleArtifact.HorizontalFrame"/> reads on a deliverable whose coordinates are
-    /// absolute eastings and northings in the bundle's OWN projected CRS.
-    /// </summary>
-    /// <remarks>
-    /// It names a frame rather than a CRS on purpose, and there is nothing to parse an EPSG out of:
-    /// the CRS is the one the same block already publishes as
-    /// <c>hosts.revit.georeference.crs_projected</c>. Reading the token as "the origin's CRS" applies
-    /// two published statements together; it does not derive a third (<c>HPS-33</c>).
-    /// </remarks>
     internal const string ProjectedFrame = "absolute_projected";
 
-    /// <summary>
-    /// What <see cref="BundleArtifact.HorizontalFrame"/> reads on a deliverable whose coordinates are
-    /// east/north offsets about <c>hosts.revit.georeference.origin</c>.
-    /// </summary>
     internal const string LocalFrame = "local_enu";
 
-    /// <summary>
-    /// The key of the shared vector carrier in <c>hosts.revit.vectors</c>: one GeoPackage in the origin's
-    /// own CRS, holding a table per layer.
-    /// </summary>
     internal const string VectorCarrierKey = "gpkg";
 
-    /// <summary>
-    /// The one <c>vertical_reference</c> the format declares: a Z that is real orthometric height, never
-    /// an offset from the origin.
-    /// </summary>
     internal const string AbsoluteHeight = "absolute";
 
-    /// <summary>
-    /// Deliverable sub-objects of the <c>hosts.revit</c> block — this host's OWN block (HPS-33). Each
-    /// is optional, and each present one carries a <c>sha256</c> the schema makes required (HPS-34).
-    /// </summary>
     private const string RevitToposurfacePoints = "toposurface_points";
     private const string RevitSurfaceDxf = "surface_dxf";
     private const string RevitIfcSite = "ifc_site";
@@ -85,25 +42,11 @@ public static class BundleManifestReader
     private static readonly string[] RevitDeliverableKeys =
         [RevitToposurfacePoints, RevitSurfaceDxf, RevitIfcSite, RevitDrape, RevitContours];
 
-    /// <summary>
-    /// The envelope every host block lives under at MPB 1.0.0. One key replaces the roster: a host
-    /// asks whether this object has ANY key, never which keys it has, which is what makes roster
-    /// staleness structurally unable to matter rather than merely tolerated.
-    /// </summary>
     private const string HostsKey = "hosts";
 
-    /// <summary>
-    /// This host's own subtree, <c>hosts.revit</c> — and never a sibling's (HPS-33).
-    /// </summary>
     private static JsonElement? RevitHostBlock(JsonElement root) =>
         root.Object(HostsKey)?.Object(HostKey);
 
-    /// <summary>
-    /// Parses manifest text. Never throws. On refusal the returned manifest carries
-    /// <see cref="BundleManifest.IsValid"/> <c>false</c>, a populated
-    /// <see cref="BundleManifest.Error"/>, and every top-level fact that was readable before the
-    /// refusal — the order id above all, because that is the vault join key (HPS-37).
-    /// </summary>
     public static BundleManifest Parse(string jsonText)
     {
         BundleManifest manifest = new();
@@ -134,22 +77,10 @@ public static class BundleManifestReader
     {
         manifest.JobId = root.Str("job_id");
 
-        // Read as a STRING and parsed as semver. An MPB version IS a string, so the numeric read
-        // this used to do is gone entirely — and with it the truncate-vs-round divergence that
-        // needed policing, since there is no longer a number to disagree about. Kept verbatim and
-        // unparsed on the manifest so a refusal can quote exactly what the bundle said, including
-        // an integer-era value this reader does not speak.
         manifest.Version = root.Str("version");
         manifest.OrderId = ReadOrderId(root);
         manifest.FilingKey = ReadFilingKey(root);
 
-        // Clean break (HPS-31). Anything that fails to parse as semver — an absent version, an
-        // integer from the pre-history, a partial "1.0" — is refused. Deliberately NOT coerced
-        // through a number first: the integer era read an absent version as 0 and refused it, and
-        // letting a string fall to 0 the same way would be an accident that happens to work rather
-        // than a decision. This is the one refusal that returns immediately: below the floor, the
-        // rest of the document is written in a dialect this host does not speak, so reading on
-        // would be dual-parsing by another name.
         ManifestVersion parsedVersion = ManifestVersion.Parse(manifest.Version);
         ManifestVersion floor = ManifestVersion.Parse(ManifestVersions.MinSupportedManifestVersion);
         if (!parsedVersion.IsValid || parsedVersion.CompareTo(floor) < 0)
@@ -165,12 +96,6 @@ public static class BundleManifestReader
                     ManifestVersions.MinSupportedManifestVersion));
         }
 
-        // The other end of the semver compatibility policy, which the integer era had no way to
-        // express. Minors are strictly additive and unknown fields are ignored, so any 1.x or 2.x
-        // reads here; an unknown higher MAJOR is a graceful refusal rather than a best-effort parse,
-        // because a major is exactly the promise that something this reader relies on may have
-        // changed meaning. Too-old and too-new are distinct refusals with distinct remedies —
-        // re-download the AOI, versus update the plugin — which a bare "unsupported" conflated.
         if (parsedVersion.Major > ManifestVersions.NewestSupportedMajor)
         {
             return Refuse(
@@ -178,13 +103,8 @@ public static class BundleManifestReader
                 ManifestVersions.NewerMajorMessage(manifest.Version, ManifestVersions.NewestSupportedMajor));
         }
 
-        // 2.0 removed `hosts.revit.vectors` and names each vector layer's projected twin in
-        // `layout.projected_variants` instead (spec/changelog.md, 2.0.0). Every other pointer this
-        // host reads kept its key, so this is the one place the two layouts part.
         bool layoutTwo = parsedVersion.Major >= 2;
 
-        // From here every refusal is accumulated rather than returned, so a refused manifest still
-        // hands the caller a fully-populated set of facts (HPS-37).
         string? refusal = null;
 
         manifest.DeliveryModel = root.Object("packaging")?.Str("delivery_model") ?? string.Empty;
@@ -211,11 +131,6 @@ public static class BundleManifestReader
         ReadArtifacts(manifest, root);
         refusal ??= ReadGeoreference(manifest, root);
 
-        // The own block wins; `delivery.local_origin` is the fallback that keeps the `local_ft`
-        // bundles already in curators' hands importable (HPS-33). An own block that
-        // is present but incomplete falls through rather than shadowing a usable delivery origin —
-        // the two are meant to agree, and "published but unusable" is closer to absent than to
-        // authoritative.
         manifest.SurveyPoint = manifest.Georeference.Origin is { IsUsable: true } ownOrigin
             ? ownOrigin
             : manifest.Delivery.LocalOrigin;
@@ -232,19 +147,6 @@ public static class BundleManifestReader
         return manifest;
     }
 
-    /// <summary>
-    /// The vault join key. Top-level <c>order_id</c> is authoritative; <c>attribution.order_id</c> is
-    /// the fallback, and only on a bundle whose <c>attribution</c> also carries a <c>job_id</c>. The
-    /// ETL job id is deliberately never a fallback — it changes on every rebuild and joining on it
-    /// would silently address the wrong row (HPS-37).
-    /// </summary>
-    /// <remarks>
-    /// Before MPB 1.7.0 <c>attribution.order_id</c> was emitted undeclared and held the packaging JOB
-    /// id; 1.7.0 declares it the curator's order, or null, and adds <c>attribution.job_id</c> beside
-    /// it, whose absence marks the old meaning. So the key is read as the order only where
-    /// <c>job_id</c> stands beside it, and an older bundle with no top-level <c>order_id</c> has no
-    /// order from here. A null order reads as none.
-    /// </remarks>
     private static string ReadOrderId(JsonElement root)
     {
         string orderId = root.Str("order_id");
@@ -258,15 +160,6 @@ public static class BundleManifestReader
             : string.Empty;
     }
 
-    /// <summary>
-    /// What this host files the bundle under (<see cref="BundleManifest.FilingKey"/>): the top-level
-    /// <c>order_id</c>, and otherwise <c>attribution.order_id</c> whatever it means.
-    /// </summary>
-    /// <remarks>
-    /// Exactly what <see cref="ReadOrderId"/> returned before MPB 1.7.0 gave the attribution key a
-    /// second meaning, kept so that a bundle is filed where every earlier import filed it. It is a
-    /// filing key and nothing else: the vault is joined on <see cref="ReadOrderId"/> alone.
-    /// </remarks>
     private static string ReadFilingKey(JsonElement root)
     {
         string orderId = root.Str("order_id");
@@ -275,15 +168,6 @@ public static class BundleManifestReader
             : root.Object("attribution")?.Str("order_id") ?? string.Empty;
     }
 
-    /// <summary>
-    /// <c>attribution.sources[]</c>, each field verbatim. An entry that is not an object, or that
-    /// carries no field this host writes, is skipped alone rather than abandoning the list.
-    /// </summary>
-    /// <remarks>
-    /// Never a refusal. Attribution is written into the project, not acted on, so a malformed entry
-    /// costs that entry and nothing else — refusing the bundle over it would take the terrain away
-    /// from a curator for the sake of one line of credits.
-    /// </remarks>
     private static void ReadAttribution(BundleManifest manifest, JsonElement root)
     {
         if (root.Object("attribution")?.Array("sources") is not { } sources)
@@ -313,16 +197,6 @@ public static class BundleManifestReader
         manifest.AttributionSources = read;
     }
 
-    /// <summary>
-    /// <c>file_entries</c>: each file's <c>odbl_role</c>, <c>license</c> and <c>sources</c>, keyed by
-    /// archive path. The frame members are not read (<c>HPS-33</c>).
-    /// </summary>
-    /// <remarks>
-    /// Never a refusal, and never a lighter reading than the file earns: an entry that is not an
-    /// object, or that states no role, or a role this reader does not know, is kept as
-    /// <see cref="OdblRole.Database"/> (<c>spec/format.md</c> §6.8). Dropping such an entry would read
-    /// the same, but keeping it lets a later reader tell a file the manifest listed from one it did not.
-    /// </remarks>
     internal static void ReadFileEntries(BundleManifest manifest, JsonElement root, string member = "file_entries")
     {
         if (root.Object(member) is not { } entries)
@@ -330,10 +204,6 @@ public static class BundleManifestReader
             return;
         }
 
-        // Keyed without regard to case, as the archive's entries are matched (BundleEntryIndex): the
-        // path a step asks about is the archive's own spelling, and 2.0 forbids two paths that differ
-        // only by case, so a case-only difference is the same file: a later spelling replaces an
-        // earlier one, as a repeated key always did.
         Dictionary<string, FileLicensing> read = new(StringComparer.OrdinalIgnoreCase);
         foreach (JsonProperty entry in entries.EnumerateObject())
         {
@@ -368,16 +238,6 @@ public static class BundleManifestReader
         manifest.FileEntries = read;
     }
 
-    /// <summary>
-    /// <c>location.time_zone</c>, each field verbatim. The top-level block every host may read, and
-    /// not <c>hosts.revit</c>: the zone describes the place, not this host's frame.
-    /// </summary>
-    /// <remarks>
-    /// Never a refusal, for the reason attribution is not one: the zone sets one project setting, so a
-    /// malformed block costs that setting and nothing else. The project then keeps the zone it had,
-    /// which is what a bundle without the block does. An offset that does not read as a finite number
-    /// is malformed; one outside any host's range is not, and is kept (<c>spec/format.md</c> §4.1).
-    /// </remarks>
     private static void ReadTimeZone(BundleManifest manifest, JsonElement root)
     {
         if (root.Object("location")?.Object("time_zone") is not { } zone
@@ -395,12 +255,6 @@ public static class BundleManifestReader
         };
     }
 
-    /// <summary>
-    /// Reads the bounding box. Each edge is optional-with-a-companion-flag rather than
-    /// defaulted-to-zero: a `null` west is <em>unknown</em>, and coercing it to 0.0 would produce a
-    /// box that looks real and spans the Greenwich meridian (HPS-20). All four must be known before
-    /// <see cref="BundleManifest.HasBbox"/> can be true.
-    /// </summary>
     private static void ReadBbox(BundleManifest manifest, JsonElement root)
     {
         if (root.Object("bbox") is not { } bbox)
@@ -440,9 +294,6 @@ public static class BundleManifestReader
                 }
             }
 
-            // MPB 2.0: each original vector file's archive path to its `-Projected` twin. Keyed
-            // without regard to case, so the original's path is matched as the archive matches it.
-            // A 1.x layout has no such member, and a value that is not a path is no twin.
             if (table.Object(LayoutProjectedVariants) is { } variants)
             {
                 foreach (JsonProperty variant in variants.EnumerateObject())
@@ -462,17 +313,6 @@ public static class BundleManifestReader
         manifest.CesiumTerrainPath = layout.GetValueOrDefault("cesium_terrain", string.Empty);
     }
 
-    /// <summary>
-    /// The shared <c>vector</c> layers this host places, each selected by name, format AND geometry
-    /// family, and whether the base <c>road</c> layer is there. A layer that ships only formats this
-    /// host cannot read yields nothing — there is no fallback to gpkg, because "wrong format" and
-    /// "absent" have the same correct outcome here and a fallback would hand the importer bytes it
-    /// cannot parse.
-    /// </summary>
-    /// <remarks>
-    /// Each layer is read for the geometry its import step draws from (<see cref="SiteVectorLayers"/>);
-    /// on a layer split by geometry family, that is which of its files each step takes.
-    /// </remarks>
     private static void ReadSharedVectorLayers(BundleManifest manifest, JsonElement root)
     {
         HashSet<string> nothingToPlace = new(StringComparer.Ordinal);
@@ -488,13 +328,9 @@ public static class BundleManifestReader
         manifest.RoadPolygons = ReadVectorLayer(root, SiteVectorLayers.RoadPolygons, nothingToPlace);
         manifest.SharedLayersWithNothingToPlace = nothingToPlace;
 
-        // Not an artifact: this host reads no road centreline out of the base layer (it takes the
-        // draped road_splines instead). All it is asked is whether the layer is there, because that
-        // is what makes a missing road_polygons "not derived" rather than "no roads here".
         manifest.HasRoadLayer = HasVectorLayer(root, "road");
     }
 
-    /// <summary>Whether the <c>vector</c> block lists a layer of this name, in any format.</summary>
     private static bool HasVectorLayer(JsonElement root, string layerName)
     {
         if (root.Object("vector")?.Array("layers") is not { } layers)
@@ -514,29 +350,6 @@ public static class BundleManifestReader
         return false;
     }
 
-    /// <summary>
-    /// Selects one <c>vector</c> layer by layer name, format AND geometry family: the first layer of
-    /// that name, then the <c>geojson</c> file inside it holding the geometry its step draws from.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The format table's <c>path</c> IS the manifest pointer for these layers (<c>HPS-32</c>) — the
-    /// top-level <c>layout.vector</c> names the directory, not the file, so there is no layout key
-    /// to prefer over it.
-    /// </para>
-    /// <para>
-    /// A layer that mixes geometry families may ship one file per family, each row naming its
-    /// <c>geometry_family</c>, and a consumer reads all of the rows: the first <c>geojson</c> row is
-    /// then one family of several, and taking it for the water bodies would take the streams and drop
-    /// every lake. So the rows are looked through for the one naming the wanted family. Failing that,
-    /// a row naming no family is the whole layer, and so is a row naming a family this build does not
-    /// know or one written as something other than a string (<c>spec/compatibility.md</c> §3): the file
-    /// is read, and each feature kept or passed over by its own geometry, as in an unsplit file. A row
-    /// naming another family this build knows is never taken — a line file is not a water body — and a
-    /// layer whose rows all do is added to <paramref name="nothingToPlace"/>, so the planner can say
-    /// the bundle has none rather than send the curator to a vault that cannot supply one.
-    /// </para>
-    /// </remarks>
     private static BundleArtifact? ReadVectorLayer(
         JsonElement root,
         SiteVectorLayer wanted,
@@ -575,8 +388,6 @@ public static class BundleManifestReader
                         continue;
                     }
 
-                    // A row with no path points at nothing: it neither ends the search nor stands in
-                    // for a later row as the whole layer.
                     if (SharedLayerFile(format, layer.OptionalStr("vertical_datum")) is not { } file)
                     {
                         wantedWithoutPath = true;
@@ -597,21 +408,17 @@ public static class BundleManifestReader
                 return wholeLayer;
             }
 
-            // A wanted file that names no path is a broken pointer, which keeps the vault's remedy;
-            // only a layer with no file of the wanted family at all has nothing to place.
             if (listedGeojson && !wantedWithoutPath)
             {
                 nothingToPlace.Add(wanted.Name);
             }
 
-            // Only the first layer of that name is ever considered, with or without a geojson.
             break;
         }
 
         return null;
     }
 
-    /// <summary>One file of the shared set, or <c>null</c> when its row names no path.</summary>
     private static BundleArtifact? SharedLayerFile(JsonElement format, string? layerVerticalDatum)
     {
         string path = format.Str("path");
@@ -623,29 +430,16 @@ public static class BundleManifestReader
                 Sha256 = format.OptionalStr("sha256"),
                 Format = "geojson",
 
-                // RFC 7946 fixes the CRS at WGS84 lon/lat and the bundle's layers say so in their own
-                // `crs` member. Stated rather than left blank so the planner branches on a value
-                // instead of on the layer's name.
                 HorizontalFrame = GeographicFrame,
                 VerticalDatum = layerVerticalDatum,
             };
     }
 
-    /// <summary>
-    /// A format row's <c>geometry_family</c> when it is a string, and <c>null</c> otherwise — absent,
-    /// a JSON null, or a value of another kind, each of which leaves the file read as the whole layer.
-    /// </summary>
     private static string? GeometryFamily(JsonElement format)
         => format.TryGetProperty("geometry_family", out JsonElement family) && family.ValueKind == JsonValueKind.String
             ? family.GetString()
             : null;
 
-    /// <summary>
-    /// Reads <c>delivery</c>. An unsupported enum value fails closed and names the offending value
-    /// rather than falling back to the default (HPS-35) — silently reading an unknown
-    /// <c>linear_unit</c> as metres would place an imperial site 3.28× off with nothing to debug.
-    /// An <em>absent</em> block is not an error: metric bundles omit it.
-    /// </summary>
     private static string? ReadDelivery(BundleManifest manifest, JsonElement root)
     {
         if (root.Object("delivery") is not { } delivery)
@@ -654,10 +448,6 @@ public static class BundleManifestReader
             return null;
         }
 
-        // `unit_system` is recorded but NOT gated on. HPS-35 fails closed on an enum the host acts
-        // on; this one it does not act on — every scale decision comes from `linear_unit` and the
-        // per-artifact `units`. Refusing here would make the whole bundle unimportable the day web
-        // adds a third token, over a value that changes nothing about the import.
         UnitSystem unitSystem = delivery.Str("unit_system") switch
         {
             "metric" => UnitSystem.Metric,
@@ -673,9 +463,6 @@ public static class BundleManifestReader
         GeoOrigin? localOrigin = null;
         if (delivery.Object("local_origin") is { } origin)
         {
-            // Metric by field name — `easting_m`/`northing_m` — and so unaffected by the block's
-            // own `linear_unit`, which describes the ARTIFACTS and reads "ft" on the one tier that
-            // publishes this origin.
             localOrigin = new GeoOrigin
             {
                 Lon = origin.OptionalDouble("lon"),
@@ -702,26 +489,6 @@ public static class BundleManifestReader
         return null;
     }
 
-    /// <summary>
-    /// Reads <c>revit.georeference</c> — this host's own placement block (HPS-33).
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The field names here are NOT <c>delivery.local_origin</c>'s. The origin's plan pair is
-    /// <c>projected.easting</c>/<c>projected.northing</c> with an explicit
-    /// <c>projected.linear_unit</c>, where the delivery block spells them <c>easting_m</c>/
-    /// <c>northing_m</c> and means metres. Reading the first pair with the second pair's assumption
-    /// is a State-Plane-foot site placed 3.28× out, which is why the unit is carried on
-    /// <see cref="GeoOrigin"/> rather than baked into the field name.
-    /// </para>
-    /// <para>
-    /// An unreadable <c>linear_unit</c> fails the whole manifest closed, exactly as
-    /// <c>delivery.linear_unit</c> does (HPS-35): the origin is what positions everything the bundle
-    /// carries, so a scale nobody can read is a statement about the bundle rather than about one
-    /// artifact. An <em>absent</em> one is metric, the reading every other unit site in this host
-    /// takes for an unstated unit.
-    /// </para>
-    /// </remarks>
     private static string? ReadGeoreference(BundleManifest manifest, JsonElement root)
     {
         if (RevitHostBlock(root)?.Object("georeference") is not { } georeference)
@@ -765,7 +532,6 @@ public static class BundleManifestReader
         return null;
     }
 
-    /// <summary>The three linear units the ETL delivers in; an empty token is "unstated".</summary>
     private static bool TryReadLinearUnit(string raw, out LinearUnit unit)
     {
         switch (raw)
@@ -788,11 +554,6 @@ public static class BundleManifestReader
         }
     }
 
-    /// <summary>
-    /// Fails closed on a unit this host cannot read, naming the field AND the value (HPS-35) —
-    /// silently reading an unknown token as metres would place an imperial site 3.28× off with
-    /// nothing to debug.
-    /// </summary>
     private static string UnsupportedLinearUnit(string field, string raw)
         => string.Format(
             CultureInfo.InvariantCulture,
@@ -800,11 +561,6 @@ public static class BundleManifestReader
             field,
             raw);
 
-    /// <summary>
-    /// Reads <c>hosts.revit.readiness</c> and nothing else. A sibling host's block is ignored, never
-    /// merged, and the retired v17 anonymous keys are not a fallback — reading them would turn a
-    /// clean break into dual-parsing (HPS-36).
-    /// </summary>
     private static void ReadReadiness(BundleManifest manifest, JsonElement root)
     {
         if (RevitHostBlock(root)?.Object("readiness") is not { } revit)
@@ -826,10 +582,6 @@ public static class BundleManifestReader
         };
     }
 
-    /// <summary>
-    /// <c>hosts.revit.file_frame</c>, as declared. Every field is read verbatim; whether the frame is
-    /// this host's is <see cref="SiteFrame.Holds"/>'s question, asked where a refusal can be asserted.
-    /// </summary>
     private static void ReadFileFrame(BundleManifest manifest, JsonElement root)
     {
         if (RevitHostBlock(root)?.Object("file_frame") is not { } frame)
@@ -847,8 +599,6 @@ public static class BundleManifestReader
         GeoOrigin? origin = null;
         if (frame.Object("origin") is { } local)
         {
-            // An unreadable unit leaves the origin with no position rather than a metric guess, so
-            // SiteFrame.Holds refuses it.
             bool unitRead = TryReadLinearUnit(local.Str("linear_unit"), out LinearUnit unit);
             origin = new GeoOrigin
             {
@@ -874,29 +624,6 @@ public static class BundleManifestReader
         };
     }
 
-    /// <summary>
-    /// Replaces the shared vector layers with this host's own copy, on a bundle that carries one.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The copy is all or nothing (<c>spec/format.md</c> §6.5), so where it is present every layer
-    /// comes from it, and a layer it lacks is <c>null</c>: it had no features in the area, and the
-    /// shared set has none either. Where it is absent — a bundle cut before it existed, or one whose
-    /// <c>readiness.vectors</c> says it was withheld — the shared lon/lat set stays, as the fallback
-    /// for content the block does not carry (<c>HPS-52</c>); the <c>HPS-45</c> projection behind it
-    /// still reaches a UTM origin only.
-    /// </para>
-    /// <para>
-    /// Since MPB 1.4.0 the block can be present with <c>readiness.vectors</c> false: a layer from
-    /// another source (<c>steep_slope</c>, <c>flood_zones</c>) is converted on its own, and its verdict
-    /// is its own. The copy of the shared layers was then not produced, so they keep the shared set,
-    /// and only the layers of another source are read from the block (<see cref="ReadHazards"/>).
-    /// </para>
-    /// <para>
-    /// Each layer's <c>horizontal_frame</c>, <c>units</c> and <c>vertical_reference</c> are carried
-    /// verbatim; the planner decides whether this host can place them.
-    /// </para>
-    /// </remarks>
     private static void ReadOwnVectors(BundleManifest manifest, JsonElement root)
     {
         if (RevitHostBlock(root)?.Object("vectors") is not { } vectors || !HasOwnVectorLayers(vectors))
@@ -919,38 +646,13 @@ public static class BundleManifestReader
         manifest.RoadPolygons = ReadOwnVectorLayer(vectors, SiteVectorLayers.RoadPolygons.Name);
     }
 
-    /// <summary>
-    /// Whether the block holds any vector layer to read: a <c>layers</c> array of its own files, or the
-    /// shared carrier's pointer.
-    /// </summary>
     private static bool HasOwnVectorLayers(JsonElement vectors)
         => vectors.Array("layers") is not null || vectors.Object(VectorCarrierKey) is not null;
 
-    /// <summary>
-    /// The two hazard layers of this host's own copy, and what the manifest publishes about each:
-    /// the flood map the zones came from, and the steep-ground threshold as written.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Own block only (MPB 1.4.0). The shared set carries neither layer, and the GeoPackages that
-    /// every bundle before 1.4.0 carried are in a format this host does not read — and flood's is in
-    /// lon/lat, which would need projecting (<c>HPS-45</c> permits that only onto a UTM origin).
-    /// Taking the own copy alone keeps both layers on the one route that places anything by
-    /// subtraction.
-    /// </para>
-    /// <para>
-    /// Never a refusal: every fact here is shown to a curator, not acted on, so a malformed flood
-    /// block costs its provenance lines and nothing else.
-    /// </para>
-    /// </remarks>
     private static void ReadHazards(BundleManifest manifest, JsonElement root, bool layoutTwo)
     {
         if (layoutTwo)
         {
-            // MPB 2.0: each hazard layer is a GeoPackage of its own, found through its layout
-            // pointer, read from its projected twin where it has one and as it is where it has none
-            // (`Elevation/SteepSlopes.gpkg` is already in the order's CRS). Either way its CRS is
-            // checked against the origin's when it is read (HPS-53), never assumed.
             manifest.FloodZones = LayoutGeoPackage(manifest, LayoutFloodZones, SiteVectorLayers.FloodZones.Name);
             manifest.SteepGround = LayoutGeoPackage(manifest, LayoutSteepSlope, SiteVectorLayers.SteepGround.Name);
         }
@@ -990,30 +692,6 @@ public static class BundleManifestReader
         }
     }
 
-    /// <summary>
-    /// MPB 2.0's projected copy of the shared vector layers: each layer's GeoPackage twin in the
-    /// order's projected CRS and unit, found through <c>layout.projected_variants</c>, with the shared
-    /// lon/lat GeoJSON kept as its fallback.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// 2.0 removes <c>hosts.revit.vectors</c>, and a projected-CRS reader reads the <c>-Projected</c>
-    /// twins instead (<c>spec/changelog.md</c>, 2.0.0): absolute, in the same tables, columns and
-    /// types as the original, which is the 1.x carrier's frame exactly
-    /// (<c>revit/docs/vector-carrier.md</c>). So a twin is planned as the carrier was, against the
-    /// origin, and its CRS is checked when it is read.
-    /// </para>
-    /// <para>
-    /// A layer whose GeoPackage has no twin keeps the shared GeoJSON: the shared set is lon/lat, and
-    /// the GeoPackage beside it is too. These are the shared set's files, so the shared set's absence
-    /// rules hold, and <see cref="BundleManifest.VectorsFromOwnBlock"/> stays false.
-    /// </para>
-    /// <para>
-    /// The twin has no hash in the manifest: <c>file_entries</c> states meaning, not bytes. It rides the
-    /// bundle's own verification, the sidecar's archive digest or the part's, as every file without a
-    /// pointer hash does.
-    /// </para>
-    /// </remarks>
     private static void ReadProjectedTwins(BundleManifest manifest, JsonElement root)
     {
         if (manifest.ProjectedVariants.Count == 0)
@@ -1032,17 +710,6 @@ public static class BundleManifestReader
         manifest.RoadPolygons = ProjectedTwin(manifest, root, SiteVectorLayers.RoadPolygons, manifest.RoadPolygons);
     }
 
-    /// <summary>
-    /// The layer read from the twin of its GeoPackage, or <paramref name="geoJson"/> unchanged where
-    /// the layer has no GeoPackage of the wanted geometry with a twin.
-    /// </summary>
-    /// <remarks>
-    /// The GeoPackage rows are chosen as the GeoJSON rows are (<see cref="ReadVectorLayer"/>): a row
-    /// naming another geometry family this build knows is passed over. A row's <c>tables</c>, where it
-    /// lists them, split the layer by geometry family inside the file, named for the family
-    /// (<c>Water_polygon</c>); the table named for the layer is taken first, then the table of the
-    /// family the step draws from. A file listing neither has nothing this step can read.
-    /// </remarks>
     private static BundleArtifact? ProjectedTwin(
         BundleManifest manifest,
         JsonElement root,
@@ -1105,19 +772,12 @@ public static class BundleManifestReader
                 };
             }
 
-            // Only the first layer of that name is ever considered, as the GeoJSON read does.
             break;
         }
 
         return geoJson;
     }
 
-    /// <summary>
-    /// The table of <paramref name="wanted"/> in a GeoPackage row: the layer's own name where the row
-    /// lists no tables (the file holds the layer alone, and the importer reads its one table whatever it
-    /// is named: <see cref="BundleArtifact.SoleTable"/>), else the listed table of that name, else the
-    /// one of the geometry family the step draws from, or <c>null</c>.
-    /// </summary>
     private static string? TwinTable(JsonElement format, SiteVectorLayer wanted)
     {
         IReadOnlyList<string> tables = format.StringArray("tables");
@@ -1131,10 +791,6 @@ public static class BundleManifestReader
             ?? tables.FirstOrDefault(name => name.EndsWith(family, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>
-    /// A 2.0 hazard layer: the GeoPackage <paramref name="layoutKey"/> points at, or its projected
-    /// twin where <c>layout.projected_variants</c> names one, read as the table of the layer's name.
-    /// </summary>
     private static BundleArtifact? LayoutGeoPackage(BundleManifest manifest, string layoutKey, string table)
     {
         string path = manifest.Layout.GetValueOrDefault(layoutKey, string.Empty);
@@ -1154,10 +810,6 @@ public static class BundleManifestReader
         };
     }
 
-    /// <summary>
-    /// One layer of this host's own copy: from the shared carrier when the carrier holds a table for it,
-    /// else from the layer's own GeoJSON file.
-    /// </summary>
     private static BundleArtifact? ReadOwnVectorLayer(JsonElement vectors, string layerName)
     {
         BundleArtifact? geoJson = ReadOwnGeoJsonLayer(vectors, layerName);
@@ -1185,24 +837,6 @@ public static class BundleManifestReader
         return null;
     }
 
-    /// <summary>
-    /// The layer as a table of the shared vector carrier, found through <c>hosts.revit.vectors.gpkg</c>,
-    /// or <c>null</c> when the block has no carrier, or its <c>tables</c> list none for this layer.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The pointer names a path, a hash and the tables the file holds (<c>tables</c>, as the schema has it
-    /// since MPB 1.7.0); a layer is the table of its own name, matched without regard to case as
-    /// SQLite matches names. The carrier is in the origin's own CRS and unit, absolute, on every tier
-    /// (<c>revit/docs/vector-carrier.md</c>), so the artifact states that frame and not the Revit files':
-    /// the planner places it against the origin, and the file's own CRS is checked when it is read.
-    /// </para>
-    /// <para>
-    /// A pointer with no hash is not a carrier: the schema requires one, and a file this host cannot
-    /// verify is not read (<c>HPS-34</c>; <see cref="CheckRevitHashes"/> refuses the bundle first). The
-    /// fidelity levels are the layer's own GeoJSON entry's where it has them, else the pointer's.
-    /// </para>
-    /// </remarks>
     private static BundleArtifact? ReadCarrierLayer(JsonElement vectors, string layerName, BundleArtifact? geoJson)
     {
         if (vectors.Object(VectorCarrierKey) is not { } carrier)
@@ -1234,10 +868,6 @@ public static class BundleManifestReader
         };
     }
 
-    /// <summary>
-    /// One file of an own vector layer — the layer's own, or a pointer level's, which states its frame
-    /// with the same keys — or <c>null</c> when it names no path.
-    /// </summary>
     private static BundleArtifact? OwnLayerFile(JsonElement pointer, FidelityLevels? levels = null)
     {
         string path = pointer.Str("path");
@@ -1347,11 +977,6 @@ public static class BundleManifestReader
                 VerticalDatum = detail?.OptionalStr("vertical_datum"),
             });
 
-        // Host-neutral, like the vector layers and unlike the `revit.*` deliverables. The tree
-        // points are published in the delivery CRS, which is this host's frame, but a host-neutral
-        // pointer is in that frame by coincidence rather than by contract (HPS-52), so the CRS its
-        // manifest entry states is read here and the planner fails closed on a mismatch rather
-        // than reconciling it (HPS-53).
         manifest.TreePoints = BuildArtifact(
             manifest,
             LayoutTreePoints,
@@ -1370,33 +995,12 @@ public static class BundleManifestReader
         ReadImagery(manifest, root, elevation);
     }
 
-    /// <summary>
-    /// The satellite drape: its pointer, the two candidate extents, and the GSD that corroborates
-    /// one of them.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Three host-neutral blocks and not one host block. The drape's declared extent lives in
-    /// <c>unreal.imagery_drape</c>, and this reader does not go there — the shared corpus states the
-    /// host blocks in conflict on purpose, so a host that reaches into a sibling's is meant to fail
-    /// (<c>HPS-36</c>). What it reads instead is <c>imagery.drape</c> when a bundle
-    /// carries it, <c>elevation.dem</c>'s bounds when one does not, and <c>imagery.gsd_m</c> either
-    /// way.
-    /// </para>
-    /// <para>
-    /// Both extents are read whenever both are published. Choosing between them is the planner's
-    /// call, not this reader's: the choice has a refusal attached to it, and refusals belong where a
-    /// headless test can assert them (<c>HPS-02</c>).
-    /// </para>
-    /// </remarks>
     private static void ReadImagery(BundleManifest manifest, JsonElement root, JsonElement? elevation)
     {
         JsonElement? imagery = root.Object("imagery");
 
         manifest.ImageryGsdM = imagery?.OptionalDouble("gsd_m");
 
-        // `present` is read only for its explicit `false`. An absent block leaves this alone, which
-        // keeps "the ETL produced no imagery" distinct from "this manifest never mentioned imagery".
         manifest.ImageryAbsentByDeclaration = imagery is { } block && !block.Bool("present", fallback: true);
 
         JsonElement? drape = imagery?.Object("drape");
@@ -1416,9 +1020,6 @@ public static class BundleManifestReader
         manifest.ImageryDrapeExtent = ReadGroundExtent(drape, "extent", "extent_crs");
         manifest.DemBounds = ReadGroundExtent(elevation?.Object("dem"), "bounds_target_crs", "crs");
 
-        // This host's own drape (MPB 1.3.0), in its own frame. Its pointer is the block's own
-        // `path`: the layout table names the fixed-frame drape, which on a State Plane delivery is a
-        // different image.
         if (RevitHostBlock(root)?.Object("drape") is { } own
             && own.Str("path") is { Length: > 0 } ownPath)
         {
@@ -1428,9 +1029,6 @@ public static class BundleManifestReader
             manifest.RevitDrapeExtent = ReadGroundExtent(own, "extent", "extent_crs");
         }
 
-        // The published contours (MPB 1.4.0): the same file `elevation.contours` names, under a
-        // pointer that states its frame. Every unit is carried raw; the planner checks each against
-        // the block's file_frame and refuses a disagreement rather than choosing between them.
         if (RevitHostBlock(root)?.Object(RevitContours) is { } contours
             && contours.Str("path") is { Length: > 0 } contoursPath)
         {
@@ -1440,10 +1038,6 @@ public static class BundleManifestReader
         }
     }
 
-    /// <summary>
-    /// The own drape's file — its own, or a pointer level's, which states its frame with the same
-    /// keys — or <c>null</c> when it names no path.
-    /// </summary>
     private static BundleArtifact? OwnDrapeFile(JsonElement pointer, FidelityLevels? levels = null)
         => pointer.Str("path") is { Length: > 0 } path
             ? new BundleArtifact
@@ -1458,10 +1052,8 @@ public static class BundleManifestReader
             }
             : null;
 
-    /// <summary>A drape level's own extent: a smaller image covers the same ground, and says so itself.</summary>
     private static GroundExtent? DrapeLevelExtent(JsonElement pointer) => ReadGroundExtent(pointer, "extent", "extent_crs");
 
-    /// <summary>The published contours' file — its own, or a pointer level's — or <c>null</c> when it names no path.</summary>
     private static BundleArtifact? OwnContoursFile(JsonElement pointer, FidelityLevels? levels = null)
         => pointer.Str("path") is { Length: > 0 } path
             ? new BundleArtifact
@@ -1479,15 +1071,6 @@ public static class BundleManifestReader
             }
             : null;
 
-    /// <summary>
-    /// A <c>[left, bottom, right, top]</c> array plus the CRS field naming its coordinates, or
-    /// <c>null</c> when either is missing or malformed.
-    /// </summary>
-    /// <remarks>
-    /// An array of any length but four is <c>null</c> rather than partially read. A five-element
-    /// extent is a producer whose meaning this host does not know, and taking the first four of it
-    /// is how a guess gets mistaken for a reading.
-    /// </remarks>
     private static GroundExtent? ReadGroundExtent(JsonElement? block, string arrayField, string crsField)
     {
         if (block is not { } element || element.Array(arrayField) is not { } bounds)
@@ -1522,34 +1105,6 @@ public static class BundleManifestReader
         };
     }
 
-    /// <summary>
-    /// Resolves one artifact. The path is this host's own block's <c>path</c> when
-    /// <paramref name="hostDetail"/> carries one (<c>HPS-52</c>); otherwise the <c>layout</c> table's,
-    /// falling back to the detail block's own <c>path</c>. Metadata and the optional sha256 come from
-    /// whichever of those blocks describes the file chosen. No path from any pointer means the
-    /// artifact is absent — this never guesses a well-known folder (HPS-32).
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The block is first because it is this host's, in this host's frame on every delivery tier; a
-    /// host-neutral file is in whatever frame its producer found convenient, and a host that reaches
-    /// for it first is right by coincidence. The host-neutral pointers are the fallback for a block
-    /// carrying no path, a bundle cut before the block carried one included. A block path naming an
-    /// entry the bundle lacks is still that pointer, and the planner skips it as one; it never falls
-    /// through to the host-neutral file.
-    /// </para>
-    /// <para>
-    /// The pointers can disagree. <c>layout</c> is schema-required; the <c>elevation.*</c> and
-    /// <c>buildings.ifc</c> detail blocks ride <c>additionalProperties</c>, so producer drift between
-    /// them is a live possibility rather than a hypothetical, and between the block and either of them
-    /// it is the frame difference the block exists for. Among the host-neutral two, the
-    /// <c>layout</c> path is preferred — it is the declared one. Whatever is chosen, a block that
-    /// describes a different file has its metadata DISCARDED rather than transplanted onto a file it
-    /// does not describe; a detail block with no <c>path</c> of its own describes the host-neutral
-    /// file. Carrying a <c>units: "ftUS"</c> from one file over to another is a site imported 3.28×
-    /// wrong with nothing on screen to suggest it (HPS-20: unknown, not assumed).
-    /// </para>
-    /// </remarks>
     private static BundleArtifact? BuildArtifact(
         BundleManifest manifest,
         string layoutKey,
@@ -1575,20 +1130,10 @@ public static class BundleManifestReader
             detail = null;
         }
 
-        // This host's block always describes the file chosen: its own path when it carries one, and
-        // the host-neutral file when it carries none. Its statements are read first — since MPB 1.0.0
-        // the generic detail blocks are empty, and the block's own `units_note` says each artifact's
-        // `units` describes that file (HPS-33, HPS-36).
         BundleArtifact template = shape(detail);
 
-        // The levels are the describing block's: this host's when it names the file, otherwise the
-        // detail block that still describes it. A detail block discarded above describes another
-        // file, and so do its levels.
         JsonElement? levelsOwner = hostDetail ?? detail;
 
-        // A pointer level is a file of this entry's kind, stating its frame with the entry's own keys
-        // and inheriting none of them. The foliage vocabulary is not a frame: it names what the
-        // values of a column mean, and a level is the same columns.
         BundleArtifact? Pointer(JsonElement level)
         {
             string levelPath = level.Str("path");
@@ -1633,23 +1178,6 @@ public static class BundleManifestReader
         };
     }
 
-    /// <summary>
-    /// Refuses a v19 bundle whose <c>revit</c> block declares a deliverable without its hash.
-    /// </summary>
-    /// <remarks>
-    /// The schema lists <c>sha256</c> in the <c>required</c> set of each deliverable sub-object,
-    /// so a present block without one is a producer bug and fails closed (HPS-34) — importing
-    /// unverifiable bytes is worse than not importing. The sub-objects themselves remain
-    /// optional — a bundle with no Revit deliverables selected is well-formed.
-    /// </para>
-    /// <para>
-    /// This rule used to be version-gated at v19, because the floor still accepted v18, which
-    /// published no Revit hashes at all, and an absent hash there had to stay <em>valid but
-    /// unverified</em> rather than "corrupt" (HPS-27). The MPB 1.0.0 floor retires that gate
-    /// entirely: every version this reader accepts publishes the hashes, so the condition was
-    /// unconditionally true and a branch that can never be taken is worse than no branch — it
-    /// reads as a live rule protecting a case that no longer exists.
-    /// </remarks>
     private static string? CheckRevitHashes(BundleManifest manifest, JsonElement root, bool layoutTwo)
     {
         if (RevitHostBlock(root) is not { } revit)
@@ -1671,14 +1199,11 @@ public static class BundleManifestReader
             }
         }
 
-        // The vector copy below is a 1.x member, removed at 2.0 and not read there, so its hash
-        // rules do not reach a 2.0 bundle.
         if (layoutTwo)
         {
             return null;
         }
 
-        // The shared carrier's pointer requires its hash the same way (MPB 1.7.0).
         if (revit.Object("vectors")?.Object(VectorCarrierKey) is { } carrier && carrier.OptionalStr("sha256") is null)
         {
             return string.Format(
@@ -1689,7 +1214,6 @@ public static class BundleManifestReader
                 manifest.Version);
         }
 
-        // MPB 1.3.0's own vector copy makes each layer's hash required the same way.
         if (revit.Object("vectors")?.Array("layers") is { } layers)
         {
             foreach (JsonElement layer in layers.EnumerateArray())
@@ -1710,51 +1234,13 @@ public static class BundleManifestReader
         return null;
     }
 
-    /// <summary>
-    /// Refuses a bundle the ETL has not built any DCC formats for yet.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The discriminator is deliberately "has this bundle been materialized for <em>anyone</em>",
-    /// not "does it have Revit content" — HPS-47, decided from the manifest's neutral signals:
-    /// a non-empty <c>hosts</c> object, or a non-empty
-    /// <c>vector.layers</c> array. Those are different questions and only the first one is a
-    /// parse verdict: a materialized bundle with no Revit deliverables selected is a perfectly
-    /// well-formed manifest, and the shared corpus requires every host to accept it
-    /// (<c>manifest.materializationSignals</c>). The "there is nothing here for Revit" case is
-    /// <see cref="BundleManifest.HasRevitContent"/>, and the reason lives in
-    /// <c>hosts.revit.readiness</c> (HPS-36).
-    /// </para>
-    /// <para>
-    /// A base, not-yet-materialized bundle carries no host block, no vector layers and no artifact
-    /// pointers beyond the base tier — its top-level facts are still parsed and returned (HPS-37)
-    /// so the vault join key and the Cesium streaming path survive the refusal.
-    /// </para>
-    /// </remarks>
     private static string? CheckMaterialized(BundleManifest manifest, JsonElement root)
     {
-        // Own content is a shortcut, not the rule: content for this host implies materialized.
-        // HPS-47 only forbids own content being the ONLY signal — the neutral checks below are
-        // what keep a bundle materialized for someone else readable.
         if (manifest.HasRevitContent || manifest.LandXml is not null || manifest.ContoursDxf is not null)
         {
             return null;
         }
 
-        // A non-empty `hosts` object means the bundle reached the readiness stage, so it IS
-        // materialized — even when every readiness path inside reads `present: false`. That case is
-        // not a parse failure, it is the case HPS-36 exists for: the manifest says WHY each
-        // artifact is absent and the plugin must surface those reasons. Refusing here would throw
-        // them away and leave the user with a generic "nothing here yet", which is the dead-end the
-        // rule bans.
-        //
-        // At 1.0.0 this ONE check replaces the integer era's three (a known host block, a
-        // `dcc_readiness` object, a host roster). Only whether the object has a key is read — no
-        // host id is compared, so a bundle materialized solely for a host this plugin has never
-        // heard of still answers "materialized".
-        //
-        // A key, not mere existence: an empty `hosts` object is base-tier scaffolding exactly as an
-        // empty `vector.layers` array is.
         if (root.Object(HostsKey) is { } hosts && hosts.EnumerateObject().Any())
         {
             return null;
@@ -1770,7 +1256,6 @@ public static class BundleManifestReader
             + "all — then re-download.";
     }
 
-    /// <summary>Compares two manifest paths, tolerating separator style only.</summary>
     private static bool SamePath(string left, string right)
         => string.Equals(
             left.Replace('\\', '/').Trim(),

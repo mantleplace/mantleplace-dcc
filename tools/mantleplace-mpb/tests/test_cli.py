@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""`mpb validate` and `mpb corpus` as a caller meets them: an exit code and a report."""
 
 from __future__ import annotations
 
@@ -73,8 +72,6 @@ class TheValidateCommand(unittest.TestCase):
 
 
 class TheCorpusCommand(unittest.TestCase):
-    """The runner that holds the validator to the shared corpus's `bundle` group."""
-
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
@@ -163,8 +160,6 @@ class TheCorpusCommand(unittest.TestCase):
         self.assertEqual(0, code, out)
 
     def test_a_3x_case_marked_staged_is_held_to_the_staged_3x_schema(self) -> None:
-        """A served 3.x schema is no longer pending: a staged case is held to it, so a case it
-        refuses fails the run, and one it accepts passes."""
         staged = str(write_schema_dir(self.tmp / "staged3", {"2.0.0": SYNTHETIC_SCHEMA_2,
                                                              "3.0.0": SYNTHETIC_SCHEMA_3},
                                       staged=("3.0.0",)))
@@ -187,7 +182,6 @@ class TheCorpusCommand(unittest.TestCase):
         self.assertIn("schema.invalid", out)
 
     def test_a_case_whose_names_collide_by_case_is_built_only_as_zips(self) -> None:
-        """No folder can hold it on a case-insensitive file system, which is the rule's point."""
         self.write(
             [{"id": "bundle.collide", "group": "bundle", "file": "bundle/collide.json",
               "expect": "reject", "reason": "r",
@@ -202,7 +196,6 @@ class TheCorpusCommand(unittest.TestCase):
         self.assertNotIn("(folder)", out)
 
     def test_a_case_with_a_zip_method_is_built_only_as_zips_and_holds_it(self) -> None:
-        """A folder has no zip method; the case's `zipMethods` is written into the zips."""
         body = self.body(manifest(version="2.0.0"))
         body["zipMethods"] = {"README.md": "stored"}
         case = {"id": "bundle.stored", "group": "bundle", "file": "bundle/stored.json",

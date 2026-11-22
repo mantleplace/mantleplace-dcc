@@ -3,7 +3,6 @@ using MantlePlace.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 
-/// <summary>What the user is told when an export arrives: that it arrived, where, and that it is importing.</summary>
 internal static class ExportReceiptTests
 {
     private static HostExport Export() => new(

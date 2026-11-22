@@ -1,8 +1,5 @@
 // Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
-// Mesh Terrain spike harness: a scratch module, never part of the plugin.
-// Every scenario is parameterised by environment variables and logs "SPIKE" lines.
-
 #include "Modules/ModuleManager.h"
 IMPLEMENT_MODULE(FDefaultModuleImpl, MeshTerrainSpike);
 
@@ -76,11 +73,9 @@ namespace Spike
 		return true;
 	}
 
-	/** The placement the Landscape path gives the same bundle: North -> +X, East -> +Y, AOI centred on the
-	 *  origin, z = z_min + u/65535 * range. All values come from the manifest via the environment. */
 	struct FFrame
 	{
-		int32 R = 0;            // samples per edge
+		int32 R = 0;
 		double EastCm = 0, NorthCm = 0, ZMinCm = 0, ZRangeCm = 0;
 		double SE() const { return EastCm / (R - 1); }
 		double SN() const { return NorthCm / (R - 1); }
@@ -95,7 +90,6 @@ namespace Spike
 		return (S(R0, C0) * (1 - dc) + S(R0, C0 + 1) * dc) * (1 - dr) + (S(R0 + 1, C0) * (1 - dc) + S(R0 + 1, C0 + 1) * dc) * dr;
 	}
 
-	/** Compare every Nth vertex of every section against the Landscape-equivalent surface. */
 	void Measure(UWorld* World, AMeshPartition* Mega, const TArray<uint16>& Hm, const FFrame& F, const TCHAR* Tag)
 	{
 		int64 Verts = 0, Checked = 0, Sections = 0;
@@ -127,7 +121,6 @@ namespace Spike
 			Tag, Sections, Verts, Checked, MaxMis, MaxDz, Checked ? FMath::Sqrt(SumDz2 / Checked) : 0.0, *MinW.ToString(), *MaxW.ToString());
 	}
 
-	/** Build sections ourselves with vertices exactly on the samples (the corner-registered grid). */
 	AMeshPartition* BuildGrid(UWorld* World, const TArray<uint16>& Hm, const FFrame& F, int32 NSec, const FTransform& MegaXf, bool bChannels)
 	{
 		AMeshPartition* Mega = World->SpawnActor<AMeshPartition>(AMeshPartition::StaticClass(), FTransform::Identity);
@@ -139,7 +132,6 @@ namespace Spike
 		for (int32 sx = 0; sx < NSec; ++sx)
 		{
 			const int32 c0 = Q * sx / NSec, c1 = Q * (sx + 1) / NSec, r0 = Q * sy / NSec, r1 = Q * (sy + 1) / NSec;
-			// Importer-local frame (pre-yaw): +X east (columns), +Y south (rows), the same frame FHeightmapImporter uses.
 			const FVector Centre(-F.EastCm / 2 + (c0 + c1) * 0.5 * F.SE(), -F.NorthCm / 2 + (r0 + r1) * 0.5 * F.SN(), 0);
 			FDynamicMesh3 M;
 			M.EnableAttributes();
@@ -162,8 +154,6 @@ namespace Spike
 			FMeshNormals::InitializeOverlayToPerVertexNormals(M.Attributes()->PrimaryNormals());
 			if (bChannels)
 			{
-				// Demonstration values only (four column bands): the real values would be the bundle's
-				// published material_weights, resampled onto the grid exactly as the Landscape path does.
 				M.Attributes()->SetNumWeightLayers(4);
 				for (int32 k = 0; k < 4; ++k)
 				{
@@ -178,7 +168,7 @@ namespace Spike
 					}
 				}
 			}
-			AActor* Base = Ed->SpawnBaseModifier(MoveTemp(M), {}, FTransform(Centre)); // relative: sections follow the MegaMesh actor
+			AActor* Base = Ed->SpawnBaseModifier(MoveTemp(M), {}, FTransform(Centre));
 			if (UMeshProviderModifier* P = Base->FindComponentByClass<UMeshProviderModifier>()) Bounds.Append(P->ComputeBounds());
 		}
 		Mega->SetActorTransform(MegaXf);
@@ -221,8 +211,6 @@ TEST_CLASS_WITH_FLAGS(MeshTerrainSpike, "Spike", EAutomationTestFlags::EditorCon
 				F.EastCm = Spike::EnvD(TEXT("SPIKE_EAST_CM")); F.NorthCm = Spike::EnvD(TEXT("SPIKE_NORTH_CM"));
 				F.ZMinCm = Spike::EnvD(TEXT("SPIKE_ZMIN_CM")); F.ZRangeCm = Spike::EnvD(TEXT("SPIKE_ZRANGE_CM"));
 				const int32 NSec = int32(Spike::EnvD(TEXT("SPIKE_SECTIONS"), 16));
-				// The Landscape path's frame: AOI centred on the origin; the mesh path's yaw +90 maps the
-				// importer's (East, South) onto the world's (North, East).
 				const FTransform MegaXf(FRotator(0, 90, 0), FVector(0, 0, F.ZMinCm));
 				TArray<uint16> Hm; int32 W = 0, H = 0;
 
@@ -244,7 +232,6 @@ TEST_CLASS_WITH_FLAGS(MeshTerrainSpike, "Spike", EAutomationTestFlags::EditorCon
 					Mega = World->SpawnActor<AMeshPartition>(AMeshPartition::StaticClass(), FTransform::Identity);
 					Ed = NewObject<UMeshPartitionEditorComponent>(Mega, UMeshPartitionEditorComponent::StaticClass(), TEXT("MegaMeshEditorComponent"), RF_Transactional);
 					Mega->SetMeshPartitionComponent(Ed);
-					// The glb's placement: centroid-local, z=0 at centroid ground -> (0,0,ground), yaw +90.
 					const FTransform GlbXf(FRotator(0, 90, 0), FVector(0, 0, Spike::EnvD(TEXT("SPIKE_GROUND_CM"))));
 					TArray<FBox> Bounds; int64 V = 0, Tri = 0; FBox Expected(ForceInit);
 					for (UStaticMesh* S : Meshes)
@@ -254,7 +241,6 @@ TEST_CLASS_WITH_FLAGS(MeshTerrainSpike, "Spike", EAutomationTestFlags::EditorCon
 						Conv.Convert(S->GetMeshDescription(0), D);
 						V += D.VertexCount(); Tri += D.TriangleCount();
 						Expected += S->GetBoundingBox().TransformBy(GlbXf);
-						// What the Convert tool does on Accept: recentre each section on its bounds.
 						const FVector C = FBox(D.GetBounds()).GetCenter();
 						for (int32 Vid : D.VertexIndicesItr()) D.SetVertex(Vid, D.GetVertex(Vid) - C);
 						TArray<UMaterialInterface*> Mats;
@@ -282,10 +268,10 @@ TEST_CLASS_WITH_FLAGS(MeshTerrainSpike, "Spike", EAutomationTestFlags::EditorCon
 					FHeightmapImportParams Params;
 					Params.World = World;
 					Params.HeightmapFilename = Spike::Env(TEXT("SPIKE_PNG"));
-					Params.MeshResolution = FInt32Point(W - 1); // quads, so vertices == samples
+					Params.MeshResolution = FInt32Point(W - 1);
 					Params.MeshSize = FVector(F.EastCm, F.NorthCm, F.ZRangeCm);
 					Params.SectionsResolution = FInt32Point(NSec);
-					Params.bSaveAndUnload = false; // the plugin never saves what it imports
+					Params.bSaveAndUnload = false;
 					Params.LocationVolumesResolution = FInt32Point(0);
 					FHeightmapImporter Importer(Params);
 					const bool bOk = Importer.Import(nullptr);
@@ -305,8 +291,6 @@ TEST_CLASS_WITH_FLAGS(MeshTerrainSpike, "Spike", EAutomationTestFlags::EditorCon
 					Spike::Measure(World, Mega, Hm, F, TEXT("grid_placed"));
 					if (bChannels)
 					{
-						// Channels are declared on the definition, whose ChannelMap.ChannelDescs is private with no
-						// setter: written here through reflection on a transient copy of the default definition.
 						UMeshPartitionDefinition* Def = DuplicateObject(const_cast<UMeshPartitionDefinition*>(UMeshPartitionDefinition::GetDefaultMegaMeshDefinition()), GetTransientPackage());
 						FArrayProperty* DescsProp = FindFProperty<FArrayProperty>(FChannelMap::StaticStruct(), TEXT("ChannelDescs"));
 						FScriptArrayHelper Arr(DescsProp, DescsProp->ContainerPtrToValuePtr<void>(&Def->GetChannelMap()));
@@ -315,7 +299,6 @@ TEST_CLASS_WITH_FLAGS(MeshTerrainSpike, "Spike", EAutomationTestFlags::EditorCon
 							const int32 Idx = Arr.AddValue();
 							reinterpret_cast<FChannelDesc*>(Arr.GetRawPtr(Idx))->Name = *FString::Printf(TEXT("band_%d"), k);
 						}
-						// A Mesh Terrain material built programmatically: Resource -> ChannelSample per band -> lerp chain.
 						UMaterial* Mat = NewObject<UMaterial>(GetTransientPackage(), TEXT("M_SpikeBands"));
 						auto* Res = Cast<UMaterialExpressionMeshPartitionResource>(UMaterialEditingLibrary::CreateMaterialExpression(Mat, UMaterialExpressionMeshPartitionResource::StaticClass()));
 						UMaterialExpression* Prev = UMaterialEditingLibrary::CreateMaterialExpression(Mat, UMaterialExpressionConstant3Vector::StaticClass());
@@ -342,8 +325,6 @@ TEST_CLASS_WITH_FLAGS(MeshTerrainSpike, "Spike", EAutomationTestFlags::EditorCon
 						for (TActorIterator<AActor> It(World); It; ++It)
 							if (UMeshProviderModifier* P = It->FindComponentByClass<UMeshProviderModifier>())
 							{
-								// The bake (FChannelTextureRenderer::GenerateSectionMeshChannels) is private; it matches a
-								// mesh weight layer to a channel by name, so count the layers the definition will match.
 								const FDynamicMeshAttributeSet* A = P->GetMesh()->Attributes();
 								for (int32 k = 0; A && k < A->NumWeightLayers(); ++k)
 									ActiveSum += Def->GetChannelMap().FindChannel(A->GetWeightLayer(k)->GetName()) != INDEX_NONE;

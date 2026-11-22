@@ -5,15 +5,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The bundle archive and its on-disk layout.
-/// </summary>
-/// <remarks>
-/// These assertions could not exist while <c>LocalBundleArchive</c> lived in the Revit shim: a
-/// hosted runner has no Revit, so the shim is never built in CI and everything in it was covered by
-/// <c>agent-review</c> alone. Moving it to <c>MantlePlace.Client</c> is what makes the two
-/// lifetimes, the zip-slip guard and the per-order keying testable (<c>HPS-02</c>, <c>HPS-42</c>).
-/// </remarks>
 internal static class LocalBundleArchiveTests
 {
     private const string OrderId = "3f285101-0310-425b-b06b-bdb73b025b6a";
@@ -22,11 +13,6 @@ internal static class LocalBundleArchiveTests
 
     private const string WrongSha256 = "0000000000000000000000000000000000000000000000000000000000000000";
 
-    /// <summary>
-    /// Computed from the fixture rather than transcribed: a literal would need re-deriving every
-    /// time the fixture changes, and the version that silently stopped matching would look like a
-    /// corrupt bundle rather than like corpus rot.
-    /// </summary>
     private static string PointsSha256 => Sha256Digest.OfUtf8(PointsCsv);
 
     internal static int Run()
@@ -53,9 +39,6 @@ internal static class LocalBundleArchiveTests
 
         run.Case("a bundle is cached under its ORDER id, not its file name", () =>
         {
-            // The collision this replaces: every bundle the platform emitted was called
-            // download.zip, so two orders shared one retained directory and the first order's
-            // Revit links resolved to the second order's extracted files.
             string first = WriteBundle(Path.Combine(sandbox, "a", "download.zip"), OrderId);
             string second = WriteBundle(Path.Combine(sandbox, "b", "download.zip"), OrderId);
 
@@ -85,10 +68,6 @@ internal static class LocalBundleArchiveTests
 
         run.Case("a bundle from before MPB 1.7.0 keeps the folder and stem every earlier import gave it", () =>
         {
-            // Its attribution.order_id is the packaging job's id, so it is no longer the order -- but
-            // every earlier import filed the bundle, and stamped its ground, roads and boundaries,
-            // under it. Filing it under the zip's path instead would make a re-import a stranger to
-            // its own elements, and place them all a second time.
             const string Legacy = "job-legacy-7";
             string zip = WriteBundle(
                 Path.Combine(sandbox, "legacy", "download.zip"),
@@ -146,17 +125,12 @@ internal static class LocalBundleArchiveTests
                 run.Contains(retainedPath, archive.Layout.ExtractedRoot, "retained lands under the order root");
             }
 
-            // The failure this guards: deleting the retained directory on dispose leaves every
-            // Revit link the import just created pointing at nothing, and Revit says so only the
-            // next time the project is opened.
             run.False(File.Exists(transientPath), "scratch is cleaned up");
             run.True(File.Exists(retainedPath), "retained survives — links point into it (HPS-44)");
         });
 
         run.Case("a retained file a host holds open is reused when it is already the published one", () =>
         {
-            // A live Civil 3D 2027 run imported one order into a second drawing while the first still
-            // showed its aerial: AutoCAD held the retained image open and the rewrite threw IOException.
             string zip = WriteBundle(Path.Combine(sandbox, "h", "download.zip"), OrderId);
             using LocalBundleArchive archive = LocalBundleArchive.Open(zip, Path.Combine(sandbox, "h", "cache"));
             string first = archive.Extract("Surface/SurfacePoints.csv", ExtractionLifetime.Retained, PointsSha256);
@@ -237,9 +211,6 @@ internal static class LocalBundleArchiveTests
 
         run.Case("a corrupt entry is refused before its bytes land on disk", () =>
         {
-            // The defect: sha256 was parsed off the manifest and consumed by nothing. Verification
-            // existed only on the DOWNLOAD path (⛔HPS-26, BundleCache), so a zip that arrived any
-            // other way was extracted and imported unchecked.
             string zip = WriteBundle(Path.Combine(sandbox, "k", "download.zip"), OrderId);
             using LocalBundleArchive archive = LocalBundleArchive.Open(zip, cacheRoot);
 
@@ -269,17 +240,12 @@ internal static class LocalBundleArchiveTests
             string verified = archive.Extract("Surface/SurfacePoints.csv", ExtractionLifetime.Transient, PointsSha256);
             run.True(File.Exists(verified), "the declared hash matched, so the file was written");
 
-            // Below v19 the Revit deliverables published no hash at all. Treating that as corrupt
-            // makes every one of those bundles un-importable; treating it as verified is a lie.
             string unverified = archive.Extract("Surface/Surface.dxf", ExtractionLifetime.Transient, null);
             run.True(File.Exists(unverified), "an unadvertised hash is valid-but-unverified");
         });
 
         run.Case("the whole plan is verified before ANY step runs", () =>
         {
-            // Per-entry checking alone would abort the bad artifact only after the earlier steps had
-            // already created a toposolid in the user's model. The reference host sweeps the whole
-            // set up front and creates nothing on a mismatch; this is the same shape.
             string zip = WriteBundle(Path.Combine(sandbox, "m", "download.zip"), OrderId);
             using LocalBundleArchive archive = LocalBundleArchive.Open(zip, cacheRoot);
 
@@ -319,8 +285,6 @@ internal static class LocalBundleArchiveTests
             };
             run.Contains(archive.VerifyPlan(bad), "Site/notes.txt", "and one bad artifact aborts the lot");
 
-            // SetSharedCoordinates names no entry — a sweep that hashed "" would report a bundle
-            // corrupt over a step that touches no bytes.
             BundleImportPlan placementOnly = new()
             {
                 CanImport = true,
@@ -331,9 +295,6 @@ internal static class LocalBundleArchiveTests
 
         run.Case("an unattended import takes its zip from the environment", () =>
         {
-            // Every entry point was UI-gated, and the file dialog is created by the add-in rather
-            // than by Revit, so journal playback could not drive the import at all — which is why
-            // Toposolid.Create and friends had never executed inside Revit.
             run.Equal(LocalBundleSource.Unattended(@"C:\bundles\a.zip"), @"C:\bundles\a.zip", "a named path");
             run.Equal(LocalBundleSource.Unattended("  C:\\bundles\\a.zip  "), @"C:\bundles\a.zip", "trimmed");
             run.True(LocalBundleSource.Unattended(null) is null, "unset means ask the user");
@@ -367,9 +328,6 @@ internal static class LocalBundleArchiveTests
             run.True(archive.ProbeImageSize("Imagery/Missing.png") is null, "so is an entry that is not there");
             run.True(archive.ProbeImageSize("") is null, "and so is no entry at all");
 
-            // The drape itself was never written out: probing happens while the plan is still being
-            // made, and a ~50 MB extraction to answer a 24-byte question would make every refusal
-            // cost what a successful import costs.
             run.False(
                 File.Exists(Path.Combine(archive.RetainedDirectory, "Imagery", "Drape.png")),
                 "the probe extracted nothing");
@@ -389,13 +347,10 @@ internal static class LocalBundleArchiveTests
 
             using LocalBundleArchive archive = LocalBundleArchive.Open(zipPath, cacheRoot);
 
-            // A stream that ends mid-header must read as "not an image" rather than blocking or
-            // handing the caller a half-filled buffer of zeroes.
             run.True(archive.ProbeImageSize("Imagery/Drape.png") is null, "a truncated header is refused");
         });
     }
 
-    /// <summary>The first 24 bytes of a PNG declaring the given dimensions.</summary>
     private static byte[] PngPrefix(uint width, uint height)
     {
         byte[] prefix =
@@ -416,7 +371,6 @@ internal static class LocalBundleArchiveTests
         entry.Write(content, 0, content.Length);
     }
 
-    /// <summary>Writes a bundle zip with the entries the import path actually reaches for.</summary>
     private static string WriteBundle(string zipPath, string? orderId, bool withManifest = true, string? manifestJson = null)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(zipPath)!);

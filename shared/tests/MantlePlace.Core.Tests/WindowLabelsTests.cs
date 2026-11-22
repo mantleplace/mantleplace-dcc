@@ -1,27 +1,7 @@
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// What the Mantle Place windows say, and the one colour the brand is allowed to spend on
-/// them, including the slot their header gives the mark. Which render fills a slot of that size is
-/// <see cref="RibbonImageryTests"/>, whose rule the header shares with the ribbon.
-/// </summary>
-/// <remarks>
-/// <para>
-/// These are strings and numbers, so they live in the pure core and are asserted here rather than
-/// read off a screenshot (<c>HPS-02</c>, <c>HPS-42</c>). The shim's remaining job is to copy them
-/// onto a <c>Window</c>, a <c>Button</c> and an <c>Image</c>, which is the part no test can reach —
-/// and the part CI never even builds.
-/// </para>
-/// <para>
-/// The casing cases are not decoration. Revit's windows sat at <c>Prepare for Revit</c> beside
-/// <c>Remove download</c>, one Title Case and one sentence case, in the same button row. The
-/// shared-word cases are not decoration either: <c>Vault</c> and <c>Sign In</c> are fixed across
-/// hosts by <c>HPS-51</c>, and this is the half of that rule a test can hold.
-/// </para>
-/// </remarks>
 internal static class WindowLabelsTests
 {
-    /// <summary>Every button face the windows show, so a new one cannot skip the casing rule.</summary>
     private static readonly string[] EveryButtonFace =
     [
         WindowLabels.Refresh,
@@ -52,8 +32,6 @@ internal static class WindowLabelsTests
 
         run.Case("each header names the window's purpose, not the product again", () =>
         {
-            // The mark is beside it and the title bar is above it, so repeating "Mantle Place" here
-            // would be the third time in one window.
             run.Equal(WindowLabels.VaultHeading, "Vault", "the vault window's heading");
             run.Equal(WindowLabels.SignInHeading, "Sign In", "the sign-in window's heading");
             run.Equal(WindowLabels.ImportHeading, "Bundle Import", "the import window's heading");
@@ -68,8 +46,6 @@ internal static class WindowLabelsTests
 
         run.Case("the sign-in heading is the ribbon's word for the same action", () =>
         {
-            // One vocabulary across the plugin: the ribbon face the curator clicked and the window
-            // it opened may not disagree about what the action is called.
             run.Equal(WindowLabels.SignInHeading, AccountRibbon.SignInFace, "window heading matches the ribbon face");
         });
 
@@ -79,8 +55,6 @@ internal static class WindowLabelsTests
             {
                 foreach (string word in face.Split(' ', StringSplitOptions.RemoveEmptyEntries))
                 {
-                    // "for" and "a" are the lower-case words Title Case keeps lower: a short
-                    // preposition or article inside the phrase, never at its start.
                     bool minorWord = string.Equals(word, "for", StringComparison.Ordinal)
                         || string.Equals(word, "a", StringComparison.Ordinal);
                     bool leads = face.StartsWith(word, StringComparison.Ordinal);
@@ -116,8 +90,6 @@ internal static class WindowLabelsTests
         {
             run.Equal(MarkRenders.HeaderSlotPixels, 32, "the slot beside a window heading");
 
-            // The window half of the rule RibbonImageryTests pins for the ribbon: a header on a 200%
-            // laptop must reach the 64 px render, or the mark beside the heading is a blurred square.
             run.Equal(MarkRenders.FileNameFor(MarkRenders.HeaderSlotPixels, 1.0), "MantlePlaceMark_32.png", "100%");
             run.Equal(MarkRenders.FileNameFor(MarkRenders.HeaderSlotPixels, 1.5), "MantlePlaceMark_48.png", "150%");
             run.Equal(MarkRenders.FileNameFor(MarkRenders.HeaderSlotPixels, 2.0), "MantlePlaceMark_64.png", "200%");
@@ -125,8 +97,6 @@ internal static class WindowLabelsTests
 
         run.Case("the brand orange is the mark's own orange", () =>
         {
-            // The tile the renderer mattes the monogram out of is 0xFF7110, and the reference host
-            // names the same value Mantle(). One colour, one spelling, both hosts.
             run.Equal(BrandPalette.Mantle.Hex, "#FF7110", "the primary action's fill");
             run.Equal(BrandPalette.OnMantle.Hex, "#FFFFFF", "what is legible on it, as the mark does it");
         });
@@ -136,8 +106,6 @@ internal static class WindowLabelsTests
             BrandColour hover = BrandPalette.MixToWhite(BrandPalette.Mantle, 0.14);
             BrandColour pressed = BrandPalette.MixToWhite(BrandPalette.Mantle, 0.24);
 
-            // Each channel moves toward white by the same fraction, so the three keep their order
-            // and the button never jumps to a different brand colour under the cursor.
             run.Equal(hover.R, (byte)0xFF, "red is already at white and stays");
             run.Equal(hover.G, (byte)0x85, "green lifts by 14% of its distance to white");
             run.Equal(hover.B, (byte)0x31, "blue lifts by 14% of its distance to white");
@@ -150,8 +118,6 @@ internal static class WindowLabelsTests
             run.Equal(BrandPalette.MixToWhite(BrandPalette.Mantle, 0).Hex, "#FF7110", "no mix is the colour itself");
             run.Equal(BrandPalette.MixToWhite(BrandPalette.Mantle, 1).Hex, "#FFFFFF", "a full mix is white");
 
-            // A caller handing this a fraction out of range gets the nearest end rather than a
-            // wrapped byte: this runs on a dispatcher where a throw takes Revit down.
             run.Equal(BrandPalette.MixToWhite(BrandPalette.Mantle, -5).Hex, "#FF7110", "below zero clamps");
             run.Equal(BrandPalette.MixToWhite(BrandPalette.Mantle, 5).Hex, "#FFFFFF", "above one clamps");
             run.Equal(BrandPalette.MixToWhite(BrandPalette.Mantle, double.NaN).Hex, "#FF7110", "NaN is no mix");
@@ -159,8 +125,6 @@ internal static class WindowLabelsTests
 
         run.Case("the import window says HPS-51's words for a step's state", () =>
         {
-            // The standard's row for the import window fixes these, because the reference host will
-            // show the same surface. Revit's half is only the casing.
             run.Equal(WindowLabels.StateWord(ImportStepState.Waiting), "Waiting", "not reached");
             run.Equal(WindowLabels.StateWord(ImportStepState.Importing), "Importing", "in flight");
             run.Equal(WindowLabels.StateWord(ImportStepState.Done), "Done", "finished");
@@ -187,7 +151,6 @@ internal static class WindowLabelsTests
 
         run.Case("the step names are the glossary's", () =>
         {
-            // Three planner kinds build the one terrain, so they are one word to the curator.
             run.Equal(WindowLabels.StepName(ImportStepKind.ToposurfaceFromSurfaceTin), "Terrain", "the TIN path");
             run.Equal(WindowLabels.StepName(ImportStepKind.ToposurfaceFromPointsFile), "Terrain", "the points path");
             run.Equal(WindowLabels.StepName(ImportStepKind.LinkSiteIfc), "Site Model", "the IFC");
@@ -203,8 +166,6 @@ internal static class WindowLabelsTests
 
         run.Case("the step's clock reads in the units a wait of that length is read in", () =>
         {
-            // The longest step measured so far is the 2027 drape at 2,759 s, so minutes carry most
-            // of the reading; the seconds stay so the clock visibly moves while Revit does not.
             run.Equal(WindowLabels.Elapsed(TimeSpan.Zero), "0 s", "the step has just started");
             run.Equal(WindowLabels.Elapsed(TimeSpan.FromSeconds(59.9)), "59 s", "whole seconds, never rounded up to a minute");
             run.Equal(WindowLabels.Elapsed(TimeSpan.FromSeconds(60)), "1 min 0 s", "the first minute");
@@ -232,9 +193,6 @@ internal static class WindowLabelsTests
 
             run.Equal(WindowLabels.Search, "Search", "the search field's label");
 
-            // A tooltip is a sentence, like every button's ToolTip, not a face, so it is not Title
-            // Case. What it must do is say the label is what is searched, so an order id typed
-            // into the field and matching nothing is not a surprise.
             run.Contains(WindowLabels.SearchToolTip, "area label", "the tooltip names what is matched");
             run.True(WindowLabels.SearchToolTip.EndsWith('.'), "and is one sentence");
             run.Equal(WindowLabels.AreaUnknown, "Area Unknown", "an area the listing did not give");

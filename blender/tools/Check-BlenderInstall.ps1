@@ -1,29 +1,3 @@
-<#
-.SYNOPSIS
-    Says whether the Blender plugin installed on this machine is current with origin/main, a
-    preview of a branch, or stale -- one line, one exit code.
-
-.DESCRIPTION
-    Reads the stamp Install-BlenderAddon.ps1 wrote into the plugin's folder in each Blender
-    version's extension repository, and compares the commit it names against origin/main, counting
-    only commits that touch blender/. The verdict contract is tools/local-install/README.md; the
-    sentences come from LocalInstall.psm1 and nowhere else.
-
-    Only the Blender versions that hold the plugin are read: a Blender used for something else is
-    not a slot. No Blender configuration at all is "not configured", quiet with exit 0, so a
-    stranger's clone sees nothing red.
-
-    Windows PowerShell 5.1 compatible, like every script in this repository.
-
-.PARAMETER ConfigRoot
-    Blender's per-user configuration root. Defaults to %APPDATA%\Blender Foundation\Blender.
-
-.PARAMETER NoFetch
-    Compare against the origin/main this clone already has, without fetching first.
-
-.EXAMPLE
-    ./Check-BlenderInstall.ps1
-#>
 [CmdletBinding()]
 param(
     [string]$ConfigRoot = (Join-Path $env:APPDATA 'Blender Foundation/Blender'),
@@ -67,7 +41,6 @@ function Get-StampField {
     return $null
 }
 
-# One verdict per distinct install, keyed by what the stamp says. Normally one.
 $buckets = [ordered]@{}
 $fetched = $false
 foreach ($slot in $slots) {

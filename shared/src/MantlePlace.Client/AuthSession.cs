@@ -5,10 +5,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Client;
 
-/// <summary>The outcome of a sign-in, refresh or restore.</summary>
-/// <param name="Succeeded">Whether the session is now authenticated.</param>
-/// <param name="Cancelled">True when nothing failed — the curator backed out, or it timed out.</param>
-/// <param name="Message">What to tell the curator when <paramref name="Succeeded"/> is false.</param>
 public readonly record struct AuthOutcome(bool Succeeded, bool Cancelled, string Message)
 {
     public static AuthOutcome Ok => new(true, false, string.Empty);
@@ -18,33 +14,10 @@ public readonly record struct AuthOutcome(bool Succeeded, bool Cancelled, string
     public static AuthOutcome Failed(string message) => new(false, false, message);
 }
 
-/// <summary>
-/// A grant request that did not succeed, and whether the platform rejected the GRANT or merely
-/// failed to answer.
-/// </summary>
-/// <remarks>
-/// The two want opposite handling -- discard the stored credential, or keep it -- so they cannot
-/// share a return type that is just a message. See <see cref="TokenGrants.IsDefinitiveRejection"/>.
-/// </remarks>
 internal readonly record struct GrantFailure(string Message, bool IsDefinitive);
 
-/// <summary>
-/// The one auth session for the Revit process: browser sign-in, refresh, restore, sign-out.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Owned by the add-in's <c>IExternalApplication</c> and reached through a static accessor. One per
-/// process, not one per command: two commands each holding their own session would each hold their
-/// own access token, and signing out in one would leave the other authenticated.
-/// </para>
-/// <para>
-/// ⛔<c>HPS-15</c>: <see cref="AccessToken"/> lives in this object and nowhere else. It is never
-/// written to disk and never logged. Only the refresh token reaches <see cref="ISecretStore"/>.
-/// </para>
-/// </remarks>
 public sealed class AuthSession : IDisposable
 {
-    /// <summary>The single stored secret. One key, so sign-out has one thing to clear.</summary>
     private const string RefreshTokenKey = "refresh-token";
 
     private readonly HttpMessageHandler? _handler;
@@ -58,9 +31,6 @@ public sealed class AuthSession : IDisposable
     private string _refreshToken = string.Empty;
     private DateTimeOffset _expiresAt = DateTimeOffset.MinValue;
 
-    /// <param name="endpoints">Where the platform is.</param>
-    /// <param name="secrets">Where the refresh token is kept.</param>
-    /// <param name="handler">A message handler for the grant calls, for tests; the shared one when <c>null</c>.</param>
     public AuthSession(MantlePlaceEndpoints endpoints, ISecretStore secrets, HttpMessageHandler? handler = null)
     {
         _endpoints = endpoints;
@@ -68,29 +38,14 @@ public sealed class AuthSession : IDisposable
         _handler = handler;
     }
 
-    /// <summary>Raised whenever <see cref="State"/> changes.</summary>
-    /// <remarks>
-    /// ⚠ <b>Raised on whatever thread finished the work, which is a thread-pool thread for every
-    /// transition a sign-in or a refresh produces</b> — every await beneath this type is
-    /// <c>ConfigureAwait(false)</c>. A subscriber must marshal before it touches anything owned by
-    /// the host. In Revit that means an <c>ExternalEvent</c> for the document API (see
-    /// <c>BundleImportEventHandler</c>) and the window's dispatcher for UI; touching a ribbon
-    /// <c>PushButton</c> straight from this callback is a main-thread violation, and Revit answers
-    /// those by terminating the process.
-    /// </remarks>
     public event EventHandler<AuthState>? StateChanged;
 
     public AuthState State { get; private set; } = AuthStateMachine.Initial;
 
     public string UserEmail { get; private set; } = string.Empty;
 
-    /// <summary>Whether a stored session would survive a restart (<c>HPS-16</c>).</summary>
     public bool IsPersistent => _secrets.IsPersistent;
 
-    /// <summary>
-    /// True when there is a refresh token to renew from, whether or not the access token is still
-    /// good. Distinguishes "signed out" from "signed in, needs a new access token".
-    /// </summary>
     public bool CanRenewSession
     {
         get
@@ -102,7 +57,6 @@ public sealed class AuthSession : IDisposable
         }
     }
 
-    /// <summary>The bearer token, or empty. Memory-only (<c>HPS-15</c>).</summary>
     public string AccessToken
     {
         get
@@ -114,7 +68,6 @@ public sealed class AuthSession : IDisposable
         }
     }
 
-    /// <summary>When the access token lapses, as the last grant stated; the minimum with none.</summary>
     public DateTimeOffset AccessTokenExpiresAt
     {
         get
@@ -126,7 +79,6 @@ public sealed class AuthSession : IDisposable
         }
     }
 
-    /// <summary>Whether the access token is within the skew of lapsing (<c>HPS-11</c>).</summary>
     public bool IsAccessTokenExpired(DateTimeOffset now)
     {
         lock (_gate)
@@ -135,22 +87,13 @@ public sealed class AuthSession : IDisposable
         }
     }
 
-    /// <summary>
-    /// Full browser sign-in: bind the loopback, open the browser, wait, exchange the code.
-    /// </summary>
     public async Task<AuthOutcome> SignInAsync(CancellationToken cancellationToken = default)
     {
         if (!Raise(AuthEvent.BeginSignIn))
         {
-            // A second sign-in while one is in flight is ignored, not queued (HPS-12).
             return AuthOutcome.Abandoned;
         }
 
-        // NOT a `using`. The field and the object have to die together: a `using` here disposed the
-        // source on every exit while _signIn went on pointing at it, and the next CancelSignIn --
-        // which is what the sign-in window's Close button raises -- threw ObjectDisposedException out
-        // of a WPF event handler on Revit's dispatcher and terminated the process. The lifetime is
-        // owned by the finally below instead, where the field is cleared in the same breath.
         CancellationTokenSource signIn = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         lock (_gate)
         {
@@ -160,8 +103,6 @@ public sealed class AuthSession : IDisposable
 
         try
         {
-            // Bind BEFORE opening the browser (HPS-06). Ephemeral unless a machine has forced explicit
-            // ports; a browser sent to a redirect nothing is listening for just hangs on a blank tab.
             using LoopbackRedirectListener? listener = _endpoints.LoopbackPorts.Count > 0
                 ? LoopbackRedirectListener.Start(_endpoints.LoopbackPorts, _endpoints.CallbackPath)
                 : LoopbackRedirectListener.StartEphemeral(_endpoints.CallbackPath);
@@ -194,7 +135,6 @@ public sealed class AuthSession : IDisposable
 
             if (result.Outcome is null)
             {
-                // Timeout or explicit cancel. Neither latches Failed (HPS-09, HPS-12).
                 Raise(AuthEvent.Cancel);
                 return AuthOutcome.Abandoned;
             }
@@ -208,8 +148,6 @@ public sealed class AuthSession : IDisposable
             GrantFailure? failure = await ExchangeCodeAsync(result.Callback!.Code, verifier, signIn.Token).ConfigureAwait(false);
             if (failure is { } exchangeFailure)
             {
-                // No stored credential is at stake yet, so the definitive/transient split does not
-                // apply to a sign-in: there is nothing to discard or keep.
                 Raise(AuthEvent.SignInFailed);
                 return AuthOutcome.Failed(exchangeFailure.Message);
             }
@@ -219,9 +157,6 @@ public sealed class AuthSession : IDisposable
         }
         finally
         {
-            // Reference identity, not a bare null: the state machine refuses a concurrent sign-in
-            // today, but if that ever changes, clearing a LATER flow's source would silently disarm
-            // a Cancel button that still has something to cancel.
             lock (_gate)
             {
                 if (ReferenceEquals(_signIn, signIn))
@@ -234,9 +169,6 @@ public sealed class AuthSession : IDisposable
         }
     }
 
-    /// <summary>
-    /// Aborts an in-flight sign-in. Closing a window is not this — only an explicit cancel is.
-    /// </summary>
     public void CancelSignIn()
     {
         lock (_gate)
@@ -245,16 +177,6 @@ public sealed class AuthSession : IDisposable
         }
     }
 
-    /// <summary>
-    /// Cancels the in-flight sign-in if there is one. Caller holds <c>_gate</c>.
-    /// </summary>
-    /// <remarks>
-    /// A cancel that arrives after the flow is over is a no-op, not an error, and both callers reach
-    /// this from a ribbon command or a window handler where a throw is expensive out of proportion
-    /// to the mistake. <see cref="SignInAsync"/> nulls the field as it disposes, so this catch should
-    /// now be unreachable; it stays because the cost of being wrong about that was a terminated
-    /// Revit rather than a logged warning.
-    /// </remarks>
     private void CancelInFlight()
     {
         try
@@ -266,14 +188,6 @@ public sealed class AuthSession : IDisposable
         }
     }
 
-    /// <summary>
-    /// Startup restore from the stored refresh token (<c>HPS-13</c>).
-    /// </summary>
-    /// <remarks>
-    /// Silent about absence: no stored token is not an error and causes no state change. Forgiving
-    /// about failure: the in-memory tokens are cleared but the PERSISTED refresh token is kept, so a
-    /// network blip at Revit start does not force a re-login.
-    /// </remarks>
     public async Task<AuthOutcome> RestoreAsync(CancellationToken cancellationToken = default)
     {
         if (!_secrets.TryLoad(RefreshTokenKey, out string stored) || stored.Length == 0)
@@ -301,12 +215,8 @@ public sealed class AuthSession : IDisposable
         return AuthOutcome.Ok;
     }
 
-    /// <summary>Mints a fresh access token from the refresh token.</summary>
     public async Task<AuthOutcome> RefreshAsync(CancellationToken cancellationToken = default)
     {
-        // Take the freshest token before spending a round trip on it. Both hosts share one
-        // credential per OS user, so the other one may have rotated since this process last
-        // refreshed, and the copy in memory would then already be dead.
         string refreshToken = ReadFreshestRefreshToken();
 
         if (refreshToken.Length == 0)
@@ -334,10 +244,6 @@ public sealed class AuthSession : IDisposable
         return AuthOutcome.Ok;
     }
 
-    /// <summary>
-    /// The freshest refresh token available: the stored one when it differs from the one held in
-    /// memory, because a difference means the other host rotated it since this process last looked.
-    /// </summary>
     private string ReadFreshestRefreshToken()
     {
         string inMemory;
@@ -351,22 +257,6 @@ public sealed class AuthSession : IDisposable
             : inMemory;
     }
 
-    /// <summary>
-    /// Settles a failed refresh or restore: keep the stored credential, or discard it.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A transient failure keeps it, always. A network blip must never cost a curator their session,
-    /// which is why a failed restore has always left the stored copy alone.
-    /// </para>
-    /// <para>
-    /// A definitive rejection discards it -- but only after checking whether the OTHER host rotated
-    /// the credential between our read and the platform's answer. If the store now holds something
-    /// else, the platform rejected a token that is merely superseded, and discarding here would sign
-    /// the curator out of both hosts because Unreal happened to refresh first. That case retries
-    /// once, with the token the other host wrote.
-    /// </para>
-    /// </remarks>
     private AuthOutcome FailRenewal(GrantFailure failure, string presented)
     {
         lock (_gate)
@@ -384,9 +274,6 @@ public sealed class AuthSession : IDisposable
         string freshest = ReadFreshestRefreshToken();
         if (freshest.Length > 0 && !string.Equals(freshest, presented, StringComparison.Ordinal))
         {
-            // Superseded, not dead. Leave the state settled so the retry is allowed to begin, then
-            // renew again with what the other host wrote. One hop only: the retry presents the
-            // freshest token there is, and a rejection of THAT is about the session.
             Raise(AuthEvent.SignOut);
             lock (_gate)
             {
@@ -396,9 +283,6 @@ public sealed class AuthSession : IDisposable
             return AuthOutcome.Abandoned;
         }
 
-        // The platform says this refresh token will never work again. Keeping it produces a plugin
-        // that retries a dead credential at every launch and never asks for the sign-in that would
-        // fix it (⛔HPS-17).
         lock (_gate)
         {
             _refreshToken = string.Empty;
@@ -411,7 +295,6 @@ public sealed class AuthSession : IDisposable
         return AuthOutcome.Failed($"{failure.Message} Sign in again to continue.");
     }
 
-    /// <summary>Drops the session and clears the store (<c>HPS-17</c>).</summary>
     public void SignOut()
     {
         lock (_gate)
@@ -454,10 +337,6 @@ public sealed class AuthSession : IDisposable
 
     private async Task<GrantFailure?> RefreshGrantAsync(string refreshToken, CancellationToken cancellationToken)
     {
-        // The broker, always. There used to be an identity-provider-direct path taken when this
-        // machine had the project URL and anon key configured, which meant the route nearly every
-        // install actually uses was the one exercised least in development. It also put a
-        // packaging-time secret in the auth path for a call the broker makes anyway.
         string body = JsonSerializer.Serialize(new Dictionary<string, string>
         {
             ["refresh_token"] = refreshToken,
@@ -471,14 +350,6 @@ public sealed class AuthSession : IDisposable
             .ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Posts a grant request, through the generated Platform API client, and applies the response.
-    /// <c>null</c> on success.
-    /// </summary>
-    /// <remarks>
-    /// A 426 <c>client_update_required</c> is an update, not a rejection: it is never definitive, so
-    /// the stored session is kept for the updated plugin to renew, and the failure says update.
-    /// </remarks>
     private async Task<GrantFailure?> PostGrantAsync(
         string baseUrl,
         Func<PlatformApiClient, CancellationToken, Task> operation,
@@ -499,7 +370,6 @@ public sealed class AuthSession : IDisposable
         }
         catch (HttpRequestException ex)
         {
-            // Nothing was rejected -- nothing was answered. Transient by definition.
             return new GrantFailure($"Could not reach mantle.place: {ex.Message}", IsDefinitive: false);
         }
 
@@ -517,10 +387,6 @@ public sealed class AuthSession : IDisposable
         return null;
     }
 
-    /// <summary>
-    /// Takes a grant. Every SUCCESSFUL grant re-persists the refresh token, so the stored copy never
-    /// goes stale (<c>HPS-13</c>).
-    /// </summary>
     private void Apply(TokenGrant grant)
     {
         string toPersist;
@@ -528,9 +394,6 @@ public sealed class AuthSession : IDisposable
         {
             _accessToken = grant.AccessToken;
 
-            // ⛔HPS-10: a response that omits refresh_token keeps the prior one. Wiping it here
-            // costs the curator their session at the next restart, hours later, with no cause they
-            // could connect it to.
             _refreshToken = TokenGrants.ChooseRefreshToken(grant.RefreshToken, _refreshToken);
             _expiresAt = TokenGrants.ExpiryFrom(DateTimeOffset.UtcNow, grant.ExpiresInSeconds);
             toPersist = _refreshToken;
@@ -547,7 +410,6 @@ public sealed class AuthSession : IDisposable
         }
     }
 
-    /// <summary>Applies an event. <c>false</c> when the machine declined to move.</summary>
     private bool Raise(AuthEvent signal)
     {
         AuthState next;
@@ -566,20 +428,6 @@ public sealed class AuthSession : IDisposable
         return true;
     }
 
-    /// <summary>
-    /// ⛔<c>HPS-05</c>: the system browser, never an embedded webview and never a password field in
-    /// Revit.
-    /// </summary>
-    /// <summary>
-    /// Explains a failure to bind any loopback port, without guessing at a cause we cannot see.
-    /// </summary>
-    /// <remarks>
-    /// The message this replaced said "Close other Mantle Place sessions and try again", which was
-    /// wrong nearly every time it appeared. HTTP.SYS reports a bind into a Windows reserved port
-    /// block as "used by another process", so the OS itself suggests a second copy of the plugin
-    /// that does not exist, and the curator closes Revit twice for nothing. It also rendered a
-    /// sparse candidate list as a range ("51000–53048"), naming thousands of ports it never tried.
-    /// </remarks>
     private static string DescribeBindFailure(IReadOnlyList<int> configuredPorts)
     {
         if (configuredPorts.Count > 0)

@@ -7,7 +7,7 @@
 #include "MantlePlaceBundleArchive.h"
 #include "MantlePlaceBundleReaderLogic.h"
 #include "MantlePlaceImportManifest.h"
-#include "MantlePlaceVaultTypes.h" // MantlePlaceMaxSupportedManifestMajor
+#include "MantlePlaceVaultTypes.h"
 #include "Tests/MantlePlaceConformanceCorpus.h"
 
 #include "FileUtilities/ZipArchiveWriter.h"
@@ -19,18 +19,10 @@
 #include "Misc/ScopeExit.h"
 #include "Serialization/JsonWriter.h"
 
-// The bundle reader, of either layout: `MantlePlace.Import.ReaderCorpus` runs every case of the
-// conformance corpus's `reader` group against it, each bundle built three ways (a folder, a zip, a zip
-// inside one wrapper folder) and opened the way the plugin opens one (MantlePlaceBundleArchive).
-// `MantlePlace.Import.BundleReaderLogic` holds the rules no corpus case states on their own: the
-// wrapper folder, the entries the reader ignores, the family table, the major gate's message, and that
-// no 3.x file is found through a per-host block.
-
 namespace
 {
 using namespace MantlePlaceConformanceCorpus;
 
-/** A set of archive entries with fixed text, read through the logic unit with no archive at all. */
 struct FInMemoryBundle
 {
 	TMap<FString, FString> Entries;
@@ -57,24 +49,19 @@ const FMantlePlaceBundleFile* FindFile(const FMantlePlaceBundleRead& Read, const
 	return Read.Files.FindByPredicate([&Path](const FMantlePlaceBundleFile& F) { return F.Path == Path; });
 }
 
-// --- The corpus ------------------------------------------------------------------------------------
-
-/** One file's bytes as the corpus describes them: a string as UTF-8, any JSON value as JSON. */
 TArray<uint8> BytesOfValue(const TSharedPtr<FJsonValue>& Value)
 {
 	FString Text;
 	const TSharedPtr<FJsonObject>* Object = nullptr;
 	if (Value.IsValid() && Value->Type == EJson::Object && Value->TryGetObject(Object) && Object != nullptr)
 	{
-		// A JSON object is a manifest, or a `$geopackage` description: the reader lists a GeoPackage and
-		// never opens it, so the description's own text stands in for the database's bytes.
 		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Text);
 		FJsonSerializer::Serialize(Object->ToSharedRef(), Writer);
 		Text += TEXT("\n");
 	}
 	else if (Value.IsValid())
 	{
-		Text = Value->AsString(); // a string, as written; the corpus describes no other file content
+		Text = Value->AsString();
 	}
 	const FTCHARToUTF8 Utf8(*Text);
 	return TArray<uint8>(reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length());
@@ -97,8 +84,6 @@ const TCHAR* FormName(EForm Form)
 	}
 }
 
-/** Whether two of the bundle's paths, or the folders above them, differ only by case: such a bundle
- *  is built as the two zips only, since no case-insensitive file system can hold it as a folder. */
 bool HasCaseCollision(const TMap<FString, TArray<uint8>>& Files)
 {
 	TSet<FString> Exact;
@@ -123,7 +108,6 @@ bool HasCaseCollision(const TMap<FString, TArray<uint8>>& Files)
 	return Folded.Num() < Exact.Num();
 }
 
-/** Build the bundle in `Form` under `Dir`; returns the path to hand the reader, or empty on failure. */
 FString Build(EForm Form, const TMap<FString, TArray<uint8>>& Files, const FString& Dir)
 {
 	IPlatformFile& Platform = FPlatformFileManager::Get().GetPlatformFile();
@@ -149,7 +133,7 @@ FString Build(EForm Form, const TMap<FString, TArray<uint8>>& Files, const FStri
 		return FString();
 	}
 	{
-		FZipArchiveWriter Writer(Out); // takes ownership of the handle; the destructor writes the directory
+		FZipArchiveWriter Writer(Out);
 		const FDateTime Now = FDateTime::UtcNow();
 		const FString Prefix = Form == EForm::Wrapped ? TEXT("site-bundle/") : TEXT("");
 		for (const TPair<FString, TArray<uint8>>& Pair : Files)
@@ -160,7 +144,6 @@ FString Build(EForm Form, const TMap<FString, TArray<uint8>>& Files, const FStri
 	return ZipPath;
 }
 
-/** The corpus's string for a value that may be null: empty for null. */
 bool ReadNullableString(const TSharedPtr<FJsonObject>& Object, const TCHAR* Key, FString& Out)
 {
 	const TSharedPtr<FJsonValue> Value = Object->TryGetField(Key);
@@ -181,14 +164,12 @@ bool ReadNullableString(const TSharedPtr<FJsonObject>& Object, const TCHAR* Key,
 	return true;
 }
 
-/** One found file as the corpus states it: `family|frame|count`, nulls written as `null`. */
 FString DescribeFile(const FString& Family, const FString& Frame, const FString& Count)
 {
 	return FString::Printf(TEXT("family=%s frame=%s count=%s"),
 		Family.IsEmpty() ? TEXT("null") : *Family, Frame.IsEmpty() ? TEXT("null") : *Frame, *Count);
 }
 
-/** The case's `result` against what the reader found, member by member; one failure per difference. */
 void CompareResult(FAutomationTestBase& T, const FString& Label, const TSharedPtr<FJsonObject>& Result,
                    const FMantlePlaceBundleRead& Read)
 {
@@ -234,8 +215,6 @@ void CompareResult(FAutomationTestBase& T, const FString& Label, const TSharedPt
 		T.TestTrue(Label + TEXT("a refusal carries a message"), !Read.Error.IsEmpty());
 	}
 
-	// `frames`: stated for a 3.x read and only then, equal to what the reader put on the read, every
-	// member exactly (a geoid the manifest names none for is `null`).
 	const TSharedPtr<FJsonObject>* ExpectedFrames = nullptr;
 	if (Result->TryGetObjectField(TEXT("frames"), ExpectedFrames) && ExpectedFrames != nullptr)
 	{
@@ -250,7 +229,6 @@ void CompareResult(FAutomationTestBase& T, const FString& Label, const TSharedPt
 		T.TestFalse(Label + TEXT("the reader read frames the case does not state"), Read.Frames.IsValid());
 	}
 
-	// `files`, as a set keyed by path, every member exactly.
 	TMap<FString, FString> ExpectedFiles;
 	const TArray<TSharedPtr<FJsonValue>>* Files = nullptr;
 	if (T.TestTrue(Label + TEXT("the case states `files`"), Result->TryGetArrayField(TEXT("files"), Files)))
@@ -303,7 +281,6 @@ void CompareResult(FAutomationTestBase& T, const FString& Label, const TSharedPt
 		}
 	}
 
-	// `skipped`, the same way.
 	TMap<FString, FString> ExpectedSkips;
 	const TArray<TSharedPtr<FJsonValue>>* Skipped = nullptr;
 	if (T.TestTrue(Label + TEXT("the case states `skipped`"), Result->TryGetArrayField(TEXT("skipped"), Skipped)))
@@ -349,8 +326,6 @@ void CompareResult(FAutomationTestBase& T, const FString& Label, const TSharedPt
 	}
 }
 
-/** The two frames a readable 3.x manifest states (format.md §9.4): a metric order and the local site frame.
- *  A 3.x manifest without them is refused as unreadable, as the .NET reader refuses it. */
 const TCHAR* const MetricFrames = TEXT(
 	"\"frames\": {\"georeferenced\": {\"horizontal_crs\": {\"code\": \"EPSG:32618\"},"
 	" \"vertical_crs\": {\"code\": \"EPSG:3855\"}, \"geoid_model\": \"EGM2008\","
@@ -362,7 +337,7 @@ const TCHAR* const MetricFrames = TEXT(
 	" \"vertical_crs\": {\"code\": \"EPSG:3855\"}, \"geoid_model\": \"EGM2008\","
 	" \"unit\": {\"name\": \"metre\", \"to_metres\": 1}, \"axes\": {\"x\": \"east\", \"y\": \"north\", \"z\": \"up\"},"
 	" \"grid_rotation_deg\": 0.67}}");
-} // namespace
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceReaderCorpusTest,
@@ -386,7 +361,7 @@ bool FMantlePlaceReaderCorpusTest::RunTest(const FString& Parameters)
 	const FString CorpusRoot = FindCorpusRoot();
 	const FString Scratch = FPaths::Combine(
 		FPaths::ProjectSavedDir(), TEXT("MantlePlace"), TEXT("Tests"), TEXT("ReaderCorpus-") + FGuid::NewGuid().ToString());
-	ON_SCOPE_EXIT { IFileManager::Get().DeleteDirectory(*Scratch, /*RequireExists*/ false, /*Tree*/ true); };
+	ON_SCOPE_EXIT { IFileManager::Get().DeleteDirectory(*Scratch, false, true); };
 
 	int32 Ran = 0;
 	for (const FCase& Case : Cases)
@@ -453,7 +428,6 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 {
 	using L = FMantlePlaceBundleReaderLogic;
 
-	// --- The family table: by extension in 3.x, by the file's own frame statement in 2.x --------------
 	TestEqual(TEXT("a GeoTIFF is georeferenced"), L::FamilyOfExtension(TEXT("Elevation/Elevation.tif")), EMantlePlaceBundleFamily::Georeferenced);
 	TestEqual(TEXT("a LandXML is georeferenced"), L::FamilyOfExtension(TEXT("Elevation/Terrain.landxml")), EMantlePlaceBundleFamily::Georeferenced);
 	TestEqual(TEXT("an extension is matched regardless of case"), L::FamilyOfExtension(TEXT("Basemap/Roads.GPKG")), EMantlePlaceBundleFamily::Georeferenced);
@@ -470,7 +444,6 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("georeferenced is in the order's unit"), L::UnitOf(EMantlePlaceBundleFamily::Georeferenced), EMantlePlaceBundleUnit::OrderDelivery);
 	TestEqual(TEXT("host-ready is in metres"), L::UnitOf(EMantlePlaceBundleFamily::HostReady), EMantlePlaceBundleUnit::Metres);
 
-	// --- Where the manifest is -----------------------------------------------------------------------
 	{
 		FString Root, Manifest;
 		TestTrue(TEXT("a root Manifest.json is found"), L::FindManifest({ TEXT("Manifest.json"), TEXT("Readme.md") }, Root, Manifest));
@@ -499,7 +472,6 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("a folder entry is ignored"), L::IsReadableEntry(TEXT("Elevation/")));
 	TestTrue(TEXT("a plain path is read"), L::IsReadableEntry(TEXT("Elevation/Elevation.tif")));
 
-	// --- The major gate --------------------------------------------------------------------------------
 	{
 		FInMemoryBundle Ahead;
 		Ahead.Entries.Add(TEXT("Manifest.json"), TEXT("{\"version\": \"4.0.0\", \"catalog\": {\"Readme.md\": {}}}"));
@@ -517,7 +489,6 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 			+ TEXT(", \"catalog\": {\"Manifest.json\": {}}}"));
 		TestEqual(TEXT("any 3.x minor is read"), Three.Read().Outcome, EMantlePlaceBundleReadOutcome::Read);
 
-		// A 3.x manifest that states no frames is refused, naming what is missing, and reads no catalog.
 		FInMemoryBundle Bare;
 		Bare.Entries.Add(TEXT("Manifest.json"), TEXT("{\"version\": \"3.0.0\", \"level\": \"Med\", \"catalog\": {\"Manifest.json\": {}}}"));
 		const FMantlePlaceBundleRead BareRead = Bare.Read();
@@ -527,7 +498,6 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("... with no level and no catalog read"), BareRead.Level.Len() + BareRead.Files.Num() + BareRead.Skipped.Num(), 0);
 	}
 	{
-		// The 2.x reader keeps its own message, word for word: the shared text is one function now.
 		FString Error;
 		MantlePlaceImportManifest::Parse(TEXT("{\"version\": \"3.0.0\"}"), Error);
 		TestEqual(TEXT("the 2.x parse refuses a 3.0 manifest with the same update message, as it shipped"),
@@ -548,10 +518,7 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("... with the floor's message"), Read.Error, L::BelowFloorMessage(TEXT(""), MantlePlaceMinSupportedManifestVersion));
 	}
 
-	// --- Nothing from a per-host block ---------------------------------------------------------------
 	{
-		// A 3.x manifest that carries a host block anyway: the file it names is not in the catalog, so it
-		// is not found, and the block's catalog-looking member is never read as one.
 		FInMemoryBundle Hosted;
 		Hosted.Entries.Add(TEXT("Manifest.json"), FString(TEXT("{\"version\": \"3.0.0\", \"level\": \"Max\", ")) + MetricFrames + TEXT(","
 			" \"catalog\": {\"Elevation/Elevation.tif\": {\"count\": {\"kind\": \"pixels\", \"value\": 4}}},"
@@ -569,7 +536,6 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- What a catalog entry states, and what it does not ------------------------------------------
 	{
 		FInMemoryBundle Counts;
 		Counts.Entries.Add(TEXT("Manifest.json"), FString(TEXT("{\"version\": \"3.0.0\", \"level\": \"Min\", ")) + MetricFrames + TEXT(
@@ -606,22 +572,15 @@ bool FMantlePlaceBundleReaderLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// --- The frames, value by value ----------------------------------------------------------------------
-// The corpus's `reader.v3Frames*` cases pin one refusal each. This pins each rule on its own, against
-// the metric frames above with one value changed: a unit is its factor and never its name, an axis
-// order, a CRS that names no form, the local axes and the local unit, and that a read hands the
-// manifest's frames back as stated, never converted.
-
 namespace
 {
-/** A 3.x manifest stating `MetricFrames` with one stated fragment replaced by another. */
 FMantlePlaceBundleRead ReadFramesFragment(FAutomationTestBase& Test, const TCHAR* From, const TCHAR* To)
 {
 	FString Frames = MetricFrames;
 	if (From != nullptr)
 	{
 		const int32 Found = Frames.Find(From, ESearchCase::CaseSensitive);
-		if (Found == INDEX_NONE) // the test's own fragment must exist, or it proves nothing
+		if (Found == INDEX_NONE)
 		{
 			Test.AddError(FString::Printf(TEXT("the test's own fragment is not in the metric frames: %s"), From));
 			return FMantlePlaceBundleRead();
@@ -633,7 +592,7 @@ FMantlePlaceBundleRead ReadFramesFragment(FAutomationTestBase& Test, const TCHAR
 		FString(TEXT("{\"version\": \"3.0.0\", \"level\": \"Med\", ")) + Frames + TEXT(", \"catalog\": {\"Manifest.json\": {}}}"));
 	return Bundle.Read();
 }
-} // namespace
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceBundleReaderFramesTest,
@@ -649,7 +608,6 @@ bool FMantlePlaceBundleReaderFramesTest::RunTest(const FString& Parameters)
 		return ReadFramesFragment(*this, From, To);
 	};
 
-	// A refusal: the manifest is refused as unreadable, the message names the value, no level is read.
 	const auto ExpectRefused = [this](const FString& What, const FMantlePlaceBundleRead& Read, std::initializer_list<const TCHAR*> Named)
 	{
 		TestEqual(What + TEXT(": refused"), Read.Outcome, EMantlePlaceBundleReadOutcome::Refused);
@@ -669,7 +627,6 @@ bool FMantlePlaceBundleReaderFramesTest::RunTest(const FString& Parameters)
 
 	ExpectRead(TEXT("the metric frames"), ReadWithFrames(nullptr, nullptr));
 
-	// A unit is its factor, never its name.
 	const TCHAR* const HorizontalUnit = TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 1}");
 	ExpectRefused(TEXT("a metre named so, at twice the factor"),
 		ReadWithFrames(HorizontalUnit, TEXT("\"horizontal_unit\": {\"name\": \"metre\", \"to_metres\": 2}")), { TEXT("states the unit metre (2") });
@@ -689,7 +646,6 @@ bool FMantlePlaceBundleReaderFramesTest::RunTest(const FString& Parameters)
 	ExpectRead(TEXT("the US survey foot by its factor"),
 		ReadWithFrames(HorizontalUnit, TEXT("\"horizontal_unit\": {\"name\": \"US survey foot\", \"to_metres\": 0.3048006096012192}")));
 
-	// An axis order that is neither east-north nor north-east.
 	const TCHAR* const AxisOrder = TEXT("\"axis_order\": \"east-north\"");
 	ExpectRead(TEXT("north-east"), ReadWithFrames(AxisOrder, TEXT("\"axis_order\": \"north-east\"")));
 	ExpectRefused(TEXT("an axis order of another word"),
@@ -701,7 +657,6 @@ bool FMantlePlaceBundleReaderFramesTest::RunTest(const FString& Parameters)
 	ExpectRefused(TEXT("an axis order that is null"),
 		ReadWithFrames(AxisOrder, TEXT("\"axis_order\": null")), { TEXT("axis_order states null") });
 
-	// A CRS that names no code, PROJJSON object or WKT2 string.
 	const TCHAR* const OrderCrs = TEXT("\"horizontal_crs\": {\"code\": \"EPSG:32618\"}");
 	ExpectRead(TEXT("a PROJJSON object CRS"),
 		ReadWithFrames(OrderCrs, TEXT("\"horizontal_crs\": {\"projjson\": {\"type\": \"ProjectedCRS\"}}")));
@@ -715,7 +670,6 @@ bool FMantlePlaceBundleReaderFramesTest::RunTest(const FString& Parameters)
 			TEXT("\"vertical_crs\": {\"name\": \"local datum\"}, \"geoid_model\": \"EGM2008\", \"horizontal_unit\"")),
 		{ TEXT("frames.georeferenced.vertical_crs") });
 
-	// The local frame runs east, north, up, in metres.
 	const TCHAR* const LocalAxes = TEXT("\"axes\": {\"x\": \"east\", \"y\": \"north\", \"z\": \"up\"}");
 	ExpectRefused(TEXT("a local frame whose up is down"),
 		ReadWithFrames(LocalAxes, TEXT("\"axes\": {\"x\": \"east\", \"y\": \"north\", \"z\": \"down\"}")), { TEXT("down") });
@@ -733,7 +687,6 @@ bool FMantlePlaceBundleReaderFramesTest::RunTest(const FString& Parameters)
 	ExpectRefused(TEXT("a local unit that is unknown"),
 		ReadWithFrames(LocalUnit, TEXT("\"unit\": {\"name\": \"cubit\", \"to_metres\": 0.4572}, \"axes\"")), { TEXT("cubit") });
 
-	// The frames come back as the manifest states them: nothing converted, derived or renamed.
 	{
 		const FMantlePlaceBundleRead Feet = ReadWithFrames(HorizontalUnit,
 			TEXT("\"horizontal_unit\": {\"name\": \"US survey foot\", \"to_metres\": 0.3048006096012192}"));
@@ -758,4 +711,4 @@ bool FMantlePlaceBundleReaderFramesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

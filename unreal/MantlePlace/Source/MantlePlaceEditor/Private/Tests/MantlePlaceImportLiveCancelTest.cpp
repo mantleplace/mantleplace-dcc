@@ -20,28 +20,8 @@
 #include "Misc/Paths.h"
 #include "UObject/Package.h"
 
-// MantlePlace.Import.LiveCancel: Cancel between steps against a real bundle, and the import after it.
-//
-// MantlePlace.Import.Steps.Cancel and MantlePlace.Import.Orchestration.StepsAndCancel prove which steps
-// a cancel stops; this proves what that leaves in a level. The bundle is MP_LIVETEST_BUNDLE (else the
-// in-tree live-test copy), with LiveFreeTier's skip rule: no bundle warns and passes locally, and is an
-// error when CI is set.
-//
-// The import is cancelled the moment its second artifact import begins, as a click on Cancel delivered
-// at that boundary would. That step finishes and the later ones do not start. Then: the result says it was
-// cancelled; the content that finished is recorded as this order's, so a re-import replaces it rather
-// than refusing it as unrecorded; and every actor it left references only live assets, none of them a
-// prior import's deleted leftover. Last, the same bundle is imported again with nobody cancelling, and
-// that import completes.
-
 namespace MantlePlaceImportLiveCancelTest
 {
-/**
- * The actors of this order whose components reference a material that is gone, by label: one garbage
- * collection has claimed, or a prior import's deleted asset that RetireDeletedLeftovers moved aside (into
- * the transient package, named `<name>_Deleted`). A transient material is not dead by itself: a landscape
- * proxy's components hold the editor's own transient instances.
- */
 bool IsDeadMaterial(const UMaterialInterface* Material)
 {
 	return !IsValid(Material)
@@ -121,17 +101,13 @@ bool FMantlePlaceImportLiveCancelTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	// --- Cancelled when the second artifact import begins: it finishes, the rest do not start. -------------
-	// The second, so the level holds finished content from more than one step; an import, not a Prepare
-	// half, so the step it lands on runs to Done. A step reads Done only once its Import has run, so
-	// "another artifact step is Done" is what says the Import pass is under way.
 	FMantlePlaceImportSteps Steps;
 	FName CancelledAt;
 	Steps.OnChanged = [&Steps, &CancelledAt]()
 	{
 		const int32 Current = Steps.CurrentIndex();
 		bool bAnArtifactDone = false;
-		for (int32 Index = 1; Index < Steps.Steps().Num(); ++Index) // index 0 is the integrity check
+		for (int32 Index = 1; Index < Steps.Steps().Num(); ++Index)
 		{
 			bAnArtifactDone |= Steps.Steps()[Index].State == EMantlePlaceImportStepState::Done;
 		}
@@ -180,7 +156,6 @@ bool FMantlePlaceImportLiveCancelTest::RunTest(const FString& Parameters)
 	TestTrue(*FString::Printf(TEXT("every actor the cancelled import left references live assets (dead: %s)"),
 		*FString::Join(Dead, TEXT(", "))), Dead.Num() == 0);
 
-	// --- Importing again, uncancelled, completes. ----------------------------------------------------------
 	const FMantlePlaceImportResult Again =
 		UMantlePlaceImporterLibrary::ImportVaultPackage(Zip, EMantlePlaceImportMode::Both);
 	if (!TestTrue(TEXT("importing again after the cancel completes"), Again.bSuccess))
@@ -196,4 +171,4 @@ bool FMantlePlaceImportLiveCancelTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
+#endif

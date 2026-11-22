@@ -2,9 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Which Revit failures an unattended import absorbs, and how it accounts for the ones it did.
-/// </summary>
 internal static class ImportFailurePolicyTests
 {
     internal static int Run()
@@ -13,11 +10,6 @@ internal static class ImportFailurePolicyTests
 
         run.Case("an error rolls back whatever its id, unless it is on the allowlist", () =>
         {
-            // ⛔ Why severity leads and the id can only ever soften. The failure the first real import
-            // hit is a composite: SlabShapeEditFailedError is "Slab Shape Edit failed. [Description]"
-            // and it substitutes SlabShapeFailedTooThin's text into itself, so a policy keyed on the
-            // inner id would never fire on the outer one — and the import would go straight back to
-            // the dead-end modal this whole type exists to prevent.
             foreach (ImportFailureKind kind in Enum.GetValues<ImportFailureKind>())
             {
                 if (kind == ImportFailureKind.CannotKeepElementsJoined)
@@ -34,11 +26,6 @@ internal static class ImportFailurePolicyTests
 
         run.Case("the one allowlisted error is resolved instead", () =>
         {
-            // "Can't keep elements joined" comes out of Revit's own IFC importer. Unjoining is what a
-            // curator does by hand and it loses nothing: the elements stay, they stop sharing
-            // geometry. It is an allowlist and not "any error with a resolution" because Revit's
-            // resolution for the toposolid failures is to DELETE THE TOPOSOLID — which would turn a
-            // refused import into a silently empty one.
             run.Equal(
                 ImportFailurePolicy.Decide(ImportFailureKind.CannotKeepElementsJoined, isError: true, hasResolutions: true)
                     == ImportFailureAction.Resolve,
@@ -65,9 +52,6 @@ internal static class ImportFailurePolicyTests
 
         run.Case("a refused subdivision is deleted alone when the error names only this step's own new elements", () =>
         {
-            // The refusal arrives at commit, after every cut has returned, and names the one
-            // subdivision Revit could not make. Deleting that element loses one published feature;
-            // rolling back loses the layer.
             run.Equal(
                 ImportFailurePolicy.Decide(ImportFailureKind.SubDivisionRefused, isError: true, hasResolutions: false, namesOnlyOwnNewElements: true),
                 ImportFailureAction.DeleteNamedElements,
@@ -76,8 +60,6 @@ internal static class ImportFailurePolicyTests
 
         run.Case("a refused subdivision still rolls back when it names anything the step did not just create", () =>
         {
-            // ⛔ The terrain itself, a curator's element or an earlier import's subdivision is never
-            // deleted to make a commit go through — and nor is nothing, when the error names no element.
             run.Equal(
                 ImportFailurePolicy.Decide(ImportFailureKind.SubDivisionRefused, isError: true, hasResolutions: false, namesOnlyOwnNewElements: false),
                 ImportFailureAction.RollBack,
@@ -152,10 +134,6 @@ internal static class ImportFailurePolicyTests
 
         run.Case("a refused site-model conversion names Revit's error and what it cost the curator", () =>
         {
-            // The conversion is Revit's own IFC importer, which opens a transaction of its own. When
-            // that transaction is refused ("Can't keep elements joined", with no resolution) the
-            // curator used to read only the exception text, "Transaction committing failed", which
-            // names neither the cause nor the loss.
             string text = ImportFailurePolicy.ExplainSiteModelRefused(
                 "Site/Site.ifc",
                 "Can't keep elements joined.",
@@ -179,8 +157,6 @@ internal static class ImportFailurePolicyTests
 
         run.Case("the eight overlaps read as an explanation, not as a failure", () =>
         {
-            // The real case: site context imported into a project that already contained a building.
-            // Correct geometry, indistinguishable today from the one error that killed the import.
             string text = ImportFailurePolicy.Explain(ImportFailureKind.ToposolidFloorOverlap, 8);
             run.Contains(text, "8 places", "it says how many");
             run.Contains(text, "expected", "and that it is expected");
@@ -205,8 +181,6 @@ internal static class ImportFailurePolicyTests
                     or ImportFailureKind.CannotKeepElementsJoined
                     or ImportFailureKind.SubDivisionRefused)
                 {
-                    // The error kinds are worded by ExplainRollBack, ExplainResolved and
-                    // ExplainRefusedSubDivision, not here.
                     continue;
                 }
 

@@ -9,7 +9,6 @@
 
 namespace
 {
-	/** Build a vault item with just the fields the row-view derivation reads. */
 	FMantlePlaceVaultItem MakeItem(
 		EMantlePlaceVaultBundleStatus Status,
 		const TArray<FString>& Formats,
@@ -26,12 +25,11 @@ namespace
 		return Item;
 	}
 
-	// Brand accents as they display on screen (sRGB hex -> linear, the same conversion the impl uses).
-	const FLinearColor White(FColor(0xFF, 0xFF, 0xFF)); // ready (the calm default)
-	const FLinearColor Water(FColor(0x09, 0x95, 0xB5)); // processing (live / in-flight)
-	const FLinearColor Zinc4(FColor(0xA1, 0xA1, 0xAA)); // refunded
-	const FLinearColor Red4(FColor(0xFF, 0x64, 0x67));  // failed
-	const FLinearColor Zinc5(FColor(0x71, 0x71, 0x7A)); // unknown
+	const FLinearColor White(FColor(0xFF, 0xFF, 0xFF));
+	const FLinearColor Water(FColor(0x09, 0x95, 0xB5));
+	const FLinearColor Zinc4(FColor(0xA1, 0xA1, 0xAA));
+	const FLinearColor Red4(FColor(0xFF, 0x64, 0x67));
+	const FLinearColor Zinc5(FColor(0x71, 0x71, 0x7A));
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
@@ -41,14 +39,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 {
-	// The list shows only Available (succeeded) bundles, and the sole action is a uniform "Import"
-	// (a BASE bundle materializes-then-imports transparently). No "GENERATE + IMPORT" / "TRY AGAIN"
-	// wording, and no per-row reason line - advanced/failed handling lives on the website.
-
-	// 1. Available + Unreal tier (ships glb), idle -> "Import", enabled, no reason.
 	{
 		const FMantlePlaceVaultRowView V = BuildVaultRowView(
-			MakeItem(EMantlePlaceVaultBundleStatus::Available, {TEXT("glb"), TEXT("geotiff")}), /*bBusy*/ false);
+			MakeItem(EMantlePlaceVaultBundleStatus::Available, {TEXT("glb"), TEXT("geotiff")}), false);
 		TestEqual(TEXT("available/unreal status label"), V.StatusLabel, FString(TEXT("ready")));
 		TestTrue(TEXT("available/unreal status color=white"), V.StatusColor.Equals(White, 1e-4f));
 		TestEqual(TEXT("available/unreal tier"), V.TierLabel, FString(TEXT("Unreal")));
@@ -57,7 +50,6 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("available/unreal no reason"), V.bShowReason);
 	}
 
-	// 2. Available + Base tier (formats but no glb) -> uniform "Import", enabled (materialize is transparent).
 	{
 		const FMantlePlaceVaultRowView V = BuildVaultRowView(
 			MakeItem(EMantlePlaceVaultBundleStatus::Available, {TEXT("geotiff"), TEXT("pmtiles")}), false);
@@ -67,15 +59,12 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("available/base status label"), V.StatusLabel, FString(TEXT("ready")));
 	}
 
-	// 3. Busy disables every row (only one import at a time).
 	{
 		const FMantlePlaceVaultRowView V = BuildVaultRowView(
-			MakeItem(EMantlePlaceVaultBundleStatus::Available, {TEXT("geotiff")}), /*bBusy*/ true);
+			MakeItem(EMantlePlaceVaultBundleStatus::Available, {TEXT("geotiff")}), true);
 		TestFalse(TEXT("busy disables primary"), V.bPrimaryEnabled);
 	}
 
-	// 4. RefreshPending (filtered from the list, but the pure derivation stays total) -> "processing"
-	//    tint, disabled Import, no reason.
 	{
 		const FMantlePlaceVaultRowView V = BuildVaultRowView(
 			MakeItem(EMantlePlaceVaultBundleStatus::RefreshPending, {TEXT("glb")}), false);
@@ -86,7 +75,6 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("refresh-pending no reason"), V.bShowReason);
 	}
 
-	// 5. Refunded -> zinc tint, disabled.
 	{
 		const FMantlePlaceVaultRowView V = BuildVaultRowView(
 			MakeItem(EMantlePlaceVaultBundleStatus::Refunded, {TEXT("glb")}), false);
@@ -95,7 +83,6 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("refunded disabled"), V.bPrimaryEnabled);
 	}
 
-	// 6. Failed -> red tint, disabled Import, NO "TRY AGAIN".
 	{
 		const FMantlePlaceVaultRowView V = BuildVaultRowView(
 			MakeItem(EMantlePlaceVaultBundleStatus::Failed, {TEXT("glb")}), false);
@@ -106,7 +93,6 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("failed no reason"), V.bShowReason);
 	}
 
-	// 7. Unknown status -> disabled, zinc-500 tint.
 	{
 		const FMantlePlaceVaultRowView V = BuildVaultRowView(
 			MakeItem(EMantlePlaceVaultBundleStatus::Unknown, {TEXT("glb")}), false);
@@ -115,7 +101,6 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("unknown disabled"), V.bPrimaryEnabled);
 	}
 
-	// 8. Empty formats Available -> tier "Unknown", uniform "Import", enabled.
 	{
 		const FMantlePlaceVaultRowView V = BuildVaultRowView(
 			MakeItem(EMantlePlaceVaultBundleStatus::Available, {}), false);
@@ -124,14 +109,12 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("empty-formats enabled"), V.bPrimaryEnabled);
 	}
 
-	// 9. Codename is capitalized per word.
 	{
 		const FMantlePlaceVaultRowView V = BuildVaultRowView(
 			MakeItem(EMantlePlaceVaultBundleStatus::Available, {TEXT("glb")}, TEXT("boston common")), false);
 		TestEqual(TEXT("codename capitalized"), V.Codename, FString(TEXT("Boston Common")));
 	}
 
-	// 10. Meta line: "{area:.2f} km2 - {Mon d, yyyy}" (km2 = U+00B2, separator = U+00B7).
 	{
 		const FMantlePlaceVaultRowView V = BuildVaultRowView(
 			MakeItem(EMantlePlaceVaultBundleStatus::Available, {TEXT("glb")}, TEXT("aoi"), 12.34,
@@ -141,7 +124,6 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("meta line"), V.MetaLine, ExpectedMeta);
 	}
 
-	// 11. FormatVaultBytes: non-positive -> "-"; scales B/KB/MB.
 	{
 		TestEqual(TEXT("bytes 0"), FormatVaultBytes(0), FString(TEXT("-")));
 		TestEqual(TEXT("bytes negative"), FormatVaultBytes(-5), FString(TEXT("-")));
@@ -150,7 +132,6 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("bytes 1 MB"), FormatVaultBytes(1024 * 1024), FString(TEXT("1.0 MB")));
 	}
 
-	// 12. Detail view: high-level fields, uniform Import, artifacts, layers, order line.
 	{
 		FMantlePlaceVaultItem Item = MakeItem(
 			EMantlePlaceVaultBundleStatus::Available, {TEXT("glb"), TEXT("geotiff")}, TEXT("boston common"), 12.34);
@@ -164,7 +145,7 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		FMantlePlaceVaultArtifact A1; A1.Format = TEXT("geotiff"); A1.ByteSize = 512 * 1024;
 		Item.DownloadFormats = {A0, A1};
 
-		const FMantlePlaceVaultDetailView D = BuildVaultDetailView(Item, /*bBusy*/ false);
+		const FMantlePlaceVaultDetailView D = BuildVaultDetailView(Item, false);
 		TestEqual(TEXT("detail codename"), D.Codename, FString(TEXT("Boston Common")));
 		TestEqual(TEXT("detail order line"), D.OrderLine, FString(TEXT("order #abcdef012345")));
 		TestEqual(TEXT("detail status"), D.StatusLabel, FString(TEXT("ready")));
@@ -172,9 +153,8 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("detail primary"), D.PrimaryLabel, FString(TEXT("Import")));
 		TestTrue(TEXT("detail enabled"), D.bPrimaryEnabled);
 		TestEqual(TEXT("detail size"), D.SizeText, FString(TEXT("13.0 MB")));
-		// "Delivered as" = dotted format strip over the download formats (web formatStripLabel).
 		const FString ExpectedDelivered =
-			FString::Printf(TEXT(".glb %c .geotiff"), (TCHAR)0x00B7 /* middot */);
+			FString::Printf(TEXT(".glb %c .geotiff"), (TCHAR)0x00B7);
 		TestEqual(TEXT("detail delivered-as strip"), D.DeliveredAsText, ExpectedDelivered);
 		TestEqual(TEXT("detail artifacts count"), D.Artifacts.Num(), 2);
 		TestEqual(TEXT("detail artifact 0 label (dotted)"), D.Artifacts[0].Label, FString(TEXT(".glb")));
@@ -191,9 +171,6 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("detail basemap"), D.bBasemap);
 	}
 
-	// 12b. Detail view of a free 3.0 bundle: the plan sheets and terrain tiles are locked rows with the words,
-	// the Site Brief is a row with its size, and the view says they come with paid builds. A paid bundle
-	// lists them unlocked, and says nothing of the kind.
 	{
 		FMantlePlaceVaultItem Item = MakeItem(EMantlePlaceVaultBundleStatus::Available, {TEXT("glb")});
 		FMantlePlaceVaultExtra Brief; Brief.Id = TEXT("SiteBrief"); Brief.Name = TEXT("Site Brief"); Brief.SizeBytes = 2048;
@@ -226,19 +203,16 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 			BuildVaultDetailView(MakeItem(EMantlePlaceVaultBundleStatus::Available, {TEXT("glb")}), false).Extras.Num(), 0);
 	}
 
-	// 13. Detail view for a non-Available bundle -> Import disabled.
 	{
 		const FMantlePlaceVaultDetailView D = BuildVaultDetailView(
 			MakeItem(EMantlePlaceVaultBundleStatus::Failed, {TEXT("glb")}), false);
 		TestFalse(TEXT("detail non-available import disabled"), D.bPrimaryEnabled);
 	}
 
-	// 14. Format explainers (web format-explainers.ts parity) + delivered-as strip edge cases.
 	{
 		TestEqual(TEXT("glb label"), GetFormatExplainer(TEXT("glb")).Label, FString(TEXT(".glb")));
 		TestEqual(TEXT("cog opens-with"), GetFormatExplainer(TEXT("cog")).OpensWith, FString(TEXT("QGIS, ArcGIS, GDAL")));
 		TestEqual(TEXT("explainer is case-insensitive"), GetFormatExplainer(TEXT("PMTILES")).Label, FString(TEXT(".pmtiles")));
-		// Unknown format: dotted label, no invented tool copy.
 		TestEqual(TEXT("unknown format dotted label"), GetFormatExplainer(TEXT("xyz")).Label, FString(TEXT(".xyz")));
 		TestTrue(TEXT("unknown format has no opens-with"), GetFormatExplainer(TEXT("xyz")).OpensWith.IsEmpty());
 		TestEqual(TEXT("empty format -> empty label"), GetFormatExplainer(TEXT("")).Label, FString());
@@ -252,4 +226,4 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

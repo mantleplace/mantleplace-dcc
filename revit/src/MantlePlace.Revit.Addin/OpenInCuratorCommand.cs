@@ -7,30 +7,10 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-/// <summary>"Open in Curator": opens the web curator on the extent the project already knows.</summary>
-/// <remarks>
-/// <para>
-/// Not a placement: nothing is written to the project. The extent comes from the order id the last
-/// Mantle Place import left on Project Information, whose extent the vault record carries, or else
-/// from the project's site latitude and longitude with a size the curator picks. A project with
-/// neither opens the plain curator. Every one of those decisions, and the link, is
-/// <see cref="CuratorExtents"/> and <see cref="CuratorLink"/> in the pure core, asserted without
-/// Revit; what is left here is reading the two facts out of the model, one bounded vault listing,
-/// the size dialog and the shell call.
-/// </para>
-/// <para>
-/// It opens no transaction and is reachable with no project open, which opens the plain curator.
-/// </para>
-/// </remarks>
 [Transaction(TransactionMode.ReadOnly)]
 [Regeneration(RegenerationOption.Manual)]
 public sealed class OpenInCuratorCommand : IExternalCommand
 {
-    /// <summary>
-    /// How long the command waits for the vault listing. It runs on Revit's thread, so the wait is
-    /// short: a listing that has not answered by then is treated as unavailable, and the curator is
-    /// told, rather than Revit left frozen on a slow network.
-    /// </summary>
     private static readonly TimeSpan ListingWait = TimeSpan.FromSeconds(6);
 
     public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
@@ -63,8 +43,6 @@ public sealed class OpenInCuratorCommand : IExternalCommand
                 break;
 
             case CuratorExtentSource.None when resolution.OrderExtentUnavailable:
-                // The project names an import, the extent could not be read, and there is no site
-                // location to fall back to: say so, then open what can be opened.
                 new TaskDialog("Mantle Place")
                 {
                     MainInstruction = "This project's import extent could not be read.",
@@ -86,11 +64,8 @@ public sealed class OpenInCuratorCommand : IExternalCommand
         return Result.Succeeded;
     }
 
-    /// <summary>The order id Project Information records, or <c>null</c> for a project never imported into.</summary>
     private static string? ReadOrderId(Document document)
     {
-        // Lookup, not ProvenanceSchema(): a project this add-in never imported into has no schema
-        // to read, and a read has no business building one.
         if (Schema.Lookup(ProvenanceStorage.SchemaGuid) is not { } schema)
         {
             return null;
@@ -99,17 +74,9 @@ public sealed class OpenInCuratorCommand : IExternalCommand
         return AttributionNotes.ReadProvenance(document, schema)?.OrderId;
     }
 
-    /// <summary>
-    /// The project's site latitude and longitude, in degrees. The values are Revit's own
-    /// (radians); whether they are a place at all is <see cref="SiteLocationPoint.IsLocated"/>'s.
-    /// </summary>
     private static SiteLocationPoint ReadSiteLocation(Document document)
         => SiteLocationPoint.FromRadians(document.SiteLocation.Latitude, document.SiteLocation.Longitude);
 
-    /// <summary>
-    /// The vault listing, or <c>null</c> when the curator is signed out, the call failed or it did
-    /// not answer in <see cref="ListingWait"/>.
-    /// </summary>
     private static IReadOnlyList<VaultBundle>? ListVaultBounded()
     {
         if (MantlePlaceApplication.Session.State != AuthState.Authenticated)
@@ -121,7 +88,6 @@ public sealed class OpenInCuratorCommand : IExternalCommand
         {
             using CancellationTokenSource timeout = new(ListingWait);
 
-            // Task.Run so the continuation never wants Revit's thread, which is the one waiting.
             Task<(VaultListing? Listing, string? Error)> listing =
                 Task.Run(() => MantlePlaceApplication.Vault.ListAsync(timeout.Token), timeout.Token);
 
@@ -138,10 +104,6 @@ public sealed class OpenInCuratorCommand : IExternalCommand
             ? "The vault did not list that order with an extent."
             : "Sign in to Mantle Place and try again: the extent comes from your vault.";
 
-    /// <summary>
-    /// Asks which of the offered sizes to draw around the site location; <c>null</c> when the curator
-    /// cancels.
-    /// </summary>
     private static CuratorExtent? AskSize(CuratorResolution resolution, SiteLocationPoint site, string placeName)
     {
         string place = string.IsNullOrWhiteSpace(placeName)
@@ -168,7 +130,6 @@ public sealed class OpenInCuratorCommand : IExternalCommand
             CommonButtons = TaskDialogCommonButtons.Cancel,
         };
 
-        // A Revit task dialog has four command links, and the core offers no more than that.
         TaskDialogCommandLinkId[] links =
         [
             TaskDialogCommandLinkId.CommandLink1,
@@ -191,9 +152,6 @@ public sealed class OpenInCuratorCommand : IExternalCommand
             dialog.AddCommandLink(links[i], resolution.SizeChoices[i].Label);
         }
 
-        // ⛔ Only now, never in the initializer: Revit checks DefaultButton against the links already
-        // added and refuses one it cannot find ("Corresponding button not found"), which stopped the
-        // command before the dialog ever showed. With no link to offer, Cancel stays the default.
         if (offered > 0)
         {
             dialog.DefaultButton = results[0];

@@ -18,23 +18,18 @@
 
 namespace
 {
-	/** Global-tab-manager id for the Mantle Place vault panel. */
 	const FName MantlePlaceVaultTabId(TEXT("MantlePlaceVault"));
 }
 
 void FMantlePlaceEditorModule::StartupModule()
 {
-	// No editor UI in a cook/commandlet/-nullrhi run; the tab manager isn't meaningful there.
 	if (IsRunningCommandlet() || !FSlateApplication::IsInitialized())
 	{
 		return;
 	}
 
-	// Register the style set (the Mantle Place logo tab icon) before wiring the tab that references it.
 	FMantlePlaceEditorStyle::Initialize();
 
-	// Register a nomad tab in the Level-Editor workspace category. As with Cesium, that SetGroup call
-	// is what surfaces the entry under Window > Mantle Place; no ToolMenus / command wiring is needed.
 	FGlobalTabmanager::Get()
 		->RegisterNomadTabSpawner(
 			MantlePlaceVaultTabId,
@@ -44,7 +39,6 @@ void FMantlePlaceEditorModule::StartupModule()
 		.SetTooltipText(LOCTEXT("MantlePlaceTabTooltip", "Open the Mantle Place vault panel: browse & import bundles you keep, or import a local .zip."))
 		.SetIcon(FSlateIcon(FMantlePlaceEditorStyle::GetStyleSetName(), "MantlePlace.TabIcon"));
 
-	// The handover command, in the Tools menu once the menus exist.
 	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FMantlePlaceEditorModule::RegisterMenus));
 }
 

@@ -1,38 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""Hold the validator to the shared conformance corpus's `bundle` group.
-
-A `bundle` case is a JSON description of a synthetic bundle, never a bundle itself: `files` maps
-each archive path to its content, a string written as UTF-8 or a JSON value written as JSON. One
-JSON value is read as a description and not written as it stands: `{"$geopackage": {"tables":
-["RoadSplines"]}}` is written as a GeoPackage that holds one empty feature table per name, so the
-corpus stays text and a case can say how many tables a file holds. The runner builds each case three ways, as a folder, a zip and a zip with one wrapper folder, and
-requires the same verdict from all three.
-
-The index entry decides what the validator must report:
-
-- `expect: accept` — the verdict is pass; `expect: reject` — the verdict is fail.
-- `expectations.errors` / `expectations.warnings` — the finding codes reported at that
-  severity, exactly: a reject case fails for its stated reason and no other, and a case that
-  lists no warnings must produce none.
-- `expectations.hashesVerified` — the number of files whose sha256 was verified.
-
-Two case fields change how a case is run, not what it must report:
-
-- `stagedSchema: true` — the case's manifest declares a staged version, served for readers and
-  not yet in the freeze ledger; the runner admits it as `mpb validate --staged` does. Once the
-  version is frozen the field changes nothing, and it is removed.
-- A case whose paths differ only by case is built as the two zips and never as a folder: no
-  folder can hold it on a case-insensitive file system, which is why the rule exists.
-
-A case body may also carry `zipMethods`, an object from an archive path to the zip method that
-member is written with (`stored`, `deflate`, `bzip2` or `lzma`; the rest are DEFLATE). A folder has
-no zip method, so a case that sets one is built as the two zips only, as a case whose paths differ
-only by case is.
-
-An expectation key the runner does not know fails the case: a runner that reads past an
-assertion it does not understand would pass a corpus full of assertions it never made.
-"""
 
 from __future__ import annotations
 
@@ -56,15 +23,10 @@ _METHODS = {"stored": zipfile.ZIP_STORED, "deflate": zipfile.ZIP_DEFLATED,
 
 
 class CorpusError(Exception):
-    """The corpus itself is unreadable; nothing was run."""
+    pass
 
 
 def geopackage_bytes(tables: list[str]) -> bytes:
-    """A GeoPackage that holds one empty feature table per name in `tables`, and no data.
-
-    It is only as much of the standard as the validator reads: `gpkg_contents` naming each table
-    as `features`, and `gpkg_geometry_columns` giving it a geometry column.
-    """
     handle, scratch = tempfile.mkstemp(prefix="mpb-corpus-gpkg-", suffix=".gpkg")
     os.close(handle)
     try:
@@ -92,7 +54,6 @@ def geopackage_bytes(tables: list[str]) -> bytes:
 
 
 def _description(content: object) -> bytes | None:
-    """The bytes of a `$geopackage` description, or None for any other JSON value."""
     if not isinstance(content, dict) or set(content) != {"$geopackage"}:
         return None
     spec = content["$geopackage"]
@@ -119,7 +80,6 @@ def _materialise(files: object) -> dict[str, bytes]:
 
 
 def _methods(body: object, files: dict[str, bytes]) -> dict[str, int]:
-    """The zip method of each member a case body names in `zipMethods`."""
     named = body.get("zipMethods") if isinstance(body, dict) else None
     if named is None:
         return {}
@@ -180,7 +140,6 @@ def _judge(case: dict, report) -> list[str]:
 
 
 def run_corpus(corpus: Path, schemas: SchemaSource) -> tuple[int, list[str]]:
-    """(cases run, failure lines). Raises CorpusError when the corpus cannot be read."""
     try:
         index = json.loads((corpus / "index.json").read_text(encoding="utf-8"))
         cases = [c for c in index["cases"] if isinstance(c, dict) and c.get("group") == GROUP]

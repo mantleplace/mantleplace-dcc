@@ -2,10 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The staged import: one step, or one chunk of a step, per <see cref="StagedImport.Advance"/>, so
-/// the host can hand Revit its message loop back between them.
-/// </summary>
 internal static class StagedImportTests
 {
     internal static int Run()
@@ -114,8 +110,6 @@ internal static class StagedImportTests
 
         run.Case("an exception that is not a step's own stops the import", () =>
         {
-            // The shim throws InvalidOperationException for a step kind this build cannot dispatch,
-            // and that must stop the import rather than quietly produce a model missing a layer.
             FakeRunner runner = new();
             runner.Bodies[ImportStepKind.LinkSiteIfc] = () => throw new InvalidOperationException("unknown kind");
             StagedImport import = new([Step(ImportStepKind.LinkSiteIfc), Step(ImportStepKind.RoadCentrelines)], runner);
@@ -181,8 +175,6 @@ internal static class StagedImportTests
 
         run.Case("a cancel after a step's last chunk lets the step finish rather than calling it cancelled", () =>
         {
-            // The last chunk has committed and only the step's closing line is left. Stopping there
-            // would report "Planting (600 of 600)" as stopped partway and lose the summary.
             FakeRunner runner = new();
             runner.Bodies[ImportStepKind.Vegetation] = () => ChunksThenSay(runner, "trees said", 250, 350);
             StagedImport import = new([Step(ImportStepKind.Vegetation), Step(ImportStepKind.ImageryDrape)], runner);
@@ -245,8 +237,6 @@ internal static class StagedImportTests
 
         run.Case("inside a step's commit the status line says Revit is committing, and only there", () =>
         {
-            // The commit is where Revit stops answering for minutes: a road layer's single commit, the
-            // drape's. The window cannot count inside it, but it can say that is where Revit is.
             FakeRunner runner = new();
             StagedImport import = null!;
             string? during = null;
@@ -269,9 +259,6 @@ internal static class StagedImportTests
 
         run.Case("what a step says about its wait is shown while it runs, and goes when it ends", () =>
         {
-            // The slow steps say, before their commit, what the wait has measured at
-            // (SlowStepNotice). The log has always had it; the window shows it beside the clock that
-            // is counting that very wait, and not over the step after.
             FakeRunner runner = new();
             StagedImport import = null!;
             ImportRunView? during = null;
@@ -298,9 +285,6 @@ internal static class StagedImportTests
 
         run.Case("a cancel pressed during a commit is said at once, before Revit's thread has heard it", () =>
         {
-            // Cancel is posted to Revit's thread, which is inside the commit and hears nothing until it
-            // returns. The window says the cancel is waiting from the moment it is pressed, on the
-            // view it already holds, rather than looking as though the click did nothing.
             FakeRunner runner = new();
             StagedImport import = null!;
             ImportRunView? during = null;
@@ -321,9 +305,6 @@ internal static class StagedImportTests
 
         run.Case("a step that fails inside its commit leaves no commit behind for the next step", () =>
         {
-            // The host says a commit has ended in a finally, but a throw from the commit itself is
-            // the case that finally exists for, and the run must not depend on the host getting it
-            // right: a stale "committing" would be said over the next step's whole run.
             FakeRunner runner = new();
             StagedImport import = null!;
             runner.Bodies[ImportStepKind.RoadPolygons] = () => ThrowsInsideCommit(() => import);
@@ -366,9 +347,6 @@ internal static class StagedImportTests
 
         run.Case("the work after the last step is named, clocked, and never said to be cancelling", () =>
         {
-            // Smooth shading, when the drape did not settle it, is committed after every step has
-            // ended: no row is in flight, and without a name the window would read every step Done,
-            // an empty bar and no status while Revit hangs.
             FakeRunner runner = new();
             StagedImport import = new([Step(ImportStepKind.LinkSiteIfc)], runner);
             import.RunToEnd();
@@ -397,8 +375,6 @@ internal static class StagedImportTests
 
         run.Case("what the finishing work says about its wait is shown beside its clock, and goes with it", () =>
         {
-            // Smooth shading committed after the last step can take minutes in Revit 2026 and 2027,
-            // and it is said before the commit the way a step's wait is.
             FakeRunner runner = new();
             StagedImport import = new([Step(ImportStepKind.LinkSiteIfc)], runner);
             import.RunToEnd();
@@ -422,8 +398,6 @@ internal static class StagedImportTests
 
         run.Case("a step can count inside its one slice, and the bar follows the count", () =>
         {
-            // The drape gives the photograph to each subdivision in turn inside one transaction, which
-            // cannot yield, so it counts instead, and the window says how far it has got.
             FakeRunner runner = new();
             StagedImport import = null!;
             string? counting = null;
@@ -457,8 +431,6 @@ internal static class StagedImportTests
 
         run.Case("a step that counted nothing to do says working, not an empty bar", () =>
         {
-            // A re-import whose subdivisions are all on the terrain already counts 0 of 0; a bar at
-            // 0% beside it would read as stuck.
             FakeRunner runner = new();
             StagedImport import = null!;
             bool indeterminate = false;
@@ -478,8 +450,6 @@ internal static class StagedImportTests
 
         run.Case("a chunk's commit keeps the bar on its count", () =>
         {
-            // The trees count after each chunk commits, so during a chunk's commit the count is short
-            // of the total, and the bar keeps it rather than flickering to working every few seconds.
             FakeRunner runner = new();
             StagedImport import = null!;
             bool indeterminate = true;
@@ -498,8 +468,6 @@ internal static class StagedImportTests
 
         run.Case("the window reads a copy of the run, which the run's next slice does not change", () =>
         {
-            // The window lives on a thread of its own, so it may still be reading a view while Revit's
-            // thread runs the next slice. What it holds has to stay what it was.
             FakeRunner runner = new();
             StagedImport import = new([Step(ImportStepKind.LinkSiteIfc), Step(ImportStepKind.RoadCentrelines)], runner);
 
@@ -526,11 +494,9 @@ internal static class StagedImportTests
 
     private static string Joined(IEnumerable<string> events) => string.Join("|", events);
 
-    /// <summary>The status line the window would show for <paramref name="import"/> now, its clock at <paramref name="seconds"/>.</summary>
     private static string Status(StagedImport import, double seconds)
         => WindowLabels.StatusLine(ImportRunView.Of(import), TimeSpan.FromSeconds(seconds));
 
-    /// <summary>A step that commits one chunk per size given, the way the tree step does.</summary>
     private static IEnumerable<StepProgress> Chunks(FakeRunner runner, params int[] sizes)
     {
         int total = sizes.Sum();
@@ -550,7 +516,6 @@ internal static class StagedImportTests
         }
     }
 
-    /// <summary>A step that is one commit, the way the polygon steps are: <paramref name="during"/> runs inside it.</summary>
     private static IEnumerable<StepProgress> InsideCommit(Func<StagedImport> import, Action during)
     {
         import().CommitStarted();
@@ -559,7 +524,6 @@ internal static class StagedImportTests
         yield break;
     }
 
-    /// <summary>One chunk of <paramref name="total"/> elements, with <paramref name="during"/> run inside its commit.</summary>
     private static IEnumerable<StepProgress> ChunkInsideCommit(Func<StagedImport> import, int total, Action during)
     {
         import().CommitStarted();
@@ -568,7 +532,6 @@ internal static class StagedImportTests
         yield return new StepProgress(total, total);
     }
 
-    /// <summary>A step that is one commit and says <paramref name="notices"/> before it, then runs <paramref name="during"/>.</summary>
     private static IEnumerable<StepProgress> Announcing(Func<StagedImport> import, string[] notices, Action during)
     {
         foreach (string notice in notices)
@@ -580,11 +543,6 @@ internal static class StagedImportTests
         yield break;
     }
 
-    /// <summary>
-    /// A step that is one commit and counts <paramref name="total"/> elements inside its one slice,
-    /// the way the drape does: <paramref name="midway"/> runs at 120, <paramref name="inCommit"/>
-    /// inside the commit that follows the count.
-    /// </summary>
     private static IEnumerable<StepProgress> CountingThenCommit(Func<StagedImport> import, int total, Action midway, Action inCommit)
     {
         for (int done = 0; done <= total; done++)
@@ -602,7 +560,6 @@ internal static class StagedImportTests
         yield break;
     }
 
-    /// <summary>A step that counts 0 of 0, then runs <paramref name="after"/> before any commit.</summary>
     private static IEnumerable<StepProgress> Counting(Func<StagedImport> import, Action after)
     {
         import().ReportProgress(new StepProgress(0, 0));
@@ -610,7 +567,6 @@ internal static class StagedImportTests
         yield break;
     }
 
-    /// <summary>The tree step's shape: one commit per chunk, counted once the chunk is in, with <paramref name="inCommit"/> run inside each.</summary>
     private static IEnumerable<StepProgress> ChunksCommittingInside(Func<StagedImport> import, Action inCommit, params int[] sizes)
     {
         int total = sizes.Sum();
@@ -625,17 +581,15 @@ internal static class StagedImportTests
         }
     }
 
-    /// <summary>A step whose commit throws, before the host can say it has ended.</summary>
     private static IEnumerable<StepProgress> ThrowsInsideCommit(Func<StagedImport> import)
     {
         import().CommitStarted();
         throw new IOException("the commit threw");
-#pragma warning disable CS0162 // An iterator needs a yield to be one.
+#pragma warning disable CS0162
         yield break;
 #pragma warning restore CS0162
     }
 
-    /// <summary>As <see cref="Chunks"/>, with the closing line a real step writes after its last chunk.</summary>
     private static IEnumerable<StepProgress> ChunksThenSay(FakeRunner runner, string closing, params int[] sizes)
     {
         foreach (StepProgress progress in Chunks(runner, sizes))
@@ -646,7 +600,6 @@ internal static class StagedImportTests
         runner.Events.Add(closing);
     }
 
-    /// <summary>A host with no Revit: records what it was asked to do, and does what each step's script says.</summary>
     private sealed class FakeRunner : IImportStepRunner
     {
         internal List<string> Events { get; } = [];

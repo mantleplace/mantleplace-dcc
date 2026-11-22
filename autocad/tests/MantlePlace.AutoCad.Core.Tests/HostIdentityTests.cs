@@ -5,12 +5,6 @@ using System.Text.Json;
 
 namespace MantlePlace.AutoCad.Tests;
 
-/// <summary>
-/// What the platform is told this plugin is. The Revit sources compile in with the AutoCAD define, so
-/// the sign-in route, the client header and the connected-host presence all say <c>autocad</c>: a
-/// plugin that signed in or joined the curator's channel as Revit would be a second Revit to the
-/// platform, and the web would send an AutoCAD user's exports to the wrong host.
-/// </summary>
 internal static class HostIdentityTests
 {
     internal static int Run()

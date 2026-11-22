@@ -2,22 +2,8 @@ using System.Xml.Linq;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The attribution view and the provenance record: what the manifest's <c>attribution.sources[]</c>
-/// becomes in the project, how a re-import finds what an earlier one wrote, and how the stored
-/// record survives a round trip.
-/// </summary>
-/// <remarks>
-/// Pass-through throughout. Nothing here decides what a licence requires; every assertion about
-/// text is an assertion that the manifest's own words arrived unchanged.
-/// </remarks>
 internal static class AttributionTests
 {
-    /// <summary>
-    /// The shape of the <c>attribution</c> block the bundles in hand carry, cut down to two sources:
-    /// one with a licence URL and one whose URL is <c>null</c>, which the published schema types as a
-    /// string and the platform emits anyway.
-    /// </summary>
     private const string TwoSources = """
         {
           "version": "1.0.1",
@@ -49,7 +35,6 @@ internal static class AttributionTests
 
     private const string JobA = "job-a";
 
-    /// <summary><see cref="AttributionView.Decide"/> for order A's build A unless a case says otherwise.</summary>
     private static AttributionNotePlan Decide(
         AttributionViewFound view,
         IReadOnlyList<string> notes,
@@ -174,8 +159,6 @@ internal static class AttributionTests
 
         run.Case("a view of that name that is not a drafting view is not written into", () =>
         {
-            // A template, or a plan a curator named this way. Renaming a new view onto the name
-            // would throw inside Revit, and writing into theirs would put credits where they did not ask.
             AttributionNotePlan plan = Decide(
                 AttributionViewFound.NotADraftingView,
                 [],
@@ -189,7 +172,6 @@ internal static class AttributionTests
 
         run.Case("a note that already says it is left alone, whatever Revit did to its line breaks", () =>
         {
-            // Revit hands a text note back with \r between paragraphs and a trailing \r of its own.
             AttributionNotePlan plan = Decide(
                 AttributionViewFound.DraftingView,
                 ["a curator's own note", "A — B\rC — D\r"],
@@ -217,8 +199,6 @@ internal static class AttributionTests
 
         run.Case("the recorded text is what identifies the note, not today's line format", () =>
         {
-            // A later plugin that lays a line out differently still finds the note an older one
-            // wrote, because the record holds the words written rather than the sources to rebuild them.
             AttributionNotePlan plan = Decide(
                 AttributionViewFound.DraftingView,
                 ["NAIP / public domain"],
@@ -230,8 +210,6 @@ internal static class AttributionTests
 
         run.Case("another order's note is never rewritten — this order's credits go beside it", () =>
         {
-            // Two orders in one project: the record is order A's, and order B is being imported. A's
-            // terrain is still in the project, so its credits must be too.
             AttributionNotePlan plan = Decide(
                 AttributionViewFound.DraftingView,
                 ["Old — licence"],
@@ -245,9 +223,6 @@ internal static class AttributionTests
 
         run.Case("a bundle that names no order rewrites its own note, found by its build", () =>
         {
-            // ADR 0011: a re-import rewrites the note in place. A bundle from before MPB 1.7.0 names no
-            // order, so its own record is known by the job id it stored; the empty order id matches
-            // nothing on its own.
             AttributionNotePlan plan = Decide(
                 AttributionViewFound.DraftingView,
                 ["Old — licence"],
@@ -262,7 +237,6 @@ internal static class AttributionTests
 
         run.Case("and so does a project whose record an earlier build left, with the job id as its order", () =>
         {
-            // An earlier build read attribution.order_id -- the job id -- as the order, and stored it so.
             AttributionNotePlan plan = Decide(
                 AttributionViewFound.DraftingView,
                 ["Old — licence"],
@@ -389,9 +363,6 @@ internal static class AttributionTests
 
         run.Case("the schema's names are ones Revit accepts", () =>
         {
-            // ExtensibleStorage takes a schema or field name only if it starts with a letter and is
-            // letters, digits and underscores after that; anything else throws inside Revit, where
-            // no test reaches.
             foreach (string name in (string[])[
                 ProvenanceStorage.SchemaName,
                 ProvenanceStorage.OrderIdField,
@@ -410,8 +381,6 @@ internal static class AttributionTests
 
         run.Case("the schema's vendor is the add-in manifest's", () =>
         {
-            // A schema whose write access is Vendor can be written only by the add-in whose manifest
-            // names that vendor. A mismatch compiles, and fails inside Revit on the first import.
             string? dir = RepoTree.Find(
                 "revit/src/MantlePlace.Revit.Addin",
                 candidate => File.Exists(Path.Combine(candidate, "MantlePlace.addin")));

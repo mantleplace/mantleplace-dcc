@@ -6,13 +6,6 @@ using MantlePlace.Client;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// A 3.0 order's level, chosen before the download (<see cref="DownloadLevels"/>, <see cref="LevelControl"/>):
-/// the offer a listing row carries, the control the shared vault window shows in every host, the
-/// request that names the host's files and one level, the cache slot it lands in, and a 2.x order
-/// left as it was. The listing and the request are held to the vendored Platform API description,
-/// whose 3.0 examples are the test double of the platform.
-/// </summary>
 internal static class DownloadLevelTests
 {
     internal static int Run()
@@ -157,8 +150,6 @@ internal static class DownloadLevelTests
             run.Equal(shown.Selected, FidelityLevel.Min, "before any choice, the control is on the recommendation");
             run.True(choices.Choose(shown, FidelityLevel.Med), "the curator chooses Med");
 
-            // A row refresh clears the list's selection and seats the row again: the window asks for
-            // the control twice, once for no row and once for the same order, now a fresh listing row.
             run.True(choices.ControlFor(null) is null, "no row selected shows no control");
             LevelControl reseated = choices.ControlFor(ListedExample("mpb3LargeSite"))!;
             run.Equal(reseated.Selected, FidelityLevel.Med, "the control still shows the choice");
@@ -220,11 +211,6 @@ internal static class DownloadLevelTests
         return run.Report("download levels");
     }
 
-    /// <summary>
-    /// A promised file the bundle does not hold (a layer the site lacks) is refused by name, and is
-    /// not an error: the request goes again naming only the rest. The platform's 404 description of the
-    /// download route is the contract.
-    /// </summary>
     private static void RunNotInBundleCases(TestRun run)
     {
         run.Case("a refusal naming files the bundle does not hold leaves the rest to ask for, in the order asked", () =>
@@ -318,7 +304,6 @@ internal static class DownloadLevelTests
         });
     }
 
-    /// <summary>The platform's refusal of promised files this bundle does not hold.</summary>
     private static string NotInBundle(params string[] files)
         => new JsonObject
         {
@@ -328,7 +313,6 @@ internal static class DownloadLevelTests
             ["files"] = new JsonArray([.. files.Select(file => (JsonNode)file)]),
         }.ToJsonString();
 
-    /// <summary>A level download's link to <paramref name="storage"/>, an hour from expiry.</summary>
     internal static string Link(OneFileServer storage)
         => new JsonObject
         {
@@ -342,10 +326,6 @@ internal static class DownloadLevelTests
 
     private readonly record struct Download(CompleteDownload Result, IReadOnlyList<string> Bodies);
 
-    /// <summary>
-    /// Downloads <paramref name="bundle"/> through the vault client, the download route answering with
-    /// <paramref name="answers"/> in turn; every download request's body is kept.
-    /// </summary>
     private static Download Downloaded(VaultBundle bundle, IReadOnlyList<string> files, params (int Status, string Body)[] answers)
     {
         Scripted handler = new(answers);
@@ -367,7 +347,6 @@ internal static class DownloadLevelTests
         }
     }
 
-    /// <summary>A vault client signed in through <paramref name="handler"/>, naming <paramref name="files"/> in a 3.0 download.</summary>
     internal static VaultClient SignedInVault(HttpMessageHandler handler, IReadOnlyList<string> files, out AuthSession session)
     {
         const string Base = "https://platform.test";
@@ -384,7 +363,6 @@ internal static class DownloadLevelTests
         return new VaultClient(endpoints, session, handler, files);
     }
 
-    /// <summary>The raw JSON of a 3.0 listing example in the vendored description.</summary>
     internal static string ListedExampleJson(string name)
     {
         using JsonDocument spec = Spec();
@@ -393,17 +371,12 @@ internal static class DownloadLevelTests
             .GetProperty("application/json").GetProperty("examples").GetProperty(name).GetProperty("value").GetRawText();
     }
 
-    /// <summary>
-    /// Grants a token, answers a route <see cref="Routes"/> names, and answers each download request
-    /// with the next scripted answer.
-    /// </summary>
     internal sealed class Scripted((int Status, string Body)[] answers) : HttpMessageHandler
     {
         private int _next;
 
         internal List<string> Downloads { get; } = [];
 
-        /// <summary>The answer for a request's path other than the download route, or <c>null</c> for none.</summary>
         internal Func<string, (int Status, string Body)?> Routes { get; init; } = _ => null;
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -429,7 +402,6 @@ internal static class DownloadLevelTests
         }
     }
 
-    /// <summary>A storage link on loopback that serves one body to every request.</summary>
     internal sealed class OneFileServer : IDisposable
     {
         private readonly System.Net.Sockets.TcpListener _listener = new(IPAddress.Loopback, 0);
@@ -477,12 +449,10 @@ internal static class DownloadLevelTests
             }
             catch (Exception ex) when (ex is ObjectDisposedException or System.Net.Sockets.SocketException or IOException)
             {
-                // Stopped: the test is done with the link.
             }
         }
     }
 
-    /// <summary>Every promised file a 3.0 download may name, from the vendored Platform API description.</summary>
     internal static IReadOnlyList<string> PromisedFiles()
     {
         using JsonDocument spec = Spec();
@@ -495,7 +465,6 @@ internal static class DownloadLevelTests
             .EnumerateArray().Select(file => file.GetString()!)];
     }
 
-    /// <summary>Holds a host's declared 3.0 files to the published promise: each one promised, none twice.</summary>
     internal static void AssertPromised(TestRun run, IReadOnlyList<string> files, string host)
     {
         IReadOnlyList<string> promised = PromisedFiles();
@@ -508,7 +477,6 @@ internal static class DownloadLevelTests
         run.Equal(files.Distinct(StringComparer.Ordinal).Count(), files.Count, host + " names each file once");
     }
 
-    /// <summary>One bundle from a 3.0 listing example in the vendored description.</summary>
     internal static VaultBundle ListedExample(string name)
     {
         using JsonDocument spec = Spec();
@@ -555,7 +523,6 @@ internal static class DownloadLevelTests
         }
     }
 
-    /// <summary>The body the vault client sends for a download of <paramref name="bundle"/>, refused so nothing is fetched.</summary>
     private static string SentBody(VaultBundle bundle, FidelityLevel? level, IReadOnlyList<string> files)
     {
         const string Base = "https://platform.test";
@@ -607,7 +574,6 @@ internal static class DownloadLevelTests
         public void Clear(string key) => _secrets.Remove(key);
     }
 
-    /// <summary>Grants a token, then refuses every call, recording each body.</summary>
     private sealed class Recorder : HttpMessageHandler
     {
         internal List<string> Bodies { get; } = [];

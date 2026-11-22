@@ -1,4 +1,3 @@
-﻿// UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
 using System.Diagnostics;
 using System.IO;
 using Autodesk.Revit.DB;
@@ -7,36 +6,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-/// <summary>
-/// Executes a <see cref="BundleImportPlan"/>'s steps against a Revit document, one at a time, for
-/// <see cref="StagedImport"/>.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Every "should we" question was already answered by <see cref="BundleImportPlanner"/>. This type
-/// only answers "how", in Revit's vocabulary: transactions, element creation, unit conversion into
-/// Revit's internal decimal feet. Keeping it decision-free is what makes the policy testable
-/// without a licence (HPS-02).
-/// </para>
-/// <para>
-/// Two decisions used to leak in here and no longer do. The three-point minimum
-/// <c>Toposolid.Create</c> imposes fired AFTER the planner had already reported <c>CanImport</c>,
-/// and now lives in <see cref="SurfacePointsReader.MinimumPoints"/> where the headless suite can
-/// reach it. The Transient/Retained choice was a per-handler literal, and now comes from
-/// <see cref="ImportStepKinds.LifetimeOf"/> — so getting a new step kind's lifetime wrong is a
-/// failing test rather than a Revit link that breaks on someone else's machine.
-/// </para>
-/// <para>
-/// The class is split one file per step — <c>RevitBundleImporter.&lt;Step&gt;.cs</c> — so that two
-/// changes to two steps do not touch one file. Three things stay here and nowhere else: the
-/// state steps hand to each other (the fields below), the dispatch from a step kind to its work
-/// (<see cref="Run"/>), and the session-wide failure hook (<see cref="InSlice"/>). The step ORDER,
-/// when a step runs and when a cancel is honoured are <see cref="StagedImport"/>'s, in the pure core.
-/// What every step shares — the log,
-/// the transaction, finding the ground — is <c>RevitBundleImporter.Plumbing.cs</c>, and what
-/// more than one vector step shares is <c>RevitBundleImporter.SiteVectors.cs</c>.
-/// </para>
-/// </remarks>
 internal sealed partial class RevitBundleImporter(
     Autodesk.Revit.ApplicationServices.Application application,
     Document document,
@@ -48,128 +17,32 @@ internal sealed partial class RevitBundleImporter(
     private readonly LocalBundleArchive _archive = archive;
     private readonly List<string> _log = [];
 
-    /// <summary>
-    /// Where a line goes the MOMENT it is produced, when the caller offered somewhere to put it.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ The summary is returned to the caller and written once, after the last step has
-    /// ended. A step that never returns therefore leaves no evidence at all — and the
-    /// site-boundary step's commit has been observed spending over four minutes inside
-    /// <c>updateElementRelations</c> on a large toposolid, which is exactly the shape of run this
-    /// import needs a record of. Anything written here is diagnostic and does not appear in the
-    /// curator's dialog.
-    /// </remarks>
     private readonly Action<string>? _trace = trace;
 
-    /// <summary>The toposolid this import built, so the boundary step drapes onto the right one.</summary>
     private ElementId _terrainId = ElementId.InvalidElementId;
 
-    /// <summary>
-    /// How many points that toposolid was built from, for the two steps that have to warn about it.
-    /// </summary>
-    /// <remarks>
-    /// Remembered on the way past rather than asked for later, for the same reason as
-    /// <see cref="_terrainId"/> — and because the number is only knowable from the points file this
-    /// run read. Null when this run did not build the terrain, which is a re-import onto ground an
-    /// earlier one laid; <see cref="SlowStepNotice"/> says so rather than inventing a count.
-    /// </remarks>
     private int? _terrainVertexCount;
 
-    /// <summary>
-    /// The subdivisions this import created, as a supplement to finding them by stamp.
-    /// </summary>
-    /// <remarks>
-    /// It is no longer the drape's only source — see <c>DrapeableSubDivisionIds</c>. This list is
-    /// empty on a re-import, because boundaries that already exist are not created again, and a drape
-    /// driven by it alone therefore touched nothing while reporting success. What it still covers is
-    /// the subdivision this import created but could not stamp: it is not findable by stamp, and
-    /// without this list it would not be draped on the very import that made it.
-    /// </remarks>
     private readonly List<ElementId> _createdSubDivisionIds = [];
 
-    /// <summary>The stamp each subdivision this run cut was cut with, whether or not Comments took it.</summary>
-    /// <remarks>
-    /// Filled by the subdivision steps and read wherever a subdivision's drape material is named
-    /// (<see cref="SiteBoundaryIdentity.NamingStamp"/>), so a cut whose Comments refused the stamp is
-    /// named by its feature rather than its element id, by the cut and the drape alike.
-    /// </remarks>
     private readonly Dictionary<ElementId, string> _stampsCutWith = [];
 
-    /// <summary>
-    /// Whether the smooth-shading decision has been made, and said, for this import.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="EnsureSmoothedSurface"/> runs up to three times: before the first cut of a polygon
-    /// step when the drape is planned, so a cut is typed for the shading the drape will write for;
-    /// inside the drape step, before the photograph is written, so it is anchored for the renderer
-    /// that will actually draw it; and after every step, for a bundle with no photograph at all.
-    /// Only the first call decides; later ones must neither retry a refusal nor repeat the sentence.
-    /// </remarks>
     private bool _smoothingSettled;
 
-    /// <summary>
-    /// Whether the step in flight had a commit Revit rolled back. Reset as each step starts, set by
-    /// <see cref="CommitAndReport"/>, read by <see cref="Committed"/> — so a step whose work is gone
-    /// reads as failed in the window and in a cancelled run's closing line, not as done.
-    /// </summary>
     private bool _stepRolledBack;
 
-    /// <summary>Times the step in flight, from its start slice to the slice that ends it.</summary>
-    /// <remarks>
-    /// Wall time, so on a staged run it includes Revit's own work between slices. The per-commit
-    /// trace lines (<see cref="CommitAndReport"/>) are what to read when tuning a chunk size.
-    /// </remarks>
     private readonly Stopwatch _stepClock = new();
 
     internal IReadOnlyList<string> Log => _log;
 
-    /// <summary>
-    /// Raised on Revit's thread just before a transaction commits — the start of the span in which
-    /// Revit answers nothing.
-    /// </summary>
-    /// <remarks>
-    /// Every <see cref="Transaction"/> the import opens is committed through <c>CommitAndReport</c>,
-    /// so this is every transaction's commit. The drape's <see cref="SubTransaction"/> commits are not
-    /// among them: they regenerate nothing, and are seconds at most. A handler must not call back into
-    /// the document: the transaction is still open.
-    /// </remarks>
     internal event Action? CommitStarting;
 
-    /// <summary>Raised on Revit's thread once a commit <see cref="CommitStarting"/> announced has returned or thrown.</summary>
     internal event Action? CommitEnded;
 
-    /// <summary>Raised on Revit's thread with each <see cref="SlowStepNotice"/> line as it is said.</summary>
     internal event Action<string>? Announced;
 
-    /// <summary>
-    /// Raised on Revit's thread with how far a step that does its work in one slice has got: the drape
-    /// through its subdivisions, a polygon layer through its cuts.
-    /// </summary>
     internal event Action<StepProgress>? Counted;
 
-    /// <summary>
-    /// Runs <paramref name="slice"/> — one <see cref="StagedImport.Advance"/> — with the import's
-    /// failure hook attached for exactly as long as it runs.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// ⛔ Revit's own IFC importer opens a transaction named "Import" inside
-    /// RevitLinkType.CreateFromIFC, and a per-transaction preprocessor cannot reach it — which is
-    /// how "Can't keep elements joined" and the IFC4 warning surfaced as a modal in the middle of an
-    /// otherwise silent import. This is the only hook that sees a transaction we did not open.
-    /// </para>
-    /// <para>
-    /// It is session-wide, so it is attached per slice and not for the length of the import. The
-    /// import is staged: between two slices Revit is live, and the curator may be editing their own
-    /// model while the trees go in. A hook left on across that gap would put this policy between
-    /// them and their own edits.
-    /// </para>
-    /// <para>
-    /// The same gap lets a curator undo an earlier step's transaction, leaving an id in the fields
-    /// above pointing at nothing. The Revit call that meets it throws an ApplicationException, which
-    /// <see cref="IsStepFailure"/> turns into that one step failing and saying why.
-    /// </para>
-    /// </remarks>
     internal bool InSlice(Func<bool> slice)
     {
         ArgumentNullException.ThrowIfNull(slice);
@@ -189,46 +62,19 @@ internal sealed partial class RevitBundleImporter(
         }
     }
 
-    /// <summary>The hook <see cref="InSlice"/> has attached, so a step can read what it caught; <c>null</c> between slices.</summary>
     private ImportFailureSwallower? _sessionFailures;
 
-    /// <summary>How many errors the session hook has caught so far, to tell a step's own from an earlier one's.</summary>
     private int SessionErrorCount => _sessionFailures?.Errors.Count ?? 0;
 
-    /// <summary>
-    /// Why Revit's IFC conversion of the site model was refused, in the words of the error the
-    /// session hook caught since <paramref name="errorsBefore"/>, or <c>null</c> when it caught none.
-    /// </summary>
-    /// <param name="entryName">The site model's entry in the bundle.</param>
-    /// <param name="errorsBefore"><see cref="SessionErrorCount"/> read before the conversion began.</param>
-    /// <param name="lost">What the curator does not have as a result, as a clause.</param>
-    /// <remarks>
-    /// The exception a refused conversion throws says only "Transaction committing failed". The
-    /// reason is the error Revit posted from the importer's own transaction, which only the session
-    /// hook sees.
-    /// </remarks>
     private string? SiteModelRefusal(string entryName, int errorsBefore, string lost)
         => _sessionFailures is { } session && session.Errors.Count > errorsBefore
             ? ImportFailurePolicy.ExplainSiteModelRefused(entryName, session.Errors[errorsBefore].Text, session.Errors[errorsBefore].Id, lost)
             : null;
 
-    /// <summary>What every import does once its steps are over, however they ended.</summary>
-    /// <remarks>
-    /// After every step as well as inside the drape step: a bundle with no photograph still gets
-    /// smooth ground, and for the bundle that had one this is a no-op read. It runs on a cancelled
-    /// import too, because the terrain that import kept is the same ground a finished one would have
-    /// left, and should look the same.
-    /// </remarks>
     internal void Finish() => EnsureSmoothedSurface();
 
-    /// <summary>Adds a line to the summary from outside the steps — the run's closing line.</summary>
     internal void Report(string line) => Say(line);
 
-    /// <inheritdoc/>
-    /// <remarks>
-    /// A step whose files are an ODbL Derivative Database has what it makes filed in the ODbL
-    /// container afterwards (<see cref="FiledInOdblContainer"/>); every other step runs as it was.
-    /// </remarks>
     public IEnumerable<StepProgress> Run(ImportStep step)
     {
         ArgumentNullException.ThrowIfNull(step);
@@ -241,8 +87,6 @@ internal sealed partial class RevitBundleImporter(
     private IEnumerable<StepProgress> RunStep(ImportStep step)
     {
 
-        // Every layer cut as subdivisions runs the same step, in its own words (GroundCuts.LayerOf),
-        // so a new one is a row in the core rather than a case here.
         if (GroundCuts.LayerOf(step.Kind) is { } groundLayer)
         {
             return Once(() => CutSubdivisions(step, groundLayer));
@@ -285,11 +129,6 @@ internal sealed partial class RevitBundleImporter(
             case ImportStepKind.SteepGround:
                 return Once(() => ImportHazardLayer(step, HazardLayer.SteepGround));
             default:
-                // Fail, do not log-and-continue. A step kind added to the pure core and never
-                // dispatched here would otherwise import silently-incomplete: the plan says the bundle
-                // is fully handled, the model is missing whatever the new kind was for, and the
-                // summary reads like a success. StagedImport lets this one through to the host,
-                // because it is not a step's own failure.
                 throw new InvalidOperationException(
                     $"This build of the plugin does not know how to execute the import step "
                     + $"'{step.Kind}', so the import was stopped rather than left half-done. "
@@ -297,31 +136,20 @@ internal sealed partial class RevitBundleImporter(
         }
     }
 
-    /// <inheritdoc/>
     public bool Committed(ImportStep step) => !_stepRolledBack;
 
-    /// <inheritdoc/>
-    /// <remarks>
-    /// InvalidOperationException is deliberately NOT one: <see cref="Run"/> throws it for a step kind
-    /// this build cannot dispatch, and that one must still stop the import.
-    /// </remarks>
     public bool IsStepFailure(Exception exception)
         => exception is Autodesk.Revit.Exceptions.ApplicationException or IOException;
 
-    /// <inheritdoc/>
     public void StepStarting(ImportStep step)
     {
         ArgumentNullException.ThrowIfNull(step);
 
-        // A start marker and a duration, because a step is the unit a curator waits on and the unit
-        // a slow one has to be attributed to. The marker is traced rather than said: it is only
-        // useful in the streamed file, where it is the last line standing if a step hangs.
         Trace($"[{step.Kind}] started.");
         _stepRolledBack = false;
         _stepClock.Restart();
     }
 
-    /// <inheritdoc/>
     public void StepEnded(ImportStep step, ImportStepState state, Exception? failure)
     {
         ArgumentNullException.ThrowIfNull(step);
@@ -335,8 +163,6 @@ internal sealed partial class RevitBundleImporter(
 
         if (state == ImportStepState.NotRun)
         {
-            // Pairs the "[Kind] started." marker, which was written before the cancel landed, so the
-            // streamed file does not read as though the step began and then vanished.
             Trace($"[{step.Kind}] not run: the import was cancelled before it began.");
             return;
         }
@@ -344,7 +170,6 @@ internal sealed partial class RevitBundleImporter(
         Say($"({step.Kind} took {_stepClock.Elapsed.TotalSeconds:N1} s.)");
     }
 
-    /// <summary>A step that is one commit, as a step with no chunk boundaries in it.</summary>
     private static IEnumerable<StepProgress> Once(Action step)
     {
         step();

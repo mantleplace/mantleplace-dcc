@@ -1,38 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The 3.x tree (`format.md` §1, §2, §6, §12), its one level (§8, §9.3) and its catalog (§9.5).
-
-These hold a manifest that declares 3.x, and only one. What each rule checks:
-
-- **The tree.** Every file sits directly in one of the seven subject folders, and the root holds
-  only `Readme.md` and `Manifest.json`. A deeper file is `tree.subfolder`; a third root file is
-  `tree.root-file`; a 2.x file that 3.0 removed (§12), or a file in a format 3.0 dropped, is
-  `tree.file-removed`. A file with a good name that the 3.0 file table does not list is
-  `tree.file-unknown`, and a folder outside the seven `tree.folder-unknown`: errors in a bundle
-  that declares 3.0, whose table this validator holds (`conformance.md` §7), and warnings in one
-  that declares a later 3.x minor, which may add a file (§3) that a 3.0 reader still reads.
-- **The names** (§2), for a name the table does not list: ASCII (`name.charset`), no number
-  (`name.number`), no hyphen (`name.hyphen`), no suffix after a word of the tree, joined or not
-  (`name.suffix`: `TerrainMed`, `Terrain_Med`, `Terrain.med.glb`), one word with its first letter
-  capitalised (`name.word`) and a lower-case extension (`name.extension`). A tree name written in
-  another case is `name.case-mismatch`: a reader matches regardless of case, and a writer uses the
-  exact case. Two entries that differ only by case are `name.case-collision`.
-- **One level.** The manifest states the download's level once, as one of `Max`, `Med` and `Min`:
-  none is `level.missing`, two or more is `level.several`, anything else `level.unknown`.
-- **The catalog.** One entry per file the download holds, keyed by its path: an entry with no file
-  is `catalog.file-missing`, a file with no entry `catalog.entry-missing`, and no catalog at all
-  `catalog.absent`. Every entry but the manifest's carries a sha256 (`catalog.sha256-missing`),
-  which is verified (`sha256.mismatch`). Every entry of a file whose row in the file table gives a
-  count states one (`catalog.count-missing`); the rows that say `None` are `Readme.md`,
-  `Manifest.json` and `Terrain.mtl`.
-- **No per-host block.** The manifest holds no `hosts` member and no member named for a host
-  (`manifest.host-block`).
-
-The 3.x schema owns the manifest's members: the catalog is `catalog`, the level `level`, an entry's
-count `count` and the per-host block `hosts`, as the served 3.0.0 schema names them. A 3.x manifest
-that states only the 2.x member `file_entries` has no catalog. These names are read here and
-nowhere else. The zip's compression is read in `zipmethods.py`.
-"""
 
 from __future__ import annotations
 
@@ -43,20 +10,15 @@ from .archive import MANIFEST_PATH_3, Bundle, unsafe
 from .report import Report
 from .schema_subset import escape
 
-#: The manifest members these checks read (see the module docstring).
 CATALOG = "catalog"
 LEVEL = "level"
 COUNT = "count"
-#: A per-host block (§9.7): the 2.x `hosts` member, and a member named for one host.
 HOST_BLOCKS = ("hosts", "unreal", "revit", "autocad", "blender")
-#: The levels, coarsest last (§8).
 LEVELS = ("Max", "Med", "Min")
 
-#: The seven subject folders (§1).
 FOLDERS = ("Elevation", "Imagery", "Landcover", "Materials", "Basemap", "Records", "Site")
 ROOT_FILES = ("Readme.md", MANIFEST_PATH_3)
 
-#: The file table of 3.0 (§6): sixty-nine files.
 _RECORDS = ("Parcels", "Zoning", "Floodplain", "Wetlands", "Soils", "Heritage", "Conservation",
             "Habitat", "Hydrography", "Contamination")
 TREE = frozenset(
@@ -78,11 +40,8 @@ TREE = frozenset(
     + [f"Records/{n}.{e}" for n in _RECORDS for e in ("gpkg", "dxf")]
     + ["Site/Site.usdz", "Site/Site.ifc", "Site/Site.dxf"])
 
-#: The files whose row in the file table gives no count (§6): `None`.
 NO_COUNT = frozenset({"Readme.md", MANIFEST_PATH_3, "Elevation/Terrain.mtl"})
 
-#: The 2.x files 3.0 removed or renamed (§12), by their 2.x path. Matched regardless of case, so
-#: `LandCover/WaterMask.tif` is caught under the 3.x folder `Landcover/` too.
 REMOVED = frozenset(path.casefold() for path in (
     "README.md", "Metadata/manifest.json", "Metadata/stac-item.json",
     "Elevation/DEM.tif", "Elevation/Heightmap.png", "Elevation/Surface.dxf",
@@ -109,12 +68,9 @@ REMOVED = frozenset(path.casefold() for path in (
     "Drawings/Linework.dxf", "Drawings/SitePlan-Small.pdf", "Drawings/SitePlan-Large.pdf",
     "Drawings/SitePlan-Small.svg", "Drawings/SitePlan-Large.svg",
 ))
-#: Formats no 3.x file is in (§12): the Shapefile set, world and projection files, the plan sheets
-#: and the OBJ's own texture. A file in one is removed wherever it sits.
 REMOVED_FORMATS = frozenset({"shp", "shx", "dbf", "cpg", "sbn", "sbx", "prj", "pgw", "tfw",
                              "jgw", "pngw", "wld", "jpg", "jpeg", "pdf", "svg"})
 
-#: The words of the tree, for spotting a suffix after one (`TerrainMed`).
 _WORDS = sorted({p.rsplit("/", 1)[-1].split(".", 1)[0] for p in TREE} | set(FOLDERS),
                 key=len, reverse=True)
 _ASCII = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -126,21 +82,17 @@ _SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
 def major(version: object) -> int | None:
-    """The major of a semver `version` string, or None."""
     found = _SEMVER.match(version) if isinstance(version, str) else None
     return int(found.group(1)) if found else None
 
 
 def minor(version: object) -> int | None:
-    """The minor of a semver `version` string, or None."""
     found = _SEMVER.match(version) if isinstance(version, str) else None
     return int(found.group(2)) if found else None
 
 
 def check_tree(bundle: Bundle, report: Report, version: object = "3.0.0") -> None:
-    """The tree and its names (`tree.*`, `name.*`), for a bundle that declares `version`."""
     report.ran.append("names")
-    # The table is 3.0's: a later minor may list a file it does not (§3).
     unknown = "error" if minor(version) == 0 else "warning"
     folded = {path.casefold(): path for path in TREE}
     unknown_folders: set[str] = set()
@@ -205,7 +157,6 @@ def _extension(path: str) -> str:
 
 
 def _name_problem(name: str, folder: bool = False) -> tuple[str, str] | None:
-    """`(code, why)` for the first naming rule `name` breaks (§2), or None."""
     stem, dot, extension = name.partition(".")
     if any(c.isdigit() for c in stem):
         return "name.number", "a name carries no number"
@@ -241,7 +192,6 @@ def _check_case_collisions(bundle: Bundle, report: Report) -> None:
 
 
 def check_level(manifest: dict, report: Report) -> None:
-    """The download's one level (`level.*`)."""
     report.ran.append("level")
     where = f"/{LEVEL}"
     if LEVEL not in manifest:
@@ -260,7 +210,6 @@ def check_level(manifest: dict, report: Report) -> None:
 
 
 def check_host_block(manifest: dict, report: Report) -> None:
-    """The manifest holds no per-host block (`manifest.host-block`, §9.7)."""
     for name in HOST_BLOCKS:
         if name in manifest:
             report.add("manifest", "manifest.host-block", "error",
@@ -270,7 +219,6 @@ def check_host_block(manifest: dict, report: Report) -> None:
 
 
 def check_catalog(manifest: dict, bundle: Bundle, report: Report) -> None:
-    """One catalog entry per file, each with a sha256 that matches (`catalog.*`, `sha256.*`)."""
     report.ran.append("catalog")
     report.ran.append("sha256")
     raw = manifest.get(CATALOG)
@@ -303,7 +251,7 @@ def check_catalog(manifest: dict, bundle: Bundle, report: Report) -> None:
                        "the two regardless of case, and a writer uses the exact case",
                        pointer=where, file=actual)
         if actual == bundle.manifest_path:
-            continue  # The manifest cannot carry its own hash (§6).
+            continue
         if path in TREE and path not in NO_COUNT and not (
                 isinstance(entry, dict) and isinstance(entry.get(COUNT), dict)):
             report.add("catalog", "catalog.count-missing", "error",

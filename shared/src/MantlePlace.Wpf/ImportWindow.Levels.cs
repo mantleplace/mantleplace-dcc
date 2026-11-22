@@ -4,26 +4,13 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Wpf;
 
-/// <summary>
-/// The level column: a plain dropdown on each row whose category publishes levels, and one set-all
-/// control above the rows. What each lists, what can be chosen and what a choice does are the
-/// checklist's (<see cref="ImportChecklist.LevelOptions"/>); this file only binds them.
-/// </summary>
-/// <remarks>
-/// Plain on purpose: visual polish waits for the web redesign, so these are stock WPF combo boxes
-/// whose items are the checklist's own labels. A level this plugin cannot import is listed and
-/// disabled, so the four always read the same and a row never offers a choice that would import
-/// the whole file in its place.
-/// </remarks>
 internal sealed partial class ImportWindow
 {
     private readonly Dictionary<ImportLayer, ComboBox> _levelBoxes = [];
     private readonly ComboBox _setAllLevels = new() { MinWidth = 120, Margin = new Thickness(8, 0, 0, 0) };
 
-    /// <summary>Wide enough for a level's label and its estimate beside the layer's name.</summary>
     private const double WidthWithLevels = 760;
 
-    /// <summary>The third column: a level dropdown on each row that offers levels.</summary>
     private void AddLevelColumn(ImportChecklist checklist, Grid rows)
     {
         rows.ColumnDefinitions.Insert(1, new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -50,14 +37,12 @@ internal sealed partial class ImportWindow
             _levelBoxes[layer] = levels;
         }
 
-        // The notes beside a disabled box move one column right, past the levels.
         foreach (TextBlock note in _notes.Values)
         {
             Grid.SetColumn(note, 2);
         }
     }
 
-    /// <summary>The heading row over the checklist: Include, and the set-all control at the right.</summary>
     private UIElement BuildLevelHeading()
     {
         foreach (FidelityLevel level in FidelityLevelNames.All)
@@ -65,7 +50,6 @@ internal sealed partial class ImportWindow
             _setAllLevels.Items.Add(new ComboBoxItem { Content = FidelityLevelNames.Token(level), Tag = level });
         }
 
-        // Shown, never chosen: what the control says while the rows are not all at one level.
         _setAllLevels.Items.Add(new ComboBoxItem { Content = WindowLabels.MixedLevels, IsEnabled = false });
         _setAllLevels.SelectionChanged += (_, _) => OnSetAllLevels();
 
@@ -114,7 +98,6 @@ internal sealed partial class ImportWindow
         RefreshChecklist();
     }
 
-    /// <summary>Paints each dropdown from the checklist, and the set-all control from what the rows share.</summary>
     private void RefreshLevels(ImportChecklist checklist)
     {
         foreach ((ImportLayer layer, ComboBox levels) in _levelBoxes)

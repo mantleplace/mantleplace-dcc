@@ -24,8 +24,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogMantlePlaceDrape, Log, All);
 
 namespace MantlePlaceDrape
 {
-	// The drape material template (authored in-editor). Loaded at runtime; a missing template
-	// is non-fatal — the geometry still imports, just without auto-assigned imagery.
 	static const TCHAR* const DrapeTemplatePath =
 		TEXT("/MantlePlace/Material/M_MantlePlace_Drape.M_MantlePlace_Drape");
 
@@ -37,8 +35,6 @@ namespace MantlePlaceDrape
 		Task->Filename = ImageryFile;
 		Task->DestinationPath = MantlePlaceImportNaming::SubfolderPath(
 			DestPackagePath, MantlePlaceImportNaming::ESubfolder::Imagery);
-		// Named on the way in, never renamed afterwards -- a rename here would purge the import's
-		// undo transaction. See MantlePlaceImportNaming::ImportNameFor.
 		Task->DestinationName = MantlePlaceImportNaming::TextureName(ImageryFile);
 		Task->bAutomated = true;
 		Task->bReplaceExisting = true;
@@ -52,11 +48,6 @@ namespace MantlePlaceDrape
 		{
 			if (UTexture2D* Texture = LoadObject<UTexture2D>(nullptr, *Path))
 			{
-				// The drape material projects this imagery by absolute world position onto the
-				// imagery's true geographic footprint. Where the terrain extends beyond that
-				// footprint the UVs leave [0,1]; the import default (TA_Wrap) would TILE the imagery
-				// across the rest of the terrain. Clamp so it sits once on its footprint with no
-				// seams (and is a no-op once the imagery spans the full AOI).
 				Texture->AddressX = TA_Clamp;
 				Texture->AddressY = TA_Clamp;
 				Texture->UpdateResource();
@@ -91,7 +82,6 @@ namespace MantlePlaceDrape
 			DestPackagePath, MantlePlaceImportNaming::ESubfolder::Imagery);
 		const FString MicObjectPath = MantlePlaceImportNaming::ObjectPathIn(MicPackage, AssetName);
 
-		// Idempotent: reuse the MIC on re-import (CreateAsset can't prompt-overwrite unattended).
 		UMaterialInstanceConstant* Mic = LoadObject<UMaterialInstanceConstant>(nullptr, *MicObjectPath);
 		if (Mic == nullptr)
 		{
@@ -109,24 +99,13 @@ namespace MantlePlaceDrape
 		Mic->SetParentEditorOnly(Template);
 		Mic->SetTextureParameterValueEditorOnly(FMaterialParameterInfo(TEXT("Drape")), Texture);
 
-		// Geometry-local drape parameters. The material reads LandscapeLayerCoords (grid-quad coords),
-		// normalises to [0,1] over the AOI grid via LandscapeQuadsXY, then maps onto the imagery footprint
-		// with DrapeUvScale/DrapeUvOffset. There are no world-space ExtentMin/ExtentSize any more, so the
-		// imagery rides the surface through sculpts and moves instead of clamping to a smear when the
-		// geometry leaves a fixed world band. GetDrapeUvTransform is identity for v8 (imagery spans the
-		// full AOI); a sub-AOI imagery footprint maps to its correct sub-rect.
 		FVector2D UvScale, UvOffset;
 		Manifest.GetDrapeUvTransform(UvScale, UvOffset);
-		// LandscapeQuadsXY divides LandscapeLayerCoords, whose local X indexes the heightmap's ROWS
-		// (north) after the importer's transpose. The manifest names its grid axes the other way round --
-		// ComponentCountX is the EASTING axis -- so the counts swap here, for the same reason
-		// GetAoiSizeUeCm() swaps the scales. `resolution` forces the two counts equal today, so this is
-		// latent rather than visible; it is written the right way round so it cannot rot if that changes.
 		Mic->SetVectorParameterValueEditorOnly(
 			FMaterialParameterInfo(TEXT("LandscapeQuadsXY")),
 			FLinearColor(
-				static_cast<float>(Manifest.Heightmap.ComponentCountY * Manifest.GetQuadsPerComponent()), // North
-				static_cast<float>(Manifest.Heightmap.ComponentCountX * Manifest.GetQuadsPerComponent()), // East
+				static_cast<float>(Manifest.Heightmap.ComponentCountY * Manifest.GetQuadsPerComponent()),
+				static_cast<float>(Manifest.Heightmap.ComponentCountX * Manifest.GetQuadsPerComponent()),
 				0.0f, 0.0f));
 		Mic->SetVectorParameterValueEditorOnly(
 			FMaterialParameterInfo(TEXT("DrapeUvScale")),
@@ -155,24 +134,6 @@ namespace MantlePlaceDrape
 
 		if (ALandscapeProxy* Proxy = Cast<ALandscapeProxy>(Target))
 		{
-			// Mirror ALandscapeProxy::EditorSetLandscapeMaterial: run the full Pre/PostEditChange
-			// cycle for the *named* LandscapeMaterial property. PostEditChangeProperty's override runs
-			// UpdateAllComponentMaterialInstances() and recreates each component's render state — a
-			// bare assignment + generic PostEditChange() leaves the components on the previous
-			// material. We inline it (rather than calling EditorSetLandscapeMaterial) because that
-			// setter symbol is not exported from the Landscape module; Pre/PostEditChange are UObject
-			// virtuals (vtable dispatch), so this links cleanly. NOTE: this reliably re-skins an
-			// already-finalized landscape; for a *freshly created* one the material must be set BEFORE
-			// ALandscape::Import (see MantlePlaceLandscapeImporter::Import) — assigning it on the
-			// import frame does not take at render time. The vault importer therefore drapes the
-			// landscape at creation and only uses this path for static meshes.
-			//
-			// Reflection is invisible to the compiler, so an engine rename cannot be caught at build
-			// time. It used to be a hard `check`, which turned that rename into a crash in a user's
-			// editor session, mid-import, with their content half-created. Fail closed instead: no
-			// drape, one error line naming the property and the engine version this was verified
-			// against, and an import that still completes. IsLandscapeMaterialPropertyResolvable is
-			// the same lookup asked ahead of time, so the automation suite goes red first.
 			FProperty* const MaterialProperty =
 				FindFProperty<FProperty>(Proxy->GetClass(), FName(LandscapeMaterialPropertyName));
 			if (MaterialProperty == nullptr)
@@ -207,8 +168,6 @@ namespace MantlePlaceDrape
 			return true;
 		}
 
-		// Every actor kind this importer spawns is handled above. A new one arriving here is a gap
-		// in this function, not a bundle problem, so it says so rather than returning quietly.
 		UE_LOG(LogMantlePlaceDrape, Error,
 			TEXT("Cannot drape \"%s\": %s is not an actor type this plugin knows how to drape."),
 			*Target->GetName(), *Target->GetClass()->GetName());

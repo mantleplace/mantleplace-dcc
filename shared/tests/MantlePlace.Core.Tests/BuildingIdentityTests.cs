@@ -2,11 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The context-building stamp and ADR 0004's table applied per building: a re-import of the same
-/// build creates only the buildings that are missing, and a later build of the same order is refused
-/// rather than stacked.
-/// </summary>
 internal static class BuildingIdentityTests
 {
     private const string Stem = "order-7f3a";
@@ -75,8 +70,6 @@ internal static class BuildingIdentityTests
                 BuildingIdentity.Stamp(Stem, Build, ThreeBuildings[1]),
             ];
 
-            // The same GlobalIds in the new build — an emitter that keeps them stable across builds —
-            // must still refuse: the build half is what says these are the older extrusions.
             BuildingDecision decision = BuildingIdentity.Decide(existing, Stem, Rebuild, ThreeBuildings);
 
             run.True(decision.Disposition == BuildingDisposition.RefuseStale, "refuse");
@@ -94,11 +87,8 @@ internal static class BuildingIdentityTests
                 "existing hall, keep",
                 BuildingIdentity.Stamp("order-other", Rebuild, ThreeBuildings[0]),
 
-                // A stem that this one is a prefix of: without the separator in the comparison, it
-                // would read as this order's earlier build and refuse the import.
                 BuildingIdentity.Stamp(Stem + "def", Rebuild, ThreeBuildings[0]),
 
-                // Another kind's stamp for this very order is not a building.
                 TreeIdentity.Stamp(Stem, Rebuild, 1),
             ];
             BuildingDecision decision = BuildingIdentity.Decide(existing, Stem, Build, ThreeBuildings);

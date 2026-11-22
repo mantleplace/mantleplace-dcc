@@ -1,14 +1,5 @@
 // Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
-// THE LIST. Every artifact type the importer knows is one entry in MakeAll, in import order. There is
-// no discovery and no reflection scan: what imports, and in what order, is what this file says, and a
-// reader sees all of it at once.
-//
-// Adding an artifact type means exactly: one handler file (MantlePlaceArtifact<Name>.cpp, which reads
-// its block, declares its payloads and imports them), one sub-struct (its block in
-// MantlePlaceManifestBlocks.h, held as one member of FMantlePlaceVaultManifest), and the declaration
-// and entry below. Parse, the integrity chain and ImportVaultPackage do not change.
-
 #include "MantlePlaceArtifactHandler.h"
 
 namespace MantlePlaceArtifacts
@@ -26,19 +17,14 @@ TUniquePtr<IMantlePlaceArtifactHandler> MakePublicRecords();
 FHandlers MakeAll()
 {
 	FHandlers Handlers;
-	// The drape builds its material BEFORE the landscape adopts it, and the log reads in this order.
 	Handlers.Add(MakeDrape());
 	Handlers.Add(MakeLandscape());
 	Handlers.Add(MakeCoverageRasters());
-	// The terrain mesh after the Landscape: in Both mode it turns its own collision off when it finds the
-	// Landscape this import built (MantlePlace.Import.TerrainCollisionLogic asserts the order).
 	Handlers.Add(MakeTerrainMesh());
 	Handlers.Add(MakeBuildings());
 	Handlers.Add(MakeRoadSplines());
 	Handlers.Add(MakeFoliagePoints());
-	// The scatter after the table and the coverage rasters it reads, which it finds in the context.
 	Handlers.Add(MakeFoliageScatter());
-	// The public-record overlays last: they lie on the ground the geometry above has just made.
 	Handlers.Add(MakePublicRecords());
 	return Handlers;
 }
@@ -50,8 +36,6 @@ FName MantlePlaceArtifactId::FoliageScatter() { return FName(TEXT("foliage_scatt
 
 FMantlePlaceImportSelection FMantlePlaceImportSelection::FromMode(EMantlePlaceImportMode Mode, bool bFoliageScatter)
 {
-	// Landscape and Mesh are alternatives for the terrain itself; everything else is content that
-	// describes the ground and imports whenever the bundle ships it, whatever the Mode.
 	FMantlePlaceImportSelection Selection;
 	if (Mode == EMantlePlaceImportMode::Mesh)
 	{
@@ -61,7 +45,6 @@ FMantlePlaceImportSelection FMantlePlaceImportSelection::FromMode(EMantlePlaceIm
 	{
 		Selection.Excluded.Add(MantlePlaceArtifactId::TerrainMesh());
 	}
-	// Generated content, not the bundle's: opt-in, whatever the Mode.
 	if (!bFoliageScatter)
 	{
 		Selection.Excluded.Add(MantlePlaceArtifactId::FoliageScatter());

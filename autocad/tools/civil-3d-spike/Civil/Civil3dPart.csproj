@@ -1,11 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    The spike's Civil 3D half (../README.md): the only assembly here that references Civil 3D, loaded
-    by the probe only after its presence test says Civil 3D is loaded in the process, as the plugin's
-    Civil 3D part will be. Built against the same year as ../Probe/.
-  -->
-
   <PropertyGroup>
     <AcadYear Condition="'$(AcadYear)' == ''">2027</AcadYear>
     <AcadDir Condition="'$(AcadDir)' == ''">$(ProgramFiles)\Autodesk\AutoCAD $(AcadYear)</AcadDir>

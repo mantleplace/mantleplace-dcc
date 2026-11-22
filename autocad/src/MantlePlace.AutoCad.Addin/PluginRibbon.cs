@@ -8,30 +8,10 @@ using AcApplication = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MantlePlace.AutoCad.Addin;
 
-/// <summary>
-/// Puts the Mantle Place panel on a Mantle Place tab of the plugin's own, and puts it back each time the
-/// host rebuilds its ribbon.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Built in code because a partial CUIX file cannot do it: its tab is its own customization group's, so
-/// AutoCAD and Civil 3D 2027 showed it as a second "Add-ins" tab beside their own
-/// (<c>autocad/docs/api-record.md</c>). Which tab, whether it must be made and whether the panel is
-/// already there is <see cref="PlugInsPanel.Place"/> in the pure core; this reads the ribbon's tabs,
-/// makes the tab when told to, and adds the panel.
-/// </para>
-/// <para>
-/// The host builds its ribbon from its customization files at startup, after this assembly
-/// initialises, and again on every workspace change and customization reload, which drops a panel
-/// added in code. So the panel is placed on the first idle that finds the ribbon, and again on each
-/// <c>WorkspaceLoaded</c>; placing it twice is a no-op.
-/// </para>
-/// </remarks>
 internal static class PluginRibbon
 {
     private static RibbonPaletteSet? _watched;
 
-    /// <summary>Starts watching for the ribbon. AutoCAD's UI thread, from <c>Initialize</c>.</summary>
     internal static void Attach()
     {
         AcApplication.Idle += OnIdle;
@@ -45,7 +25,6 @@ internal static class PluginRibbon
         }
     }
 
-    /// <summary>Stops watching. AutoCAD's UI thread, from <c>Terminate</c>.</summary>
     internal static void Detach()
     {
         AcApplication.Idle -= OnIdle;
@@ -74,7 +53,6 @@ internal static class PluginRibbon
 
     private static void OnWorkspaceLoaded(object? sender, EventArgs e) => Place();
 
-    // Startup: keeps asking on each idle until the host has built a ribbon with tabs on it, then stops.
     private static void OnIdle(object? sender, EventArgs e)
     {
         if (ComponentManager.Ribbon is not { Tabs.Count: > 0 })
@@ -112,7 +90,7 @@ internal static class PluginRibbon
 
             tab.Panels.Add(BuildPanel());
         }
-#pragma warning disable CA1031 // A ribbon that will not take the panel is said, never left to take AutoCAD down; the commands still type.
+#pragma warning disable CA1031
         catch (Exception ex)
 #pragma warning restore CA1031
         {
@@ -130,7 +108,6 @@ internal static class PluginRibbon
             {
                 Id = command.ButtonId,
 
-                // Large buttons break their text where it is told to, as the host's own do.
                 Text = command.Label.Replace(' ', '\n'),
                 ShowText = true,
                 ShowImage = true,
@@ -141,7 +118,6 @@ internal static class PluginRibbon
                 CommandParameter = command.Command,
                 CommandHandler = RunCommand.Instance,
 
-                // F1 over the button: the host opens the help source at the topic.
                 ToolTip = new RibbonToolTip
                 {
                     Title = command.Label,
@@ -157,7 +133,6 @@ internal static class PluginRibbon
         return new RibbonPanel { Source = source };
     }
 
-    /// <summary>Types a button's command into the active drawing, as the host's own buttons do.</summary>
     private sealed class RunCommand : ICommand
     {
         internal static readonly RunCommand Instance = new();
@@ -183,7 +158,6 @@ internal static class PluginRibbon
                 return;
             }
 
-            // Two escapes end whatever command is running, as a ribbon macro's ^C^C does.
             document.SendStringToExecute("\x03\x03_" + command + " ", true, false, true);
         }
     }

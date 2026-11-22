@@ -24,7 +24,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogMantlePlaceTerrainTiles, Log, All);
 
 namespace
 {
-	/** True when the file at Path is a readable zip holding a tileset (a `layer.json` inside a folder). */
 	bool IsUsableTilesZip(const FString& Path)
 	{
 		IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
@@ -37,7 +36,7 @@ namespace
 		{
 			return false;
 		}
-		const FZipArchiveReader Reader(Handle); // takes ownership of the handle
+		const FZipArchiveReader Reader(Handle);
 		return Reader.IsValid() && FMantlePlaceTerrainTilesLogic::FindTileset(Reader.GetFileNames()).bFound;
 	}
 }
@@ -48,7 +47,6 @@ void UMantlePlaceTerrainTilesFetcher::EnsureClient()
 	{
 		return;
 	}
-	// The editor's ONE auth session, as the vault panel uses it: signing in there signs this in.
 	UMantlePlaceAuthSystemBase* AuthSystem = nullptr;
 	if (UMantlePlaceAuthSubsystem* AuthSubsystem = UMantlePlaceAuthSubsystem::Get())
 	{
@@ -56,7 +54,7 @@ void UMantlePlaceTerrainTilesFetcher::EnsureClient()
 	}
 	if (AuthSystem == nullptr)
 	{
-		AuthSystem = NewObject<UMantlePlaceAuthSystemBase>(this); // no editor: nothing is signed in, and the listing says so
+		AuthSystem = NewObject<UMantlePlaceAuthSystemBase>(this);
 	}
 	VaultClient = NewObject<UMantlePlaceVaultClient>(this);
 	VaultClient->OnVaultListedNative.AddUObject(this, &UMantlePlaceTerrainTilesFetcher::HandleListedNative);
@@ -71,7 +69,7 @@ bool UMantlePlaceTerrainTilesFetcher::Fetch(const FString& BundleZipPath)
 		UE_LOG(LogMantlePlaceTerrainTiles, Warning, TEXT("A terrain tiles fetch is already running; this ask was not started."));
 		return false;
 	}
-	Step = EStep::Listing; // held from the first line, so a reuse or a refusal below settles through Finish like the rest
+	Step = EStep::Listing;
 
 	FMantlePlaceVaultManifest Manifest;
 	FString ReadError;
@@ -90,7 +88,6 @@ bool UMantlePlaceTerrainTilesFetcher::Fetch(const FString& BundleZipPath)
 	ActiveOrderId = Manifest.OrderId;
 	ActiveTilesPath = FMantlePlaceTerrainTilesLogic::TilesZipBeside(BundleZipPath);
 
-	// Fetched once: tiles already beside the bundle are the answer, and nothing is requested.
 	if (FMantlePlaceTerrainTilesLogic::PlanFetch(IsUsableTilesZip(ActiveTilesPath), nullptr)
 		== FMantlePlaceTerrainTilesLogic::EFetchPlan::Reuse)
 	{
@@ -99,8 +96,6 @@ bool UMantlePlaceTerrainTilesFetcher::Fetch(const FString& BundleZipPath)
 		return true;
 	}
 
-	// The plugin keeps the Extra in the folder of a bundle it downloaded. A zip from anywhere else has no such
-	// folder of the plugin's, and nothing is written beside it.
 	const FString CacheRoot = FPaths::Combine(FPaths::ProjectSavedDir(), GetDefault<UMantlePlaceBundleCache>()->CacheSubDir);
 	if (!FMantlePlaceTerrainTilesLogic::IsInVaultCache(BundleZipPath, CacheRoot))
 	{
@@ -114,7 +109,7 @@ bool UMantlePlaceTerrainTilesFetcher::Fetch(const FString& BundleZipPath)
 	}
 
 	EnsureClient();
-	VaultClient->ListVault(); // -> HandleListedNative; the client renews an expired token and replays on its own
+	VaultClient->ListVault();
 	return true;
 }
 
@@ -131,7 +126,7 @@ void UMantlePlaceTerrainTilesFetcher::HandleListedNative(bool bSuccess, const TA
 	}
 	const FMantlePlaceVaultItem* Row = Bundles.FindByPredicate(
 		[this](const FMantlePlaceVaultItem& Item) { return Item.OrderId == ActiveOrderId; });
-	const FMantlePlaceTerrainTilesLogic::EFetchPlan Plan = FMantlePlaceTerrainTilesLogic::PlanFetch(/*bTilesBesideUsable*/ false, Row);
+	const FMantlePlaceTerrainTilesLogic::EFetchPlan Plan = FMantlePlaceTerrainTilesLogic::PlanFetch(false, Row);
 	if (Plan == FMantlePlaceTerrainTilesLogic::EFetchPlan::NoTilesListed)
 	{
 		Finish(false, FMantlePlaceTerrainTilesLogic::NoTilesListedReason());
@@ -139,7 +134,6 @@ void UMantlePlaceTerrainTilesFetcher::HandleListedNative(bool bSuccess, const TA
 	}
 	if (Plan == FMantlePlaceTerrainTilesLogic::EFetchPlan::Locked)
 	{
-		// A free bundle: the platform would refuse the link, so none is asked for.
 		Finish(false, FMantlePlaceTerrainTilesLogic::LockedReason());
 		return;
 	}
@@ -156,7 +150,6 @@ void UMantlePlaceTerrainTilesFetcher::HandlePresignedNative(bool bSuccess, const
 	}
 	if (!bSuccess || Download.Url.IsEmpty())
 	{
-		// The platform refused the link as locked: the locked row's words, not "could not".
 		Finish(false, Message == FMantlePlaceTerrainTilesLogic::LockedReason()
 			? Message
 			: FString::Printf(TEXT("Could not get a link for the terrain tiles: %s"), *Message));
@@ -164,7 +157,6 @@ void UMantlePlaceTerrainTilesFetcher::HandlePresignedNative(bool bSuccess, const
 	}
 	Step = EStep::Downloading;
 
-	// The minted link is storage, not the Platform API: it carries its own signature and no client header.
 	const TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = FHttpModule::Get().CreateRequest(); // not a Platform API call
 	Request->SetVerb(TEXT("GET"));
 	Request->SetURL(Download.Url);
@@ -195,7 +187,6 @@ void UMantlePlaceTerrainTilesFetcher::HandleDownloaded(const TArray<uint8>& Byte
 		Finish(false, FString::Printf(TEXT("The terrain tiles download failed (HTTP %d)."), ResponseCode));
 		return;
 	}
-	// Fail closed: the Extra states its length, and a download of another length is not that file.
 	if (!FMantlePlaceTerrainTilesLogic::SizeMatches(ActiveExtra.SizeBytes, Bytes.Num()))
 	{
 		Finish(false, FString::Printf(TEXT("The terrain tiles download is %d bytes; the platform lists %lld. Nothing was kept."),
@@ -203,7 +194,6 @@ void UMantlePlaceTerrainTilesFetcher::HandleDownloaded(const TArray<uint8>& Byte
 		return;
 	}
 
-	// Written beside, verified, then promoted by rename, so a torn download never looks like a cached one.
 	const FString PartPath = ActiveTilesPath + TEXT(".part");
 	IPlatformFile& PlatformFile = FPlatformFileManager::Get().GetPlatformFile();
 	PlatformFile.CreateDirectoryTree(*FPaths::GetPath(ActiveTilesPath));
@@ -218,7 +208,7 @@ void UMantlePlaceTerrainTilesFetcher::HandleDownloaded(const TArray<uint8>& Byte
 		Finish(false, FMantlePlaceTerrainTilesLogic::NotATilesetReason());
 		return;
 	}
-	if (!IFileManager::Get().Move(*ActiveTilesPath, *PartPath, /*Replace*/ true))
+	if (!IFileManager::Get().Move(*ActiveTilesPath, *PartPath, true))
 	{
 		IFileManager::Get().Delete(*PartPath);
 		Finish(false, FString::Printf(TEXT("Could not keep the terrain tiles at %s."), *ActiveTilesPath));

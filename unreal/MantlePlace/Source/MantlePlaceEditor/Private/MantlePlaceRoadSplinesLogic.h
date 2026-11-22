@@ -4,12 +4,6 @@
 
 #include "CoreMinimal.h"
 
-/**
- * One Z-draped road centerline from the bundle's Vector/RoadSplines.geojson, converted to the
- * Local Projected Frame (AOI centroid at world origin, East -> +X, North -> +Y, 1 uu = 1 cm).
- * WidthMEstimated / RoadClass / Name ride along to become the properties of the spawned
- * AMantlePlaceRoadSpline (verbatim; none is derived here).
- */
 struct FMantlePlaceRoadSpline
 {
 	TArray<FVector> PointsUeCm;
@@ -18,135 +12,48 @@ struct FMantlePlaceRoadSpline
 	FString Name;
 };
 
-/**
- * The vertical datum the shared `road_splines` layer states for its heights (MPB 1.8.0), beside
- * whether the manifest's version owes that statement. Built by
- * `FMantlePlaceVaultManifest::GetRoadSplinesDatum()`, so the parser reports what was published and
- * FMantlePlaceRoadSplinesLogic::CanPlaceHeights decides what it means.
- */
 struct FMantlePlaceRoadSplinesDatum
 {
-	/** vector.layers[road_splines].vertical_datum, verbatim; empty when the layer states none. */
 	FString Stated;
 
-	/**
-	 * The manifest's version is one whose format states the datum of a layer's heights (MPB 1.8.0
-	 * and later). There, a road layer that states none is refused rather than read as a bundle from
-	 * before the format could say: the version decides which kind of bundle this is, never the
-	 * absence of the key.
-	 */
 	bool bRequired = false;
 };
 
-/** A place the road centrelines can be read from, in the order the importer prefers them (HPS-52). */
 enum class EMantlePlaceRoadSplinesSource : uint8
 {
-	/** `hosts.unreal.road_splines` (MPB 1.16.0): this host's own copy, draped on the engine's ground. */
 	EngineCopy,
-	/** `vector.layers[road_splines]`: the layer every host shares, in the datum of the delivered elevation. */
 	SharedLayer,
 };
 
-/** One declared source, with whether its heights may be placed and, when they may not, why. */
 struct FMantlePlaceRoadSplinesCandidate
 {
 	EMantlePlaceRoadSplinesSource Source = EMantlePlaceRoadSplinesSource::SharedLayer;
 
-	/** The heights are in this host's datum (or, on the shared layer, a bundle's version owes none). */
 	bool bPlaceable = false;
 
-	/** Why the source is refused, naming what it stated; empty when it is placeable. */
 	FString Refusal;
 };
 
-/**
- * Pure (engine-/IO-free) logic for the road-splines layer: GeoJSON text -> spline point sets in
- * the Local Projected Frame. The GeoJSON ships WGS84 lon/lat (RFC 7946) with orthometric Z in
- * meters, so this owns the one place the plugin projects geographic coordinates: a WGS84 ->
- * UTM transverse-Mercator forward (USGS/Snyder series, sub-decimeter within a zone — ample for
- * road centerlines at engine scale). Everything is deterministic and headless-testable under
- * -nullrhi (mirrors FMantlePlaceVaultLogic / FMantlePlaceAuthLogic); the importer shim owns the
- * impure parts (zip read, actor spawning).
- */
 struct FMantlePlaceRoadSplinesLogic
 {
-	/** True when Epsg is a WGS84 UTM zone: 326xx (north, 1-60) or 327xx (south, 1-60). */
 	static bool IsUtmEpsg(int32 Epsg);
 
-	/**
-	 * WGS84 lon/lat (degrees) -> UTM easting/northing (meters) for the zone encoded in Epsg
-	 * (326xx = north, 327xx = south). Returns false for a non-UTM EPSG or out-of-range input.
-	 */
 	static bool LonLatToUtm(double LonDeg, double LatDeg, int32 Epsg, double& OutEastingM, double& OutNorthingM);
 
-	/**
-	 * Whether the road layer's heights are in this host's vertical datum, so its splines sit on the
-	 * landscape rather than above or below it. This host is a fixed-frame host (HPS-54), and fixed
-	 * vertically too: its landscape, mesh and foliage are EGM2008 orthometric heights on
-	 * every order, while the shared layer's heights are the delivered elevation's, which on some
-	 * deliveries is another datum.
-	 *
-	 * True when the layer states `EGM2008-orthometric`, compared verbatim, or when it states nothing
-	 * and the version owes nothing — a bundle from before the format stated a datum, when every
-	 * height it carried was EGM2008. False, with OutReason naming what was stated, for any other
-	 * datum, an unknown one included (the format makes an unknown datum fail closed), and for an
-	 * owed datum the layer leaves out. The refusal is a named skip of the layer, as HPS-53 skips a
-	 * file in another frame, and never a conversion: no offset is applied, because shifting a height
-	 * is deriving one (HPS-33).
-	 */
 	static bool CanPlaceHeights(const FMantlePlaceRoadSplinesDatum& Datum, FString& OutReason);
 
-	/**
-	 * Whether the Unreal block's own road copy (`hosts.unreal.road_splines`, MPB 1.16.0) is in this
-	 * host's vertical datum. The schema fixes the datum of that file to EGM2008-orthometric, and this
-	 * still asks: it is true only when the pointer states exactly `EGM2008-orthometric`, compared
-	 * verbatim, and never because of where the pointer sits or what its file is called. A pointer is a
-	 * statement that was made at 1.16.0 or later, so a missing datum is always owed (unlike the shared
-	 * layer's, which a bundle from before 1.8.0 could not state). False, with OutReason naming what was
-	 * stated, otherwise: the copy is refused by name, nothing is shifted (HPS-33).
-	 */
 	static bool CanPlaceEngineHeights(const FString& StatedDatum, FString& OutReason);
 
-	/**
-	 * The sources the manifest declares for the road centrelines, in the order the importer tries
-	 * them (HPS-52): the Unreal block's own copy first, then the shared layer, each with its datum
-	 * verdict. A source the manifest does not declare is not listed. The importer reads the first
-	 * placeable one that can be read, and logs the refusal of each one it passes over, so a US order
-	 * whose manifest publishes no engine copy still skips the shared layer by name (its NAVD88 heights
-	 * are neither shifted nor placed as they are), and a bundle whose engine copy cannot be read still
-	 * gets its shared layer when that one is placeable.
-	 */
 	static TArray<FMantlePlaceRoadSplinesCandidate> PlanSources(
 	    bool bEngineCopyDeclared,
 	    const FString& EngineStatedDatum,
 	    bool bSharedLayerDeclared,
 	    const FMantlePlaceRoadSplinesDatum& SharedDatum);
 
-	/** "engine" or "shared": the name a source goes by in a corpus row and in the import log. */
 	static const TCHAR* SourceName(EMantlePlaceRoadSplinesSource Source);
 
-	/**
-	 * The importer's one-line statement of where the placed roads were read from, naming the file. The
-	 * engine copy says so, so a reader of the import summary can tell the roads were the engine-datum
-	 * copy and not the shared layer; the shared layer's line is the one the importer has always written.
-	 */
 	static FString DescribeSource(EMantlePlaceRoadSplinesSource Source, const FString& Path);
 
-	/**
-	 * Parse a RoadSplines GeoJSON FeatureCollection into Local-Projected-Frame splines.
-	 * OriginEastingM/OriginNorthingM/Epsg come from the manifest's unreal.georeference block.
-	 * LineString and MultiLineString geometries are accepted (each MultiLineString part becomes
-	 * its own spline, mirroring the ETL's per-part rows); other geometry types are skipped.
-	 * Fails closed (false + OutError) on invalid JSON, a missing features array, or an Epsg that
-	 * is not a UTM zone. The last is checked first and refuses the whole layer, empty or not: the
-	 * origin is what is wrong, and left to the per-point projection it would drop every point of
-	 * every road and return success with zero splines.
-	 *
-	 * `OutLinesSeen` counts the line parts the layer carried (a MultiLineString part counts once,
-	 * a Point never), whether or not they could be placed. It exists because dropping is invisible
-	 * on its own: a layer of roads that all failed and a layer with no roads both return zero
-	 * splines, and the count is what lets the caller say which happened. See DescribeOutcome.
-	 */
 	static bool ParseGeoJson(
 	    const FString& JsonText,
 	    double OriginEastingM,
@@ -156,13 +63,6 @@ struct FMantlePlaceRoadSplinesLogic
 	    int32& OutLinesSeen,
 	    FString& OutError);
 
-	/**
-	 * Project one road line given as WGS84 (lon deg, lat deg, orthometric z m) points into the
-	 * Local Projected Frame and append it as a spline. The shared tail of both readers: GeoJSON
-	 * positions and GeoPackage geometry blobs arrive here as the same numbers. The line counts as
-	 * seen (OutLinesSeen) whether or not it can be placed; it is appended only when at least two of
-	 * its points project, as ParseGeoJson does. Returns true when it was appended.
-	 */
 	static bool AppendLonLatLine(
 	    const TArray<FVector>& LonLatZ,
 	    const FMantlePlaceRoadSpline& Prototype,
@@ -172,26 +72,8 @@ struct FMantlePlaceRoadSplinesLogic
 	    TArray<FMantlePlaceRoadSpline>& OutSplines,
 	    int32& OutLinesSeen);
 
-	/**
-	 * The importer's one-line status for a road layer that parsed: how many line parts were
-	 * present against how many became splines. An empty layer reads as a plain success; a layer
-	 * whose roads were all unplaceable, or some of them, says so and names both numbers, so the
-	 * two cannot be mistaken for each other.
-	 */
 	static FString DescribeOutcome(int32 LinesSeen, int32 SplinesCreated);
 
-	/**
-	 * Read an MPB 3.x `Basemap/Roads.csv` into Local-Projected-Frame splines. The table is host-ready:
-	 * one row per vertex, columns `road`, `vertex`, `x`, `y`, `z`, `class`, `width_m` and `name` found by
-	 * name in the header, x and y metres east and north of the site origin and z metres above its
-	 * height (format.md sections 4 and 6). So nothing is projected: `SiteHeightM`, the origin's stated
-	 * height, is added to z as the tree table's ground_z is, and the rest is the stated offsets.
-	 *
-	 * The rows of one road share its `road` number and are in vertex order; a road ends where the
-	 * number changes. A road counts in `OutLinesSeen` whether or not it has the two points a spline
-	 * needs. A row whose x, y or z is not a number is counted in `OutRowsUnreadable` and passed over.
-	 * Fails closed (false + OutError) on a table with no header or a header missing a named column.
-	 */
 	static bool ParseSiteCsv(
 	    const FString& CsvText,
 	    double SiteHeightM,

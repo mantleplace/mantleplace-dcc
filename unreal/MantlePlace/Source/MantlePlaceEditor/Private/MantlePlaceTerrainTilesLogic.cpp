@@ -43,14 +43,13 @@ FMantlePlaceTerrainTilesLogic::FTileset FMantlePlaceTerrainTilesLogic::FindTiles
 		const FString Dir = FPaths::GetPath(Name);
 		if (Dir.IsEmpty())
 		{
-			continue; // at the root of the zip: every entry would be selected as a tile
+			continue;
 		}
 		int32 Depth = 0;
 		for (const TCHAR Ch : Dir)
 		{
 			Depth += (Ch == TEXT('/')) ? 1 : 0;
 		}
-		// The shallowest wins; of two at one depth the first by name, so the pick never depends on zip order.
 		if (Depth < FoundDepth || (Depth == FoundDepth && Name < Found.LayerJsonPath))
 		{
 			FoundDepth = Depth;

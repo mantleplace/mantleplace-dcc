@@ -3,17 +3,10 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The export protocol, decided without a platform or a Revit: the presence payload, the export in
-/// both its spellings, the lifecycle a plugin may send, the pace of progress reports, and when a
-/// bundle is ready (the platform export contract, protocol 1).
-/// </summary>
 internal static class ExportProtocolTests
 {
     private const string Connection = "revit-0123456789abcdef";
 
-    // The contract's table of what a plugin may send, written out here from the document and not
-    // derived from the code under test. A move absent from this list must be refused.
     private static readonly (ExportStatus From, string Move)[] Allowed =
     [
         (ExportStatus.Sent, "received"),
@@ -21,7 +14,7 @@ internal static class ExportProtocolTests
         (ExportStatus.Received, "awaiting_options"),
         (ExportStatus.WaitingForBundle, "awaiting_options"),
         (ExportStatus.AwaitingOptions, "start"),
-        (ExportStatus.AwaitingOptions, "progress"), // a progress sent with the first call is ignored
+        (ExportStatus.AwaitingOptions, "progress"),
         (ExportStatus.AwaitingOptions, "cancelled"),
         (ExportStatus.Importing, "progress"),
         (ExportStatus.Importing, "imported"),
@@ -136,7 +129,6 @@ internal static class ExportProtocolTests
 
         run.Case("a connection id is fresh across launches", () =>
         {
-            // A launch is a new source: nothing is read back from disk, so two never agree.
             HashSet<string> seen = [];
             for (int i = 0; i < 50; i++)
             {

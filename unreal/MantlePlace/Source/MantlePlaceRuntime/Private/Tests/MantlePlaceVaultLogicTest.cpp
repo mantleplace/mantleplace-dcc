@@ -12,21 +12,10 @@
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 
-// The vault protocol vectors — list/download/materialize response shapes, the status word buckets,
-// the error-key precedence, the targeted token list — are read from the shared conformance corpus
-// at tools/manifest-conformance/corpus/vault/ (HPS-40). A .NET host asserts the same bytes.
-//
-// Unlike the manifest group, these cases each drive a DIFFERENT parser, so they are dispatched by
-// id rather than in one loop. `Driven` + UndrivenCases is what stops a case added to the corpus
-// from being quietly ignored here (HPS-41).
-
 namespace
 {
 using namespace MantlePlaceConformanceCorpus;
 
-/** Expectation keys this suite knows how to assert. The list no longer proves coverage by itself —
- *  the per-case AssertedKeys tracking does (HPS-46) — it is kept to tell "unknown key" apart from
- *  "known key declared with a type this host could not read" in the failure message. */
 const TCHAR* const ConsumedExpectationKeys[] = {
 	TEXT("itemCount"),
 	TEXT("items"),
@@ -41,7 +30,6 @@ const TCHAR* const ConsumedExpectationKeys[] = {
 	TEXT("tokens"),
 };
 
-/** Parse a JSON body and read a string field; returns "" if absent. */
 FString VaultReadStringField(const FString& JsonStr, const TCHAR* Field)
 {
 	TSharedPtr<FJsonObject> Root;
@@ -55,7 +43,6 @@ FString VaultReadStringField(const FString& JsonStr, const TCHAR* Field)
 	return FString();
 }
 
-/** Parse a JSON body and read a top-level string array; empty when absent or wrong-typed. */
 TArray<FString> VaultReadStringArrayField(const FString& JsonStr, const TCHAR* Field)
 {
 	TArray<FString> Values;
@@ -78,11 +65,6 @@ TArray<FString> VaultReadStringArrayField(const FString& JsonStr, const TCHAR* F
 	}
 	return Values;
 }
-
-// Both mappers carry an explicit case per enumerator and NO default: the corpus legitimately
-// expects "Unknown" for some rows, so "Unknown" must map from the real Unknown enumerator — a
-// default: that produced it would let an unmapped enumerator silently equal an expected value
-//. Anything unmapped comes back as a sentinel no corpus row will ever state.
 
 FString StatusName(EMantlePlaceVaultBundleStatus Status)
 {
@@ -126,7 +108,7 @@ FString StateName(EMantlePlaceMaterializeState State)
 	}
 	return TEXT("UNMAPPED");
 }
-} // namespace
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceVaultLogicTest,
@@ -153,7 +135,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 	}
 	TSet<FString> Driven;
 
-	/** Fetch a case by id, recording it as driven. Null (and an error) if the corpus lost it. */
 	auto Take = [this, &Cases, &Driven](const TCHAR* Id) -> const FCase*
 	{
 		const FCase* Found = FindCase(Cases, Id);
@@ -166,10 +147,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		return Found;
 	};
 
-	// --- list: full + legacy rows -----------------------------------------------------------
-	// The discrimination that matters: a legacy row's null sidecar means UNKNOWN, and the full
-	// row's elevation flag is known-and-FALSE. A host that reads "layers object present" as "all
-	// true" passes a laxer check and is wrong.
 	if (const FCase* Case = Take(TEXT("vault.list.fullAndLegacy")))
 	{
 		TArray<FMantlePlaceVaultItem> Items;
@@ -187,14 +164,9 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			{
 				const TSharedPtr<FJsonObject> Row = ExpectedItems[Index];
 				const FMantlePlaceVaultItem& Item = Items[Index];
-				// The row's path in the corpus, not merely a label: every read below records against
-				// it, so an unread key fails naming `items[1].hasManifestVersion` (HPS-46b).
 				const FString Path = FString::Printf(TEXT("items[%d]"), Index);
 				const FString Where = FString::Printf(TEXT("[%s] %s"), *Case->Id, *Path);
 
-				// Every read is strictly typed and recorded. No TryGet*Field below this line: it
-				// coerces across JSON types, and a coerced read asserts nothing while counting as
-				// coverage — the asserted-keys bug, one level down.
 				FString Text;
 				bool bFlag = false;
 				double Number = 0.0;
@@ -228,8 +200,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 					TestTrue(Where + TEXT(".downloadable"), FLogic::IsDownloadable(Item) == bFlag);
 				}
 
-				// Values, not just the known/unknown flags. A row states these only when the sidecar
-				// actually knows them — the legacy row's nulls mean there is nothing to assert.
 				if (ExpectRowString(*Case, Path, Row, TEXT("aoiLabel"), Text))
 				{
 					TestEqual(Where + TEXT(".aoiLabel"), Item.AoiLabel, Text);
@@ -272,7 +242,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 						FString::Join(Item.Formats, TEXT(",")), FString::Join(Expected, TEXT(",")));
 				}
 
-				// The per-format download menu, including byteSize 0 = UNRECORDED (not an empty file).
 				const TArray<TSharedPtr<FJsonValue>>* DownloadFormats = nullptr;
 				if (ExpectRowArray(*Case, Path, Row, TEXT("downloadFormats"), DownloadFormats))
 				{
@@ -320,12 +289,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- list: the tier label, which only this host can compute ------------------------------
-	// Its whole discriminator is the presence of `glb` — the Unreal terrain mesh — so it rides an
-	// `appliesTo` case rather than the host-invariant listing above (HPS-41). All three branches,
-	// not just the two rows the listing happens to have: a Base bundle is known-and-partial, an
-	// empty formats list is the base_on_demand marker where nothing is known yet, and collapsing
-	// the two is the difference between materializing and importing.
 	if (const FCase* Case = Take(TEXT("vault.list.tierLabel")))
 	{
 		TArray<FMantlePlaceVaultItem> Items;
@@ -352,7 +315,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- list: empty, malformed rows skipped, wrong top-level key ---------------------------
 	if (const FCase* Case = Take(TEXT("vault.list.empty")))
 	{
 		TArray<FMantlePlaceVaultItem> Items;
@@ -363,8 +325,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		TestEqual(Case->What(TEXT("itemCount")), Items.Num(), ExpectedCount);
 	}
 
-	// The thumbnail case (web #897) asserts the same three things: every row in its three
-	// thumbnail shapes survives, in order, with no warning.
 	for (const TCHAR* ListCaseId :
 		{TEXT("vault.list.skipsMalformedRows"), TEXT("vault.list.thumbnailNeverBreaksARow")})
 	{
@@ -407,7 +367,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		TestTrue(Case->What(TEXT("error names the missing key")), Error.Contains(Case->ErrorContains));
 	}
 
-	// Unparseable listing bytes fail closed with a reason — never a crash, never a blank vault.
 	if (const FCase* Case = Take(TEXT("vault.reject.notJson")))
 	{
 		TArray<FMantlePlaceVaultItem> Items;
@@ -417,7 +376,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		TestEqual(Case->What(TEXT("no items survive")), Items.Num(), 0);
 	}
 
-	// --- download: presigned url + the entitlement-error fallback ---------------------------
 	if (const FCase* Case = Take(TEXT("vault.download.presigned")))
 	{
 		FMantlePlacePresignedDownload Download;
@@ -441,13 +399,11 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		FString Error;
 		TestFalse(Case->What(TEXT("rejected")),
 			FLogic::ParseDownloadResponse(Case->Payload, Download, Error));
-		// The body carries a real reason; surfacing "missing 'url'" instead would hide it.
 		TestFalse(Case->What(TEXT("states an errorContains")), Case->ErrorContains.IsEmpty());
 		TestTrue(Case->What(TEXT("error body message wins over the generic message")),
 			Error.Contains(Case->ErrorContains));
 	}
 
-	// --- materialize: start responses -------------------------------------------------------
 	for (const TCHAR* Id : { TEXT("vault.materialize.started"), TEXT("vault.materialize.alreadyRunning") })
 	{
 		if (const FCase* Case = Take(Id))
@@ -471,8 +427,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// A start body with neither jobId nor activeJobId fails closed and surfaces the platform's own
-	// message through the HPS-48 precedence.
 	if (const FCase* Case = Take(TEXT("vault.materialize.startNoJobId")))
 	{
 		FString JobId;
@@ -485,11 +439,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		TestTrue(Case->What(TEXT("error body message surfaces")), Error.Contains(Case->ErrorContains));
 	}
 
-	// --- materialize: the shapes that name NO job -------------------------------------------
-	// STOP: two of the platform's five start shapes are successes carrying no job id, and a third
-	// carries it under `activeJobId` with no `jobId` at all. Inferring failure from a missing `jobId`
-	// is what left the Revit host unable to import any bundle with nothing left to build; this host
-	// had the identical hole, masked only because a complete bundle skips materialize entirely.
 	for (const TCHAR* Id : {
 	         TEXT("vault.materialize.noop"),
 	         TEXT("vault.materialize.queued"),
@@ -525,9 +474,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- materialize: the delivery-state document -------------------------------------------
-	// Polling this endpoint returns delivered/notDelivered/activeJob and NO status word, so
-	// completion is derived. This table is that derivation.
 	if (const FCase* Case = Take(TEXT("vault.materialize.deliveryVectors")))
 	{
 		const TArray<FString> Requested = VaultReadStringArrayField(Case->Payload, TEXT("requested"));
@@ -587,11 +533,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- materialize: what a NEW request would still have to ask for ------------------------
-	// The state word is not actionable on its own. `Pending` is the wire shape of both "the job
-	// row is not visible yet" (wait) and "the run we joined has ended without building this" (ask
-	// again), and only a caller that has already SEEN a run in flight can tell them apart. This
-	// table pins the value that caller acts on.
 	if (const FCase* Case = Take(TEXT("vault.materialize.outstandingVectors")))
 	{
 		const TArray<FString> Requested = VaultReadStringArrayField(Case->Payload, TEXT("requested"));
@@ -618,7 +559,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- materialize: status vectors --------------------------------------------------------
 	if (const FCase* Case = Take(TEXT("vault.materialize.statusVectors")))
 	{
 		const TArray<TSharedPtr<FJsonObject>> Vectors = Rows(*Case, TEXT("vectors"));
@@ -638,14 +578,10 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			if (bShouldParse && bParsed)
 			{
 				TestEqual(Where + TEXT(" state"), StateName(Status.State), RowString(Row, TEXT("state")));
-				// -1 is INDETERMINATE, not zero: a progress bar must not render 0% for "unknown".
 				const double ExpectedFraction = RowNumber(Row, TEXT("fraction"), -1.0);
 				TestEqual(Where + TEXT(" fraction"),
 					static_cast<double>(Status.Fraction), ExpectedFraction, 1e-4);
 
-				// jobId and the failure message ride the body and must be SURFACED, not merely
-				// tolerated — both went unasserted before this suite. Stated only on the rows that
-				// carry them.
 				FString Expected;
 				if (Row.IsValid() && Row->TryGetStringField(TEXT("jobId"), Expected))
 				{
@@ -667,7 +603,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- status words: both enum vocabularies, incl. the synonyms and the Unknown default ----
 	if (const FCase* Case = Take(TEXT("vault.statusWordBuckets")))
 	{
 		const TSharedPtr<FJsonObject>* BundleStatus = nullptr;
@@ -703,7 +638,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 						FString::Printf(TEXT("[%s] materializeState[\"%s\"]"), *Case->Id, *Word),
 						StateName(FLogic::ParseMaterializeState(Word)),
 						Pair.Key);
-					// The table says matching is case-insensitive; assert it rather than trust it.
 					TestEqual(
 						FString::Printf(TEXT("[%s] materializeState[\"%s\"] uppercased"), *Case->Id, *Word),
 						StateName(FLogic::ParseMaterializeState(Word.ToUpper())),
@@ -721,7 +655,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 				&& FLogic::ParseStatus(TEXT("definitely-not-a-status")) == EStatus::Unknown);
 	}
 
-	// --- error body: which key wins, and the code that rides along ---------------------------
 	if (const FCase* Case = Take(TEXT("vault.errorBodyPrecedence")))
 	{
 		const TArray<TSharedPtr<FJsonObject>> Vectors = Rows(*Case, TEXT("vectors"));
@@ -743,10 +676,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			}
 		}
 
-		// The stated order itself, driven synthetically: build a body carrying every key from
-		// position i onward and assert the key at i is the one whose value surfaces. Mirrors the
-		// auth suite's errorPrecedence driver — HPS-48 makes the two parsers share ONE order, so
-		// they earn the same proof.
 		TArray<FString> Precedence;
 		if (Case->PayloadObject.IsValid())
 		{
@@ -774,9 +703,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- materialize token list: the explicit, client-owned scope (HPS-23) -------------------
-	// "all" is a legitimate user-facing scope and stays the server keyword; "unreal" must send the
-	// explicit token ARRAY, because the plugin — not the server — owns which layers a UE import needs.
 	if (const FCase* Case = Take(TEXT("vault.materializeTokenList")))
 	{
 		TArray<FString> ExpectedTokens;
@@ -792,11 +718,10 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 				FLogic::TargetedImportTokens().Contains(Token));
 		}
 
-		// The body actually put on the wire carries those same tokens, in order.
 		TArray<FString> Sent;
 		{
 			TSharedPtr<FJsonObject> Root;
-			const FString Body = FLogic::BuildMaterializeBody(TEXT("Unreal")); // case-insensitive scope
+			const FString Body = FLogic::BuildMaterializeBody(TEXT("Unreal"));
 			const TSharedRef<TJsonReader<TCHAR>> Reader = TJsonReaderFactory<TCHAR>::Create(Body);
 			TestTrue(Case->What(TEXT("materialize body parses")),
 				FJsonSerializer::Deserialize(Reader, Root) && Root.IsValid());
@@ -808,9 +733,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		TestEqual(Case->What(TEXT("body tokens match the corpus list")),
 			FString::Join(Sent, TEXT(",")), FString::Join(ExpectedTokens, TEXT(",")));
 
-		// The wire bodies themselves come from the corpus, not from literals here: the explicit
-		// scope sends the token ARRAY the corpus states, and "all" sends whatever keyword the
-		// corpus states — nothing about either shape is this suite's to hardcode.
 		const TSharedPtr<FJsonObject>* ExplicitBody = nullptr;
 		if (Case->PayloadObject.IsValid()
 			&& Case->PayloadObject->TryGetObjectField(TEXT("bodyForExplicitScope"), ExplicitBody)
@@ -850,8 +772,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 				FLogic::IsValidMaterializeScope(Scope));
 		}
 
-		// The scope known-answer rows: the case-insensitivity rows and the invalids are the
-		// normative part (lowercase-only vectors left them unpinned).
 		const TArray<TSharedPtr<FJsonObject>> ScopeVectors = Rows(*Case, TEXT("scopeVectors"));
 		TestTrue(Case->What(TEXT("has scopeVectors")), ScopeVectors.Num() > 0);
 		for (const TSharedPtr<FJsonObject>& Row : ScopeVectors)
@@ -867,12 +787,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			FLogic::IsValidMaterializeScope(TEXT("buildings")));
 	}
 
-	// --- the presign request body -----------------------------------------------------------
-	// The corpus pinned presign RESPONSES from the start and never the request, so a host could ask
-	// for the wrong thing and stay green through every gate. This host asked for "glb" and called it
-	// the whole-bundle zip: that token ALSO names a real artifact format, so the platform hands back
-	// the mesh whenever the order carries one and only falls through to the archive when it does
-	// not. It was right by luck of the data, and the cache verifies against the archive's sha256.
 	if (const FCase* Case = Take(TEXT("vault.downloadRequestBody")))
 	{
 		const FString WholeBundle = Case->PayloadObject.IsValid()
@@ -887,7 +801,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		TestFalse(Case->What(TEXT("and never with the deprecated alias")),
 		          FLogic::WholeBundleFormat().Equals(DeprecatedAlias, ESearchCase::IgnoreCase));
 
-		// The body on the wire comes from the corpus, not from a literal here.
 		const TSharedPtr<FJsonObject>* Body = nullptr;
 		if (Case->PayloadObject.IsValid() && Case->PayloadObject->TryGetObjectField(TEXT("body"), Body) && Body != nullptr)
 		{
@@ -920,9 +833,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- HPS-46 asserted-keys guard ---------------------------------------------------------
-	// Consumption is proven by what was ASSERTED, not by the allow-list alone: a declared key
-	// nothing read — unknown, mistyped, or on an assertion path that never ran — fails.
 	for (const FCase& Case : Cases)
 	{
 		for (const FString& Problem : UnassertedExpectations(Case, ConsumedExpectationKeys))
@@ -930,8 +840,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			AddError(FString::Printf(TEXT("[%s] %s"), *Case.Id, *Problem));
 		}
 
-		// And below the top level: recording `items` proves the array was reached, never
-		// that anything inside it was read (HPS-46b).
 		for (const FString& Problem : UnassertedNestedExpectations(Case))
 		{
 			AddError(FString::Printf(TEXT("[%s] %s"), *Case.Id, *Problem));
@@ -946,9 +854,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			*Missing));
 	}
 
-	// --- Host-local API surface the corpus does not specify ----------------------------------
-	// URL construction is per-host plumbing (base-URL config, percent-encoding rules), not part of
-	// the cross-host wire contract the corpus pins.
 	{
 		TestEqual(TEXT("List URL from clean base"),
 			FLogic::BuildListBundlesUrl(TEXT("https://mantle.place")),
@@ -967,7 +872,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			FString(TEXT("glb")));
 	}
 
-	// --- IsKnownFormat + the incomplete-bundle heuristic that drives the panel ----------------
 	{
 		TestTrue(TEXT("glb known"), FLogic::IsKnownFormat(TEXT("glb")));
 		TestTrue(TEXT("GLB known (case-insensitive)"), FLogic::IsKnownFormat(TEXT("GLB")));
@@ -975,20 +879,19 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("tiff not known"), FLogic::IsKnownFormat(TEXT("tiff")));
 		TestFalse(TEXT("empty not known"), FLogic::IsKnownFormat(TEXT("")));
 
-		FMantlePlaceVaultItem Base; // BASE: cesium/imagery formats, no glb terrain mesh
+		FMantlePlaceVaultItem Base;
 		Base.Formats = { TEXT("pmtiles"), TEXT("geotiff") };
 		TestTrue(TEXT("Base bundle (no glb) is incomplete"), FLogic::IsIncompleteBundle(Base));
 
-		FMantlePlaceVaultItem UpperGlb; // glb detection is case-insensitive
+		FMantlePlaceVaultItem UpperGlb;
 		UpperGlb.Formats = { TEXT("GLB") };
 		TestFalse(TEXT("GLB (uppercase) counts as complete"), FLogic::IsIncompleteBundle(UpperGlb));
 
-		FMantlePlaceVaultItem Marker; // empty formats = base_on_demand marker
+		FMantlePlaceVaultItem Marker;
 		TestTrue(TEXT("Empty-formats bundle routes through materialize (incomplete)"),
 			FLogic::IsIncompleteBundle(Marker));
 	}
 
-	// --- The post-download self-heal verdict (vault path) --------------------------------------
 	{
 		const FString Order = TEXT("3f285101-0310-425b-b06b-bdb73b025b6a");
 		TestTrue(TEXT("Readable-but-incomplete manifest with an order id recovers"),
@@ -1003,9 +906,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			FLogic::ShouldRecoverMissingUnrealPayload(true, false, Order, true));
 	}
 
-	// --- A complete order imports without a Prepare: the route, the view request, the view response ---
-	// The wire shapes are the platform's own: the no-op and the 503 delivery_state_unknown of the
-	// materialize start, and the view block, sizeBytes and manifestSha256 of POST .../download.
 	{
 		using EOutcome = EMantlePlaceMaterializeStartOutcome;
 		auto StartOf = [](const TCHAR* Body, int32 Status) -> FMantlePlaceMaterializeStart
@@ -1023,7 +923,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			return Start;
 		};
 
-		// The delivery state unknown: a 503 carrying the code, and only that.
 		TestTrue(TEXT("503 delivery_state_unknown is the unproven answer"),
 			FLogic::IsDeliveryStateUnknown(503, TEXT("{\"error\":\"unavailable\",\"code\":\"delivery_state_unknown\"}")));
 		TestFalse(TEXT("A bare 503 is an outage, not the unproven answer"),
@@ -1032,7 +931,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("The code under another status is not the unproven answer"),
 			FLogic::IsDeliveryStateUnknown(500, TEXT("{\"code\":\"delivery_state_unknown\"}")));
 
-		// The route: complete (the no-op), unproven (the 503) both fetch the view; every other start is the Prepare's.
 		TestEqual(TEXT("The no-op is a complete order: fetch the view"),
 			FLogic::DecideImportRoute(StartOf(TEXT("{\"noop\":true,\"delivered\":[\"unreal_heightmap\"]}"), 200)),
 			EMantlePlaceImportRoute::DownloadView);
@@ -1052,7 +950,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			FLogic::DecideImportRoute(StartOf(TEXT("{\"queued\":true,\"pendingTokens\":[\"a\"]}"), 202)),
 			EMantlePlaceImportRoute::Prepare);
 
-		// The request names the host and one level for every entry, and asks for the archive by name.
 		const FString ViewBody = FLogic::BuildViewDownloadBody();
 		TestEqual(TEXT("View request: format is the whole-archive token"),
 			VaultReadStringField(ViewBody, TEXT("format")), FString(TEXT("bundle")));
@@ -1060,7 +957,6 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			ViewBody,
 			FString(TEXT("{\"format\":\"bundle\",\"view\":{\"host\":\"unreal\",\"levels\":{\"*\":\"MAX\"}}}")));
 
-		// The view response: a view block only for a bundle cut into parts.
 		FMantlePlacePresignedDownload View;
 		FString Error;
 		TestTrue(TEXT("A view response parses"), FLogic::ParseDownloadResponse(
@@ -1085,10 +981,9 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 			TEXT("{\"url\":\"https://r2.example/p.zip\",\"view\":{\"partial\":true,\"parts\":[]}}"), Partial, Error);
 		TestTrue(TEXT("A partial view is read as partial"), Partial.bIsView && Partial.bPartial);
 
-		// What to fetch. The no-op's delivered tokens say which outside-the-block files the order has.
 		const TArray<FString> NoneDelivered;
 		const TArray<FString> AllOutside = { TEXT("flood.nfhl"), TEXT("cesium.terrain") };
-		FMantlePlacePresignedDownload Full = View; // a view that carries the outside files too
+		FMantlePlacePresignedDownload Full = View;
 		Full.Parts.Add(TEXT("flood.nfhl@MAX"));
 		Full.Parts.Add(TEXT("cesium.terrain"));
 		TestEqual(TEXT("A complete view is downloaded"), FLogic::DecideViewFetch(Full, true, AllOutside), EMantlePlaceViewFetch::View);
@@ -1113,4 +1008,4 @@ bool FMantlePlaceVaultLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

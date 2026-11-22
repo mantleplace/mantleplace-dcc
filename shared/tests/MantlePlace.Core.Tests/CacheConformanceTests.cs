@@ -3,10 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Drives the shared corpus' <c>cache</c> and <c>digest</c> groups (<c>HPS-27</c>, <c>HPS-28</c>,
-/// <c>HPS-30</c>).
-/// </summary>
 internal static class CacheConformanceTests
 {
     internal static int Run()
@@ -66,10 +62,6 @@ internal static class CacheConformanceTests
 
     private static void DriveValidity(TestRun run, VectorNode root)
     {
-        // The table's floor and this host's floor must agree, or the "too old" row stops testing
-        // anything. It sits exactly one below minSupportedManifestVersion by construction — and
-        // across the era break that neighbour is an INTEGER, not a semver, which is the case a host
-        // comparing only within one family gets wrong.
         run.Equal(
             root.Version("minSupportedManifestVersion") ?? "(absent)",
             ManifestVersions.MinSupportedManifestVersion,
@@ -99,16 +91,11 @@ internal static class CacheConformanceTests
             run.Equal(verdict.IsValid, row.Bool("valid") ?? false, $"[{name}] valid");
             run.Equal(verdict.Reason.ToString(), row.Str("reason")!, $"[{name}] reason");
 
-            // Valid-and-unverified is a real state and the host must report it as such. Claiming
-            // verification it did not do is a lie; calling it corrupt makes every legacy bundle
-            // un-openable.
             run.Equal(verdict.IntegrityChecked, row.Bool("integrityChecked") ?? false, $"[{name}] integrityChecked");
 
             exercised.Add(verdict.IsValid ? "valid" : verdict.Reason.ToString());
         }
 
-        // Every step of the declared precedence must actually be reached by some row, or the chain
-        // is implied rather than exercised.
         foreach (string step in precedence)
         {
             run.True(exercised.Contains(step), $"a row exercises the '{step}' step of the precedence");
@@ -137,9 +124,6 @@ internal static class CacheConformanceTests
 
             if (vector.Items("orderIdPair") is { Count: 2 } pair)
             {
-                // Both sanitise alike; the hash suffix is what stops one bundle overwriting the
-                // other. Asserting only "they differ" would pass for a random suffix, so both
-                // stems are pinned too.
                 SanitisedCacheKey left = CacheKeySanitiser.Sanitise(pair[0].AsString()!);
                 SanitisedCacheKey right = CacheKeySanitiser.Sanitise(pair[1].AsString()!);
 
@@ -173,7 +157,6 @@ internal static class CacheConformanceTests
         run.Equal(fileNames.Str("sidecar")!, BundleCacheFileNames.Sidecar, "sidecar file name");
     }
 
-    /// <summary>The suffix is the first 8 hex of sha256 over the RAW id, never over the mapped stem.</summary>
     private static void AssertSuffix(TestRun run, SanitisedCacheKey key, bool suffixed, string rawOrderId)
     {
         if (!suffixed)
@@ -216,9 +199,6 @@ internal static class CacheConformanceTests
                 $"streaming equals one-shot for '{Shorten(oneShot)}'");
         }
 
-        // Trimmed and case-insensitive, then the rule that is easy to get backwards: two UNKNOWNS
-        // are not equal. "unknown equals unknown" would report a verified match on a bundle nothing
-        // checked, which inverts ⛔HPS-27.
         run.Contains(root.Str("comparison"), "case-insensitively", "the stated comparison rule");
         run.True(Sha256Digest.Equal(" AB12 ", "ab12"), "trimmed and case-insensitive");
         run.False(Sha256Digest.Equal("", ""), "two unknowns are not a match");

@@ -2,18 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The vector layers and the imagery drape, placed from this host's own block first (<c>HPS-52</c>),
-/// and refused when the block points at a file it cannot show to be in this host's frame
-/// (<c>HPS-53</c>).
-/// </summary>
-/// <remarks>
-/// MPB 1.3.0 hands the Revit host its own copy of both, in its own frame on every delivery
-/// (<c>spec/format.md</c> §6.4, §6.5). Before it, a State Plane order placed neither: the shared
-/// vector set is lon/lat, which this host may project only into a UTM origin (<c>HPS-45</c>), and
-/// the shared drape is on the AOI's UTM grid. A bundle cut before 1.3.0 keeps that path, and what it
-/// imports today.
-/// </remarks>
 internal static class HostFramePlacementTests
 {
     private const double UsFootM = 1200.0 / 3937.0;
@@ -27,7 +15,6 @@ internal static class HostFramePlacementTests
         ImportStepKind.RoadPolygons,
     ];
 
-    /// <summary>The layer names of the Revit copy, one per kind above and in the same order.</summary>
     private static readonly string[] VectorNames = ["road_splines", "land_use", "land_cover", "water", "road_polygons"];
 
     private static readonly ImageSize DrapePixels = new(4000, 3000);
@@ -49,8 +36,6 @@ internal static class HostFramePlacementTests
     {
         run.Case("a layer in the origin's own projected CRS is placed by subtraction, in its own unit", () =>
         {
-            // 328.0833… US survey feet east of the origin is 100 m. The Z is real orthometric
-            // height in the file's unit, never an offset (spec/format.md §6.5).
             string? error = SiteVectorReader.TryParse(
                 LineString("[1450459.28333, 13171825.6, 1000.0], [1450131.2, 13172153.68333, 1000.0]"),
                 FootFrame,
@@ -84,8 +69,6 @@ internal static class HostFramePlacementTests
 
         run.Case("an own drape or vector layer with no sha256 refuses the bundle, as every Revit deliverable does", () =>
         {
-            // The 1.3.0 schema requires the hash on both, and a required-and-missing hash is a
-            // producer defect that fails closed rather than importing unverifiable bytes (HPS-34).
             BundleManifest noDrapeHash = BundleManifestReader.Parse(Manifest(
                 FootGeoreference,
                 FootFileFrame,
@@ -107,8 +90,6 @@ internal static class HostFramePlacementTests
 
         run.Case("an absolute layer whose unit is not the origin's places nothing", () =>
         {
-            // The subtraction is in the ORIGIN's unit. A metre file against a foot origin would be
-            // a number that looks like a position and is 3.28 times out.
             string? error = SiteVectorReader.TryParse(
                 LineString("[1450459.28333, 13171825.6], [1450131.2, 13172153.68333]"),
                 FootFrame,
@@ -126,8 +107,6 @@ internal static class HostFramePlacementTests
     {
         run.Case("a State Plane delivery places every vector layer from the Revit block's own copy", () =>
         {
-            // The case issue 212 is about: before 1.3.0 this bundle's origin refused every one of
-            // these layers, because the only copy it had was lon/lat.
             BundleImportPlan plan = Plan(Manifest(FootGeoreference, FootFileFrame, AllLayers("absolute_projected", "ftUS"), drape: null, VectorsPresent));
 
             for (int index = 0; index < VectorKinds.Length; index++)
@@ -153,8 +132,6 @@ internal static class HostFramePlacementTests
 
         run.Case("a local-grid delivery places its offset files about the origin", () =>
         {
-            // local_ft: no projected foot zone exists, so the files are offsets in international
-            // feet about an origin published in metric UTM (spec/format.md §6.5).
             BundleImportPlan plan = Plan(Manifest(MetricGeoreference, LocalFootFileFrame, AllLayers("local_enu", "ft"), drape: null, VectorsPresent));
 
             ImportStep? water = Find(plan, ImportStepKind.Water);
@@ -164,7 +141,6 @@ internal static class HostFramePlacementTests
 
         run.Case("a bundle from before 1.3.0 keeps the shared lon/lat set, and what it imports today", () =>
         {
-            // No readiness verdict for `vectors` is what marks a bundle cut before the key existed.
             BundleImportPlan metric = Plan(Manifest(MetricGeoreference, fileFrame: null, vectors: null, drape: null, vectorsReadiness: null, version: "1.2.0"));
             ImportStep? roads = Find(metric, ImportStepKind.RoadCentrelines);
             run.Equal(roads?.EntryName, SharedPath("RoadSplines"), "a metric origin still projects the shared set");
@@ -181,9 +157,6 @@ internal static class HostFramePlacementTests
 
         run.Case("a 1.3.0 bundle whose copy was withheld falls back to the shared set, as HPS-52 says", () =>
         {
-            // The host-neutral pointer is the fallback for content the block does not carry. On a
-            // metric origin that places what it always placed; on a State Plane one it is refused
-            // for the reason it always was.
             const string Withheld = "{ \"present\": false, \"reason\": \"not_produced\" }";
 
             BundleImportPlan metric = Plan(Manifest(MetricGeoreference, MetricFileFrame, vectors: null, drape: null, Withheld));
@@ -220,8 +193,6 @@ internal static class HostFramePlacementTests
     {
         run.Case("a copy the block points at but cannot show to be in this frame is refused, not placed", () =>
         {
-            // HPS-53: a pointer sitting in the host block is not itself the showing. Each of these
-            // is a producer defect, and each fails closed by name rather than converting anything.
             (string Label, string FileFrame, string Vectors, SkipReasonCode Code)[] cases =
             [
                 ("a metre file against a foot origin", FootFileFrame, AllLayers("absolute_projected", "m"), SkipReasonCode.CoordinateSystemNotSupported),
@@ -242,8 +213,6 @@ internal static class HostFramePlacementTests
 
         run.Case("a copy whose block declares no file frame is refused, not placed on the pointer's word", () =>
         {
-            // The schema pairs file_frame with georeference, so this bundle is malformed, and where
-            // the pointer sits is not the showing HPS-53 asks for.
             BundleImportPlan plan = Plan(Manifest(FootGeoreference, fileFrame: null, AllLayers("absolute_projected", "ftUS"), drape: null, VectorsPresent));
 
             run.False(Has(plan, ImportStepKind.RoadCentrelines), "nothing is planned");
@@ -254,8 +223,6 @@ internal static class HostFramePlacementTests
 
         run.Case("an absolute file has to be in the origin's unit even where the file frame agrees with it", () =>
         {
-            // The frame's CRS is the origin's but its declared unit is not: a contradiction the
-            // subtraction would turn into a 3.28 times error.
             string metreFrame = FootFileFrame.Replace("\"ftUS\"", "\"m\"", StringComparison.Ordinal);
             BundleImportPlan plan = Plan(Manifest(FootGeoreference, metreFrame, AllLayers("absolute_projected", "m"), drape: null, VectorsPresent));
 
@@ -292,19 +259,12 @@ internal static class HostFramePlacementTests
         });
     }
 
-    /// <summary>
-    /// MPB 1.7.0 splits a shared layer that mixes geometry families one file per family, and a
-    /// consumer reads every row. Reached wherever the shared set is: a bundle whose copy was withheld,
-    /// with or without a block carrying the hazard layers, on a metric origin.
-    /// </summary>
     private static void RunSplitLayerCases(TestRun run)
     {
         const string Withheld = "{ \"present\": false, \"reason\": \"emit_failed\" }";
 
         run.Case("a withheld copy beside a split shared water layer places the water bodies from its polygon file", () =>
         {
-            // The water bodies are cut from areas. The line file is listed first, and taking it would
-            // draw every stream and drop every lake without a word.
             foreach ((string? vectors, string shape) in new[]
             {
                 ((string?)null, "no copy at all"),
@@ -334,7 +294,6 @@ internal static class HostFramePlacementTests
             run.Contains(water?.Reason, "no areas", "and the reason says what the layer lacks");
             run.False(water?.Reason?.Contains("mantle.place/vault", StringComparison.Ordinal) ?? true, "with no re-download a vault cannot answer");
 
-            // The curator reads the step's own words, never the manifest's key for the layer.
             SkippedImport? boundaries = Skip(plan, ImportStepKind.LandUse);
             run.Contains(boundaries?.Reason, "No land use", "the step is named in words");
             run.False(boundaries?.Reason?.Contains("land_use", StringComparison.Ordinal) ?? true, "not by the layer's key");
@@ -411,7 +370,6 @@ internal static class HostFramePlacementTests
 
         run.Case("with no own drape the shared one is still refused on a State Plane origin", () =>
         {
-            // A State Plane delivery cut before 1.3.0 has no drape on Revit's grid at all.
             BundleImportPlan plan = Plan(Manifest(FootGeoreference, fileFrame: null, vectors: null, drape: null, vectorsReadiness: null, version: "1.2.0"));
 
             run.True(
@@ -419,8 +377,6 @@ internal static class HostFramePlacementTests
                 "the UTM drape is not draped against a State Plane origin");
         });
     }
-
-    // ---- fixtures -------------------------------------------------------------------------------
 
     private static readonly SiteFrame MetricFrame = new()
     {
@@ -438,21 +394,17 @@ internal static class HostFramePlacementTests
 
     private const string VectorsPresent = "{ \"present\": true }";
 
-    // One digest per split file, none shared with any other file here, so a plan that picked the
-    // wrong file is caught by its hash as well as by its path.
     private const string SplitLineSha = "1111111111111111111111111111111111111111111111111111111111111111";
     private const string SplitPolygonSha = "2222222222222222222222222222222222222222222222222222222222222222";
     private const string SplitPointSha = "3333333333333333333333333333333333333333333333333333333333333333";
     private const string SplitGpkgSha = "4444444444444444444444444444444444444444444444444444444444444444";
 
-    /// <summary>A layer split by geometry family, the line file first (MPB 1.7.0).</summary>
     private static string Split(string stem) => $$"""
         { "format": "geojson", "path": "{{SharedPath(stem + "_line")}}", "sha256": "{{SplitLineSha}}", "geometry_family": "line" },
         { "format": "geojson", "path": "{{SharedPath(stem + "_polygon")}}", "sha256": "{{SplitPolygonSha}}", "geometry_family": "polygon" },
         { "format": "gpkg", "path": "Vector/{{stem}}.gpkg", "sha256": "{{SplitGpkgSha}}", "tables": ["{{stem}}_line", "{{stem}}_polygon"] }
         """;
 
-    /// <summary>A layer split into lines and points, with no area in it.</summary>
     private static string LinesAndPoints(string stem) => $$"""
         { "format": "geojson", "path": "{{SharedPath(stem + "_line")}}", "sha256": "{{SplitLineSha}}", "geometry_family": "line" },
         { "format": "geojson", "path": "{{SharedPath(stem + "_point")}}", "sha256": "{{SplitPointSha}}", "geometry_family": "point" }
@@ -491,7 +443,6 @@ internal static class HostFramePlacementTests
         + "\"origin\": { \"easting\": 471595.0, \"northing\": 4257050.0, \"linear_unit\": \"m\" }, "
         + "\"horizontal_unit\": \"ft\", \"vertical_unit\": \"ft\" }";
 
-    /// <summary>4000 × 3000 US survey feet centred on the foot origin.</summary>
     private const string FootDrape = """
         "drape": {
           "path": "Imagery/Drape.StatePlane.png",
@@ -525,12 +476,6 @@ internal static class HostFramePlacementTests
             """;
     }
 
-    /// <summary>
-    /// A bundle carrying the shared lon/lat set and the shared UTM drape beside whichever parts of
-    /// the Revit block the case is about. <paramref name="vectorsReadiness"/> <c>null</c> is a
-    /// bundle from before <c>hosts.revit.readiness.vectors</c> existed. <paramref name="splitFormats"/>
-    /// replaces a shared layer's format rows, by layer name.
-    /// </summary>
     private static string Manifest(
         string georeference,
         string? fileFrame,

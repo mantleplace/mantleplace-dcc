@@ -6,12 +6,6 @@ using MantlePlace.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 
-/// <summary>
-/// Import Bundle (<c>HPS-61</c>): a bundle zip already on disk, imported into the active drawing with no
-/// send from the web vault. What a file must be before the importer reads it is decided in the core and
-/// pinned here; that the command and a received export reach the one importer is read off the shell's
-/// own source, because CI never builds the shell.
-/// </summary>
 internal static class LocalBundleImportTests
 {
     private const string Shell = "autocad/src/MantlePlace.AutoCad.Addin";
@@ -182,7 +176,6 @@ internal static class LocalBundleImportTests
         });
     }
 
-    /// <summary>The text from a command's attribute to the next command's, or to the end.</summary>
     private static string MethodBody(string source, string command)
     {
         int start = source.IndexOf($"[CommandMethod(\"{command}\")]", StringComparison.Ordinal);

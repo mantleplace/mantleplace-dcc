@@ -2,10 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// How a subdivision is given its drape material, which differs by Revit version, and what the type
-/// that carries it on 2026 and later is called.
-/// </summary>
 internal static class SubDivisionMaterialTests
 {
     private const string Imagery = "Mantle Place Site Imagery 9d2dfdbf-7a53-4d5f-8514-125edadc7a5f";
@@ -20,8 +16,6 @@ internal static class SubDivisionMaterialTests
                     == SubDivisionMaterialRoute.Instance,
                 "a typeless subdivision takes the material on the instance");
 
-            // Never retype when the instance write is available. A retype costs seconds per
-            // subdivision, and the instance write costs nothing.
             run.True(SubDivisionMaterial.Route(instanceMaterialWritable: true, typedAsToposolid: true)
                     == SubDivisionMaterialRoute.Instance,
                 "the instance write wins even when a type is also there");
@@ -50,9 +44,6 @@ internal static class SubDivisionMaterialTests
                 "derived from the material name, so a re-import finds the type an earlier import made");
             run.True(type != material, "named apart from the material itself");
 
-            // Under flat shading a subdivision with no keyword shares the ground's material, whose
-            // name IS the terrain's imagery type's name. Reusing that type would put the subdivision
-            // on the terrain's own layer stack, and editing it would edit the terrain.
             run.True(SubDivisionMaterial.TypeName(GroundMaterialNames.Shared(Imagery, null)) != DrapeLayering.ImageryName(
                     "9d2dfdbf-7a53-4d5f-8514-125edadc7a5f"),
                 "never the terrain's imagery type");
@@ -67,8 +58,6 @@ internal static class SubDivisionMaterialTests
             run.False(SubDivisionMaterial.NeedsRetype(SubDivisionMaterialRoute.Type, SubDivisionMaterial.TypeName(material), material),
                 "a re-import: already on the type, so no retype and no wait to announce");
 
-            // A keyword that changed between builds names a different material, so the subdivision
-            // IS retyped — and the notice has to count it, or the wait arrives unannounced.
             string before = GroundMaterialNames.PerSubDivision(Imagery, GroundLayer.LandCover, "7", null);
             run.True(SubDivisionMaterial.NeedsRetype(SubDivisionMaterialRoute.Type, SubDivisionMaterial.TypeName(before), material),
                 "on this bundle's type for another material");
@@ -84,8 +73,6 @@ internal static class SubDivisionMaterialTests
             run.True(SubDivisionMaterial.TakesTypeAtCut(SubDivisionMaterialRoute.Type, drapePlanned: true),
                 "2026 and later: given its type in the transaction that cut it, not retyped by the drape");
 
-            // 2025's subdivision is typeless and wears the photograph on the instance, which the
-            // drape writes. Nothing is made for it at the cut, so 2025 imports exactly as before.
             run.False(SubDivisionMaterial.TakesTypeAtCut(SubDivisionMaterialRoute.Instance, drapePlanned: true),
                 "a typeless cut keeps its instance material");
             run.False(SubDivisionMaterial.TakesTypeAtCut(SubDivisionMaterialRoute.Type, drapePlanned: false),
@@ -96,8 +83,6 @@ internal static class SubDivisionMaterialTests
 
         run.Case("a cut typed for the shading settled before it leaves the drape nothing to retype", () =>
         {
-            // Smooth shading is settled before the first cut, so the cut and the drape name the same
-            // material whichever way it went, and the drape finds every cut already on its type.
             string smooth = GroundMaterialNames.PerSubDivision(Imagery, GroundLayer.LandCover, "7", "grass");
             string flat = GroundMaterialNames.Shared(Imagery, "grass");
 
@@ -108,7 +93,6 @@ internal static class SubDivisionMaterialTests
                 SubDivisionMaterial.NeedsRetype(SubDivisionMaterialRoute.Type, SubDivisionMaterial.TypeName(flat), flat),
                 "flat shading, where Revit refused smoothing: the same");
 
-            // Why it is settled first: a cut named for the other shading would be retyped.
             run.True(
                 SubDivisionMaterial.NeedsRetype(SubDivisionMaterialRoute.Type, SubDivisionMaterial.TypeName(smooth), flat),
                 "a cut named for smoothing that the drape finds flat is moved again");
@@ -116,8 +100,6 @@ internal static class SubDivisionMaterialTests
 
         run.Case("a type whose top layer is already a photograph is recognised, whichever bundle made it", () =>
         {
-            // Splitting such a type again would stack a second thin layer or be refused as too thin,
-            // so its top layer's material is re-pointed instead.
             run.True(SubDivisionMaterial.IsLayeredImageryType(Imagery), "the terrain's imagery type");
             run.True(SubDivisionMaterial.IsLayeredImageryType(SubDivisionMaterial.TypeName(
                     GroundMaterialNames.PerSubDivision(Imagery, GroundLayer.LandUse, "3", null))),
@@ -132,9 +114,6 @@ internal static class SubDivisionMaterialTests
 
         run.Case("a type name keeps the characters Revit refuses out", () =>
         {
-            // The material name is already sanitised, and the suffix adds none of Revit's refused
-            // characters. Asserted through the sanitiser itself, so a later suffix edit that adds one
-            // is caught without this test keeping a second copy of the list.
             string suffix = SubDivisionMaterial.TypeName(string.Empty);
             run.Equal(
                 GroundMaterialNames.PerSubDivision("a", GroundLayer.LandUse, suffix, null),

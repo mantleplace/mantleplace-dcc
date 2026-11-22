@@ -1,12 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    The carrier spike's in-Revit probe (../README.md). A scratch add-in, never shipped: the pure core's
-    sources and the two prototype readers compile into this one assembly, as the timing harness does,
-    so it loads beside the installed plugin without sharing an assembly identity with it. It compiles
-    against Revit 2025's API like the real add-in, and so loads in 2025, 2026 and 2027.
-  -->
-
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
     <AssemblyName>MantlePlace.Scratch.CarrierProbe</AssemblyName>

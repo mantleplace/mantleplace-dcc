@@ -16,12 +16,6 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 
-// The typed road actor, with no bundle: that what the platform publishes for a road is real,
-// Blueprint-visible properties, that the actor's root is its spline, and that the importer's one
-// registration (Claim) is all it takes for a re-import to replace it. The attribute decoding that
-// feeds it is FMantlePlaceRoadSplinesLogic's and is covered in its own suite; the live-bundle test
-// covers the whole path.
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceRoadSplineActorTest,
 	"MantlePlace.Import.RoadSplineActor",
@@ -29,7 +23,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceRoadSplineActorTest::RunTest(const FString& Parameters)
 {
-	// --- The attributes are real properties, readable from a Blueprint, not strings to parse ---------
 	{
 		const UClass* RoadClass = AMantlePlaceRoadSpline::StaticClass();
 		const TCHAR* const Properties[] = {TEXT("Spline"), TEXT("RoadClass"), TEXT("RoadName"), TEXT("EstimatedWidthM")};
@@ -46,7 +39,6 @@ bool FMantlePlaceRoadSplineActorTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the actor type is an actor, so the outliner selects and filters it by class"),
 			RoadClass->IsChildOf(AActor::StaticClass()));
 
-		// The defaults say "the platform published nothing", never a made-up value.
 		const AMantlePlaceRoadSpline* Defaults = GetDefault<AMantlePlaceRoadSpline>();
 		TestEqual(TEXT("an unpublished class is None"), Defaults->RoadClass, FName(NAME_None));
 		TestTrue(TEXT("an unpublished name is empty"), Defaults->RoadName.IsEmpty());
@@ -59,7 +51,7 @@ bool FMantlePlaceRoadSplineActorTest::RunTest(const FString& Parameters)
 		AddInfo(TEXT("No editor: spawning and replacing a road spline needs an editor world. Skipped."));
 		return true;
 	}
-	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, false,
 		FName(TEXT("MantlePlaceRoadSplineTestWorld")));
 	if (!TestNotNull(TEXT("a throwaway world to spawn into"), World))
 	{
@@ -79,11 +71,10 @@ bool FMantlePlaceRoadSplineActorTest::RunTest(const FString& Parameters)
 	FMantlePlaceImportContext Context(World, Manifest, nullptr, Selection, Timeline, Result, Log);
 	Context.Identity = Identity;
 
-	// --- A spawned road: its root is its spline, and the properties hold what was set ----------------
 	AMantlePlaceRoadSpline* Road = World->SpawnActor<AMantlePlaceRoadSpline>();
 	if (!TestNotNull(TEXT("a road spline spawns"), Road))
 	{
-		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		World->DestroyWorld(false);
 		return false;
 	}
 	TestTrue(TEXT("the spline is the actor's root"), Road->GetRootComponent() == Road->Spline.Get());
@@ -94,14 +85,12 @@ bool FMantlePlaceRoadSplineActorTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("name is read back as a property"), Road->RoadName, FString(TEXT("Elm Street")));
 	TestEqual(TEXT("width is read back as a property"), Road->EstimatedWidthM, 6.5f);
 
-	// --- Claiming is the whole registration, and it writes no metadata tag --------------------------
 	Context.Claim(Road, MantlePlaceImportNaming::RoadSplineLabel(Identity, 0));
 	TestEqual(TEXT("the label is the generated road label"), Road->GetActorLabel(),
 		MantlePlaceImportNaming::RoadSplineLabel(Identity, 0));
 	TestEqual(TEXT("the actor carries exactly one tag"), Road->Tags.Num(), 1);
 	TestTrue(TEXT("and it is the import tag a re-import matches on"), Road->Tags.Contains(ImportTag));
 
-	// --- Re-import replaces it, and leaves another order's road alone ---------------------------------
 	AMantlePlaceRoadSpline* Other = World->SpawnActor<AMantlePlaceRoadSpline>();
 	Other->Tags.Add(FName(*MantlePlaceImportNaming::ImportTag(OtherIdentity)));
 	TestEqual(TEXT("the re-import sweep removes the typed road of the same order"),
@@ -113,8 +102,8 @@ bool FMantlePlaceRoadSplineActorTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("only the other order's road is left"), Remaining, 1);
 
-	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	World->DestroyWorld(false);
 	return true;
 }
 
-#endif // WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
+#endif

@@ -5,26 +5,23 @@
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
 #include "Containers/Ticker.h"
-#include "MantlePlaceVaultTypes.h"       // runtime: FMantlePlaceVaultItem / FMantlePlaceMaterializeStatus / FMantlePlacePresignedDownload
-#include "MantlePlaceBundleCacheTypes.h" // runtime: FMantlePlaceDownloadProgress
-#include "MantlePlaceImportTypes.h"      // editor:  EMantlePlaceImportMode / FMantlePlaceImportResult
-#include "MantlePlaceAuthTypes.h"        // runtime: EMantlePlaceAuthState (auth-changed relay)
-#include "MantlePlaceClientLogic.h"     // runtime: FMantlePlaceClientUpdate (426 client_update_required relay)
+#include "MantlePlaceVaultTypes.h"
+#include "MantlePlaceBundleCacheTypes.h"
+#include "MantlePlaceImportTypes.h"
+#include "MantlePlaceAuthTypes.h"
+#include "MantlePlaceClientLogic.h"
 #include "MantlePlaceVaultImportOrchestrator.generated.h"
 
 class UMantlePlaceAuthSystemBase;
 class UMantlePlaceVaultClient;
 class UMantlePlaceBundleCache;
-class FMantlePlaceImportSteps; // MantlePlaceImportStepsLogic.h (editor-internal)
-class FMantlePlaceLevelChoice; // MantlePlaceLevelChoiceLogic.h (editor-internal)
+class FMantlePlaceImportSteps;
+class FMantlePlaceLevelChoice;
 
-/** An import flow has started: its steps, which the import window shows (native: the steps are a plain class). */
 DECLARE_MULTICAST_DELEGATE_OneParam(FMantlePlaceOnImportStepsNative, TSharedRef<FMantlePlaceImportSteps>);
 
-/** A 3.0 order's level control is ready to show. True when a window shows it and will confirm it; false when nobody can. */
 DECLARE_DELEGATE_RetVal_OneParam(bool, FMantlePlaceOnOfferLevelChoiceNative, TSharedRef<FMantlePlaceLevelChoice>);
 
-/** Blueprint-assignable events for the EUW surface (a WidgetBlueprint binds these in its graph). */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnVaultListedBP, bool, bSuccess, const TArray<FMantlePlaceVaultItem>&, Bundles, const FString&, Message);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnVaultImportPhaseBP, const FString&, Phase, const FString&, Message, float, Fraction);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FMantlePlaceOnVaultImportFinishedBP, bool, bSuccess, const FMantlePlaceImportResult&, Result);
@@ -69,7 +66,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Mantle Place|Vault")
 	int32 MaxConsecutivePollFailures = 0;
 
-	/** This orchestrator's override if it has one, the project setting otherwise. */
 	float ResolvePollIntervalSeconds() const;
 	int32 ResolveMaxPolls() const;
 	int32 ResolveMaxConsecutivePollFailures() const;
@@ -93,28 +89,10 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Mantle Place|Vault")
 	FMantlePlaceOnAuthChangedBP OnAuthChanged;
 
-	/**
-	 * The platform said this plugin is too old (HTTP 426 `client_update_required`) to the auth source or
-	 * the vault client. Relayed as a native delegate (FMantlePlaceClientUpdate is not a USTRUCT), so the
-	 * C++ panel controller binds it; the surface offers the update at Update.DownloadUrl.
-	 */
 	FMantlePlaceOnClientUpdateRequiredNative OnClientUpdateRequiredNative;
 
-	/**
-	 * Fired once when an import flow starts, before any of its work, with the steps it will report into:
-	 * a Download step when the flow fetches the bundle, then the bundle's own once it is open. The panel
-	 * opens the import window on them. Fired before the work because a complete local zip imports
-	 * inside StartLocalImport itself, and a window opened after it returned would open on a finished run.
-	 */
 	FMantlePlaceOnImportStepsNative OnImportStepsNative;
 
-	/**
-	 * A 3.0 order's import waits here for its level (HPS-59): the control is offered once the steps are
-	 * announced, and the download starts when the curator presses Download. Bound by the panel controller,
-	 * which answers true only when the import window shows the control. Unbound, or answered false (an
-	 * unattended run, a script, a window that could not open), the import takes the platform's
-	 * recommended level, and fails with the reason when the order states none.
-	 */
 	FMantlePlaceOnOfferLevelChoiceNative OnOfferLevelChoiceNative;
 
 	/**
@@ -231,84 +209,60 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mantle Place|Vault")
 	static FString GetBundleTierLabel(const FMantlePlaceVaultItem& Item);
 
-	/**
-	 * The vault client this orchestrator drives (null until the first call that needs one). Exposed for a
-	 * headless test that reads the requests it makes; the surface never calls the client directly.
-	 */
 	UMantlePlaceVaultClient* GetVaultClient() const { return VaultClient; }
 
-	//~ Begin UObject interface
 	virtual void BeginDestroy() override;
-	//~ End UObject interface
 
 private:
-	/** Where we are in the async chain (guards stale async completions from a prior/cancelled run). */
 	enum class EPhase : uint8
 	{
 		Idle,
-		AutoPicking,    // ListVault in flight for StartVaultImportFirstIncomplete
-		ResolvingLocal, // ListVault in flight to sha256-match a local zip with no manifest orderId
-		Materializing,  // RequestMaterialize in flight
-		ChoosingLevel,  // a 3.0 order's level control is shown; waiting for Download
-		Polling,        // GetMaterializeStatus loop
-		Relisting,      // re-list to obtain the fresh (post-materialize) item
-		Presigning,     // GetPresignedUrl in flight
-		Downloading,    // streamed download in flight
-		Importing       // ImportVaultPackage running (synchronous)
+		AutoPicking,
+		ResolvingLocal,
+		Materializing,
+		ChoosingLevel,
+		Polling,
+		Relisting,
+		Presigning,
+		Downloading,
+		Importing
 	};
 
-	/** Lazily construct + wire the vault client and bundle cache (idempotent). */
 	void EnsureClients();
 
-	/** Shared tail of the vault + resolved-local paths: materialize (incomplete) or download+import (ready). */
 	void BeginItemImport();
 
-	/** Copy ZipPath into a fresh private staging dir (LocalStagingDir); returns the staged path, empty on failure. */
 	FString StageLocalZip(const FString& ZipPath);
 
-	/** Whole-bundle sha256 (lowercase hex) of the staged zip, or empty if it can't be read. */
 	FString ComputeStagedSha256() const;
 
-	/** Best-effort delete of LocalStagingDir + reset the local-import bookkeeping (called from FinishImport). */
 	void CleanupLocalStaging();
 
-	/** Mint a presigned "glb" URL for ActiveItem, then download it. */
 	void BeginPresign();
 
-	/** The shared start of StartVaultImport and StartVaultImportAtLevel: Level empty is the window's choice (or the recommendation). */
 	bool BeginVaultImport(const FMantlePlaceVaultItem& Item, EMantlePlaceImportMode Mode, const FString& Scope, const FString& Level);
 
-	/** A 3.0 order: offer its level control, and download what it confirms (or the recommendation, unattended). */
 	void BeginLevelChoice();
 
-	/** Download ActiveItem at Level: the kept slot when it holds that level, else a fresh 3.0 download of Unreal's files. */
 	void DownloadLevel(const FString& Level);
 
-	/** Arm a one-shot status-poll timer (respecting MaterializeMaxPolls). */
 	void SchedulePoll();
 	void DoPoll();
 	void UnschedulePoll();
 
-	/** Terminal transitions. */
 	void FinishImport(bool bSuccess, const FMantlePlaceImportResult& Result);
 	void FailImport(const FString& Message);
 
-	/** Broadcast an OnImportPhase update (and log it). */
 	void EmitPhase(const FString& PhaseLabel, const FString& Message, float Fraction);
 
-	/** A fresh set of steps for the flow that is starting, announced on OnImportStepsNative. */
 	void BeginSteps();
 
-	/** Run the bundle import itself on Path, watched by the flow's steps. */
 	FMantlePlaceImportResult RunBundleImport(const FString& Path);
 
-	/** The steps of the flow in flight; null when idle. The window holds its own reference. */
 	TSharedPtr<FMantlePlaceImportSteps> Steps;
 
-	/** Bind (once) the auth source's native auth-changed delegate, re-broadcasting it as OnAuthChanged. */
 	void EnsureAuthDelegateBound();
 
-	//~ Native-delegate handlers bound on the vault client / bundle cache / auth source.
 	void HandleAuthStateChangedNative(EMantlePlaceAuthState NewState);
 	void HandleClientUpdateRequiredNative(const FMantlePlaceClientUpdate& Update);
 	void HandleVaultListedNative(bool bSuccess, const TArray<FMantlePlaceVaultItem>& Bundles, const FString& Message);
@@ -321,7 +275,6 @@ private:
 	UPROPERTY()
 	TObjectPtr<UMantlePlaceAuthSystemBase> AuthSystem;
 
-	/** The auth source we last bound OnAuthStateChangedNative on (so a re-Initialize can rebind cleanly). */
 	TWeakObjectPtr<UMantlePlaceAuthSystemBase> BoundAuthSystem;
 
 	UPROPERTY()
@@ -336,91 +289,37 @@ private:
 	FString ActiveScope;
 	FString ActiveJobId;
 
-	/**
-	 * The tokens this run measures delivery against while polling.
-	 *
-	 * The status endpoint answers with a delivery-state document and no status word, so completion is
-	 * "these tokens are delivered and no job is in flight". Without the set there is nothing to
-	 * compare against.
-	 */
 	TArray<FString> ActiveRequestedTokens;
 	int32 PollCount = 0;
 	int32 ConsecutivePollFailures = 0;
 	FTSTicker::FDelegateHandle PollTicker;
 
-	/**
-	 * Whether a materialize run has been OBSERVED in flight for this import, which is what makes the
-	 * two readings of a Pending status tellable apart.
-	 *
-	 * "No job running and something outstanding" is the wire shape of both "the row is not visible
-	 * yet" (the normal state in the seconds after a start) and "the run ended without building this"
-	 * (which no amount of further polling can fix). Seeded true when the start JOINED a run that was
-	 * already going, because that run may well have finished before the first poll landed.
-	 */
 	bool bMaterializeRunObserved = false;
 
-	/** Outstanding tokens as of the last status, so a timeout can NAME what it waited for. */
 	TArray<FString> LastOutstanding;
 
-	/**
-	 * Re-picks spent on this import. The platform stops folding new tokens into a run once it flips
-	 * to `running` and answers 409 instead - deliberately, because the contract is that the client
-	 * re-picks on completion. This host had no re-pick, which is how an import that joined a run
-	 * built for a DIFFERENT token set sat at 83% for its whole budget (2026-08-30).
-	 *
-	 * Bounded at one: a second run that still leaves the same tokens outstanding is the platform
-	 * saying it cannot build them, and looping generate -> poll -> generate on that answer is the
-	 * failure mode the recovery guard above already exists to prevent.
-	 */
 	int32 MaterializeRepicks = 0;
 	static constexpr int32 MaxMaterializeRepicks = 1;
 
-	/**
-	 * One cloud materialize per run, whichever path fired it. Checked before recovering a
-	 * downloaded-but-incomplete bundle, so a zip the platform cannot complete (or a stale cache a
-	 * sha-less listing cannot invalidate) fails cleanly on the importer's manifest gate instead of
-	 * looping generate -> download -> generate.
-	 */
 	bool bAttemptedMaterializeRecovery = false;
 
-	/**
-	 * The import's FIRST materialize start is still to be read as a route (a vault-row import of a
-	 * bundle the listing judges incomplete). A complete order answers it with the no-op and downloads
-	 * Unreal's view; an on-demand order answers with a job and the Prepare follows. Every later start
-	 * (the post-download self-heal, a re-pick after a joined run) belongs to the Prepare and reads as
-	 * it always did, so this is cleared the moment the first answer lands.
-	 */
 	bool bRouteStartPending = false;
 
-	/**
-	 * The view was requested and its answer is awaited. bViewDeliveryKnown is true after a no-op start
-	 * (it proved nothing is left to build) and false after a 503 delivery_state_unknown (it proved
-	 * nothing), which is what decides whether a whole-archive answer is importable.
-	 */
 	bool bViewRequested = false;
 	bool bViewDeliveryKnown = false;
 
-	/** What the no-op said the order has; empty when the delivery state was unknown. */
 	TArray<FString> ViewDelivered;
 
-	/** The manifest digest the platform stated for the view being downloaded; empty when it stated none. */
 	FString ViewManifestSha256;
 
-	/**
-	 * The files the platform refused as not in this level's bundle, so the download was asked for without
-	 * them (FMantlePlacePresignedDownload::AbsentFiles). Held against the downloaded manifest before import.
-	 */
 	TArray<FString> LevelAbsentFiles;
 
-	/** A 3.0 order's level control while it is offered; null otherwise. */
 	TSharedPtr<FMantlePlaceLevelChoice> LevelChoice;
 
-	/** The level a scripted import named; empty for every other import (the window's choice, or a 2.x order). */
 	FString ScriptedLevel;
 
-	//~ Local-zip import bookkeeping (all empty/false for a vault-row import).
-	bool bLocalImport = false;    // this flow originated from a local .zip
-	FString LocalOriginalPath;    // the user's zip path (never modified) - referenced in the "unchanged" notice
-	FString LocalStagedPath;      // the staged copy (imported directly when the local bundle is already complete)
-	FString LocalStagingDir;      // staging dir to delete when the flow ends
+	bool bLocalImport = false;
+	FString LocalOriginalPath;
+	FString LocalStagedPath;
+	FString LocalStagingDir;
 };

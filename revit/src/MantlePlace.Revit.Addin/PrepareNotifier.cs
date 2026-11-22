@@ -5,46 +5,21 @@ using MantlePlace.Wpf;
 
 namespace MantlePlace.Revit.Addin;
 
-/// <summary>
-/// Tells the curator when a Prepare they stopped watching ends, or when an order nobody asked Revit to
-/// prepare turns up in the vault: a notice in the corner of Revit's window for the moment, and a
-/// badge on the Vault button for a curator who missed it.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The impure half. Whether there is a notice at all, and what it says, is
-/// <see cref="PrepareNotices"/> and <see cref="VaultNews"/>; what the badge says is
-/// <see cref="VaultBadge"/>; where a notice sits is <see cref="NoticeStack"/> — all in the pure core,
-/// where they are asserted without Revit (<c>HPS-02</c>, <c>HPS-42</c>). What is here is windows, a
-/// ribbon button, and Win32 for where Revit's window is.
-/// </para>
-/// <para>
-/// ⛔ <b>Revit's UI thread only</b>, every member. <see cref="PrepareWatcher.Ended"/> and
-/// <see cref="VaultNewsChecker.Arrived"/> are raised on a thread-pool thread and
-/// <c>MantlePlaceApplication</c> hops before calling in, because touching a ribbon button from
-/// anywhere else terminates Revit.
-/// </para>
-/// </remarks>
 internal static class PrepareNotifier
 {
     private static readonly PendingNotices Pending = new();
 
-    /// <summary>The notices on screen, newest first — index 0 is the bottom of the stack.</summary>
     private static readonly List<NoticePopup> Shown = [];
 
     private static PushButton? _vaultButton;
     private static Func<IntPtr>? _revitWindow;
 
-    /// <summary>Gives the notifier the button it badges and a way to find Revit's window.</summary>
     internal static void Attach(PushButton vaultButton, Func<IntPtr> revitWindow)
     {
         _vaultButton = vaultButton;
         _revitWindow = revitWindow;
     }
 
-    /// <summary>
-    /// A Prepare ended. Tells the curator, if there is anything to tell, and says whether it did.
-    /// </summary>
     internal static bool OnEnded(PrepareRun run, bool vaultOpen, bool signedIn)
     {
         ArgumentNullException.ThrowIfNull(run);
@@ -61,10 +36,6 @@ internal static class PrepareNotifier
         return true;
     }
 
-    /// <summary>
-    /// A background listing found orders nobody asked Revit to prepare (<see cref="VaultNewsChecker"/>).
-    /// Tells the curator, if there is anything to tell.
-    /// </summary>
     internal static void OnArrived(IReadOnlyList<VaultBundle> arrivals, bool vaultOpen)
     {
         if (VaultNews.NoticeFor(arrivals, vaultOpen) is not { } notice)
@@ -77,10 +48,6 @@ internal static class PrepareNotifier
         Show(notice.SelectOrderId, notice.Text);
     }
 
-    /// <summary>
-    /// The vault opened: whatever the notices said, the curator is now looking at it. Clears the
-    /// badge and closes every notice.
-    /// </summary>
     internal static void Seen()
     {
         Pending.Clear();
@@ -92,7 +59,6 @@ internal static class PrepareNotifier
         }
     }
 
-    /// <summary>Drops everything. Called from <c>OnShutdown</c>.</summary>
     internal static void Forget()
     {
         foreach (NoticePopup popup in Shown.ToList())
@@ -110,14 +76,11 @@ internal static class PrepareNotifier
     {
         IntPtr revitWindow = _revitWindow?.Invoke() ?? IntPtr.Zero;
 
-        // Minimised, or not up yet: nowhere to put a notice that belongs to Revit's window. The
-        // badge is still there when the curator comes back, which is what it is for.
         if (revitWindow == IntPtr.Zero || HostWindowGeometry.IsMinimised(revitWindow))
         {
             return;
         }
 
-        // One notice per bundle on screen, as on the badge: the newer ending replaces the older.
         if (selectOrderId is not null)
         {
             foreach (NoticePopup stale in Shown.Where(popup => popup.SelectOrderId == selectOrderId).ToList())
@@ -146,7 +109,6 @@ internal static class PrepareNotifier
 
     private static void Restack()
     {
-        // In Revit's window, on the monitor it is on (HostWindowGeometry).
         if (HostWindowGeometry.Bounds(_revitWindow?.Invoke() ?? IntPtr.Zero) is not { } owner)
         {
             return;
@@ -172,8 +134,6 @@ internal static class PrepareNotifier
         }
         catch (Autodesk.Revit.Exceptions.ApplicationException)
         {
-            // Swallowed for ApplyAccountState's reason: a ribbon Revit is tearing down refuses the
-            // assignment, and a fault dialog over a badge would be worse than a stale one.
         }
     }
 }

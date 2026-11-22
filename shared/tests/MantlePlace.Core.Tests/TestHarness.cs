@@ -2,10 +2,6 @@ using System.Globalization;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// A minimal assert-and-report harness. Collects every failure rather than stopping at the first,
-/// so one run tells you everything that is wrong.
-/// </summary>
 internal sealed class TestRun
 {
     private readonly List<string> _failures = [];
@@ -16,7 +12,6 @@ internal sealed class TestRun
 
     internal int FailureCount => _failures.Count;
 
-    /// <summary>Runs one named case. An exception inside it is a failure, not a crash.</summary>
     internal void Case(string name, Action body)
     {
         ArgumentNullException.ThrowIfNull(body);
@@ -56,7 +51,6 @@ internal sealed class TestRun
         }
     }
 
-    /// <summary>Passes when <paramref name="body"/> throws exactly <typeparamref name="TException"/> or a subclass.</summary>
     internal void Throws<TException>(Action body, string detail)
         where TException : Exception
     {
@@ -101,7 +95,6 @@ internal sealed class TestRun
         }
     }
 
-    /// <summary>An enum, reported by name — "expected Shrub, got Tree" rather than "1, 0".</summary>
     internal void Equal<TEnum>(TEnum actual, TEnum expected, string detail)
         where TEnum : struct, Enum
     {
@@ -133,7 +126,6 @@ internal sealed class TestRun
         }
     }
 
-    /// <summary>Prints the outcome and returns a process exit code.</summary>
     internal int Report(string suiteName)
     {
         if (_failures.Count == 0)

@@ -4,17 +4,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Drives the shared corpus' <c>auth</c> group (<c>HPS-40</c>, <c>HPS-41</c>).
-/// </summary>
-/// <remarks>
-/// All five cases are <c>expect: "vector"</c>, so there are no <c>expectations</c> keys for
-/// <c>HPS-46</c>'s asserted-keys check to bind. <see cref="VectorDocument"/> applies the same idea
-/// one level down: every value in every file must be read by something, or the case fails with the
-/// path. Without it a suite could drive row 0 of the state-validation table and skip row 3 — the
-/// empty-expected-state row, which is the entire reason ⛔<c>HPS-07</c> exists — and still report
-/// the case as covered.
-/// </remarks>
 internal static class AuthConformanceTests
 {
     internal static int Run()
@@ -99,8 +88,6 @@ internal static class AuthConformanceTests
         {
             string character = forbidden.AsString()!;
 
-            // An encoder that leaves these in place produces a verifier the server rejects only at
-            // the exchange step, long after the flow looks correct.
             run.False(
                 minted.Contains(character, StringComparison.Ordinal),
                 $"a minted verifier contains no '{character}'");
@@ -126,18 +113,12 @@ internal static class AuthConformanceTests
             AuthUrls.PercentEncode(encoding.Str("example")!),
             encoding.Str("encoded")!,
             "percent-encoded redirect URI");
-        // Two assertions, because the corpus states the set as a character-class shorthand. The
-        // first pins the shorthand; the second is the behaviour, swept over printable ASCII and
-        // listed in code-point order. Together they say "this encoder implements that set" without
-        // a range parser nobody wants to maintain.
         run.Equal(encoding.Str("unreserved")!, "A-Za-z0-9-._~", "the unreserved set the corpus states");
         run.Equal(
             UnescapedAscii(),
             "-.0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~",
             "and the set this host's encoder actually leaves alone");
 
-        // The query order is pinned so two hosts produce byte-identical authorize URLs, which is
-        // what makes a captured URL from one a usable reproduction for the other.
         string authorizeUrl = AuthUrls.BuildAuthorizeUrl("https://mantle.place/auth/native", built, "chal", "st");
         int cursor = 0;
         foreach (VectorNode parameter in root.Items("authorizeQueryOrder"))
@@ -149,16 +130,6 @@ internal static class AuthConformanceTests
         }
     }
 
-    /// <summary>
-    /// The two pages the browser is shown (<c>HPS-08</c>), against the copy and structure the
-    /// corpus pins.
-    /// </summary>
-    /// <remarks>
-    /// The point of driving this from the corpus rather than from literals here: the two hosts
-    /// render the same moment in the same flow, and they had already drifted into two headings and
-    /// two sentences with nothing failing. Asserting a literal in each host's own suite reproduces
-    /// exactly that — both suites stay green while disagreeing. Against one fixture they cannot.
-    /// </remarks>
     private static void DriveBrowserPages(TestRun run, VectorNode root)
     {
         const string HostId = "revit";
@@ -169,8 +140,6 @@ internal static class AuthConformanceTests
         VectorNode handOff = root.Obj("handOff")!;
         VectorNode escaping = root.Obj("escaping")!;
 
-        // The whole host-name map is read, not just this host's row, so a third host added upstream
-        // turns red here rather than being silently absent.
         VectorNode hostNames = copy.Obj("hostNames")!;
         string thisHost = string.Empty;
         foreach (string id in hostNames.Keys())
@@ -196,16 +165,12 @@ internal static class AuthConformanceTests
                 run.Contains(page, required.AsString()!, $"{what}: the document declares it");
             }
 
-            // HPS-08 as the absence of every way to reach off-page for something the renderer NEEDS.
-            // The hand-off below is not one of these: it is a navigation the page survives failing.
             foreach (VectorNode forbidden in structure.Items("bothPagesLack"))
             {
                 string token = forbidden.AsString()!;
                 run.False(page.Contains(token, StringComparison.Ordinal), $"{what}: no '{token}'");
             }
 
-            // Whole declarations, not bare colours: a page that ships the value in a comment and
-            // renders default white would pass the looser check.
             run.Contains(page, palette.Str("groundDeclaration")!, $"{what}: the brand ground");
             run.Contains(page, palette.Str("accentDeclaration")!, $"{what}: the brand accent");
             run.Contains(page, palette.Str("fontStackHead")!, $"{what}: a system face, never a webfont");
@@ -222,8 +187,6 @@ internal static class AuthConformanceTests
 
         string doneUrl = handOff.Str("urlTemplate")!.Replace("{hostId}", HostId, StringComparison.Ordinal);
         run.Equal(BrowserPages.DoneUrl, doneUrl, "the hand-off target the corpus states");
-        // And that the page actually carries it. Asserting the constant alone would stay green if
-        // someone edited the URL inside the script markup without touching the constant.
         run.Contains(success, doneUrl, "and the success page carries it");
 
         foreach (VectorNode required in handOff.Items("successPageContains"))
@@ -231,20 +194,12 @@ internal static class AuthConformanceTests
             run.Contains(success, required.AsString()!, "the hand-off probes before it navigates");
         }
 
-        // A meta refresh would navigate whether or not the done page answered, so an offline curator
-        // would land on the browser's own error page and the branded page would have been for
-        // nothing — in exactly the case it exists for.
         foreach (VectorNode forbidden in handOff.Items("successPageLacks"))
         {
             string token = forbidden.AsString()!;
             run.False(success.Contains(token, StringComparison.Ordinal), $"the hand-off is not '{token}'");
         }
 
-        // successOnly drives behaviour rather than restating itself: when the corpus says only
-        // success hands off, the failure page must not carry the hand-off target. The reason it
-        // must not is that the failure body interpolates an error_description the authorization
-        // server wrote, and a page that executes nothing is a page where the escape pass is the
-        // only thing that has to be right about that string.
         bool successOnly = handOff.Bool("successOnly") ?? false;
         run.True(successOnly, "the corpus says only success hands off");
         if (successOnly)
@@ -260,8 +215,6 @@ internal static class AuthConformanceTests
             run.False(failure.Contains(token, StringComparison.Ordinal), $"failure carries no '{token}'");
         }
 
-        // Stated as "the raw character does not survive", not "the escape changed something": the
-        // page is what the user sees, and that is where the character must not appear bare.
         string bodyPrefix = copy.Str("failureBodyPrefix")!;
         foreach (VectorNode character in escaping.Items("order"))
         {
@@ -271,8 +224,6 @@ internal static class AuthConformanceTests
                 $"'{raw}' never reaches the page raw");
         }
 
-        // The vectors are what pin the ORDER. Run '<' before '&' over the first of them and the '<'
-        // just written comes back as &amp;lt; — a different string, so it fails.
         IReadOnlyList<VectorNode> vectors = escaping.Items("vectors");
         run.True(vectors.Count > 0, "states escaping vectors");
         foreach (VectorNode vector in vectors)
@@ -325,22 +276,10 @@ internal static class AuthConformanceTests
         }
     }
 
-    /// <summary>
-    /// Drives <c>auth.rejectionClassification</c>: does a failed grant mean the stored
-    /// credential is permanently dead, or only that the platform could not answer?
-    /// </summary>
-    /// <remarks>
-    /// This was a host-local table on both sides, each carrying a comment asking the next
-    /// person to keep it in step with the other host by hand. The codes are a platform
-    /// contract, so the table belongs upstream: a host that starts honouring a fifth spelling
-    /// now fails here instead of diverging quietly, which is the whole reason the corpus
-    /// exists.
-    /// </remarks>
     private static void DriveRejectionClassification(TestRun run, VectorNode root)
     {
         int matrixStatus = root.Int("matrixStatus") ?? -1;
 
-        // Every key x code pair, rather than the diagonal each host happened to hand-write.
         foreach (VectorNode key in root.Items("codeKeys"))
         {
             string codeKey = key.AsString()!;
@@ -400,9 +339,6 @@ internal static class AuthConformanceTests
             }
         }
 
-        // The precedence is asserted by removing one field at a time from a body that carries them
-        // all: whichever remains highest must be the message. Asserting only the full body would
-        // pass for any implementation that happens to read the first field.
         List<string> precedence = [];
         foreach (VectorNode field in root.Items("errorPrecedence"))
         {
@@ -461,10 +397,6 @@ internal static class AuthConformanceTests
         run.Equal(states.Count, Enum.GetValues<AuthState>().Length, "the corpus names every state and no more");
         run.Equal(root.Str("initial")!, AuthStateMachine.Initial.ToString(), "initial state");
 
-        // Read the table as data, then evaluate it over EVERY (state x event) pair — 45 of them —
-        // rather than only the 13 rows it spells out. The rows are the interesting cases; the
-        // unmatched remainder is where the unchanged-by-default rule lives, and that is the rule
-        // that stops an out-of-order callback corrupting a session.
         List<(string Signal, string From, string To)> table = [];
         HashSet<string> tableEvents = new(StringComparer.Ordinal);
         foreach (VectorNode transition in root.Items("transitions"))
@@ -495,7 +427,6 @@ internal static class AuthConformanceTests
         }
     }
 
-    /// <summary>First matching rule wins; <c>*</c> matches any state; <c>unchanged</c> is a no-op.</summary>
     private static AuthState Resolve(
         List<(string Signal, string From, string To)> table,
         AuthState state,
@@ -523,7 +454,6 @@ internal static class AuthConformanceTests
         return state;
     }
 
-    /// <summary>Every printable ASCII character this host's percent-encoder leaves alone.</summary>
     private static string UnescapedAscii()
     {
         StringBuilder kept = new();

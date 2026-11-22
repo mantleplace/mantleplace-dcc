@@ -29,7 +29,6 @@ from pathlib import Path
 
 SERVED_SPEC = "https://mantle.place/api/v1/openapi.json"
 
-# Python's default user agent is refused by the edge in front of mantle.place; name the caller.
 USER_AGENT = "mantleplace-dcc platform-api sync"
 
 SHARED = Path(__file__).resolve().parents[2]
@@ -37,10 +36,6 @@ GENERATED = SHARED / "src" / "MantlePlace.PlatformApi" / "Generated"
 VENDORED_SPEC = GENERATED / "openapi.json"
 VENDORED_CLIENT = GENERATED / "PlatformApiClient.g.cs"
 
-# The client header is applied once, by PlatformTransport, to every request; excluding it here keeps
-# it out of every generated signature, so no call site can forget it or send a second one. Optional
-# properties are nullable so an absent member reads as absent: a public Quote has no Credit balance,
-# which is not a balance of 0 (the corpus case platform.quote.public pins it).
 GENERATOR_OPTIONS = [
     "/namespace:MantlePlace.PlatformApi",
     "/className:PlatformApiClient",
@@ -72,11 +67,6 @@ def lf(text: str) -> str:
     return text.replace("\r\n", "\n")
 
 
-# NSwag's System.Text.Json output puts JsonStringEnumConverter<T> on every enum property. That
-# converter ignores [EnumMember] and writes the C# name ("Credit") where the spec serves "credit",
-# and the framework's fix (JsonStringEnumMemberName) needs .NET 9 while the client targets net8.0.
-# MantlePlace.PlatformApi/EnumMemberJsonConverter.cs honours EnumMember; this swaps it in so a
-# regeneration keeps the fix.
 STOCK_ENUM_CONVERTER = "System.Text.Json.Serialization.JsonStringEnumConverter<"
 ENUM_MEMBER_CONVERTER = "MantlePlace.PlatformApi.EnumMemberJsonConverter<"
 

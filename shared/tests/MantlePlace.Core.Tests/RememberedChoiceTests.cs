@@ -3,15 +3,6 @@ using MantlePlace.Client;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The import window opening on what the curator ticked at their last Import: the starting checklist
-/// from a remembered choice and the layers a bundle carries, the prerequisites that still govern it,
-/// and a remembered file that is not usable.
-/// </summary>
-/// <remarks>
-/// The window only asks the checklist for its starting state, and CI never builds it, so every rule
-/// is decided here (<c>HPS-02</c>, <c>HPS-42</c>).
-/// </remarks>
 internal static class RememberedChoiceTests
 {
     internal static int Run()
@@ -36,7 +27,6 @@ internal static class RememberedChoiceTests
             }
             catch (IOException)
             {
-                // A leftover temp folder is not a test failure.
             }
         }
 

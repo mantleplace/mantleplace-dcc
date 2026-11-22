@@ -4,25 +4,10 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Client;
 
-/// <summary>What the cache knows about one order.</summary>
-/// <param name="Layout">Where its files are.</param>
-/// <param name="Verdict">Whether the bundle on disk is usable, and whether it was verified.</param>
-/// <param name="Sidecar">What was recorded at download time, or <c>null</c>.</param>
 public readonly record struct CacheEntry(BundleCacheLayout Layout, CacheVerdict Verdict, CacheSidecar? Sidecar)
 {
     public CacheState State => Verdict.State(File.Exists(Layout.BundleZipPath));
 
-    /// <summary>
-    /// A sentence for the panel. Unverified is never phrased as a problem — it is the normal state
-    /// of every bundle whose Revit artifacts the ETL published no digest for.
-    /// </summary>
-    /// <remarks>
-    /// The unverified sentence says which checksum is missing, because the old wording — "the platform
-    /// published no checksum for this bundle" — was not true as a whole and read worse than the
-    /// situation is. What is absent is a digest for the <em>zip</em>. The manifest inside it publishes
-    /// one per Revit deliverable, and <c>LocalBundleArchive.VerifyPlan</c> checks every one of them,
-    /// fail-closed, before a single element exists.
-    /// </remarks>
     public string Describe() => State switch
     {
         CacheState.NotCached => "Not downloaded.",
@@ -41,72 +26,36 @@ public readonly record struct CacheEntry(BundleCacheLayout Layout, CacheVerdict 
     };
 }
 
-/// <summary>
-/// The on-disk bundle cache: ⛔<c>HPS-26</c> promote-by-rename, <c>HPS-27</c> validity,
-/// <c>HPS-44</c> explicit eviction.
-/// </summary>
-/// <remarks>
-/// In <c>MantlePlace.Client</c> and not in the Revit shim precisely so this can be tested. The
-/// promote-by-rename path is a ⛔ rule whose second enforcer is <c>automation-test</c>, and a shim
-/// that CI cannot build can only ever satisfy the first.
-/// </remarks>
 public sealed class BundleCache
 {
     private readonly string? _root;
     private readonly string _host;
 
-    /// <summary>The cache under <c>%LOCALAPPDATA%</c>, for the plugin that is loading this code.</summary>
     public BundleCache()
     {
         _root = null;
         _host = HostIdentity.Id;
     }
 
-    /// <summary>As the default constructor, with an explicit root. For tests.</summary>
     public BundleCache(string root)
     {
         _root = root;
         _host = HostIdentity.Id;
     }
 
-    /// <summary>As the explicit-root constructor, as another host. For tests of the slot.</summary>
     public BundleCache(string root, string host)
     {
         _root = root;
         _host = host;
     }
 
-    /// <summary>The host this cache reads and writes a slot for.</summary>
     public string Host => _host;
 
-    /// <summary>
-    /// The level every download is fetched at today: the highest, which holds every level below it.
-    /// The level a download is cached at varies once the manifest's level control does.
-    /// </summary>
     public const string HighestLevel = HostViews.EveryEntryLevel;
 
     public BundleCacheLayout LayoutFor(string orderId)
         => _root is null ? BundleCacheLayout.ForOrder(orderId) : BundleCacheLayout.ForOrder(orderId, _root);
 
-    /// <summary>
-    /// Inspects what is on disk for an order, hashing the file when one is there.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>No size cap on hashing.</b> The reference host skips files above ~2 GB and reports them
-    /// valid-but-unverified; this host does not, because reading a 2 GB file at disk speed costs a
-    /// few seconds once per import and the alternative is telling a curator their largest and most
-    /// expensive purchase is the one nobody checked. The uncomputed path still exists in
-    /// <see cref="CacheValidity"/> — it is reachable from a legacy sidecar — it is just not something
-    /// this host chooses.
-    /// </para>
-    /// <para>
-    /// ⛔ <b>"Once per import" is the load-bearing half of that sentence.</b> Call this from anything
-    /// that runs per row per refresh and the cost stops being a few seconds once and becomes a few
-    /// seconds every time the window redraws — for a 275 MB bundle, per bundle. Listing uses
-    /// <see cref="InspectQuick"/>; this one belongs on the pre-import gate.
-    /// </para>
-    /// </remarks>
     public CacheEntry Inspect(
         string orderId,
         long? expectedSizeBytes,
@@ -115,23 +64,6 @@ public sealed class BundleCache
         string level = HighestLevel)
         => Inspect(orderId, expectedSizeBytes, expectedSha256, manifestVersion, level, hashTheFile: true);
 
-    /// <summary>
-    /// Inspects what is on disk without hashing it — the listing's view.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// It is not a weaker <see cref="Inspect"/> so much as an honest one for a different question.
-    /// <see cref="CacheValidity"/> already distinguishes an <em>unknown</em> hash from an absent one
-    /// (<c>HPS-27</c>), so leaving the computed hash empty yields <c>CachedValid</c> with
-    /// <c>IntegrityChecked: false</c> — "downloaded, not verified here" — while the size check, which
-    /// is free, still runs. No rule is relaxed: ⛔<c>HPS-26</c>'s verification happens at download,
-    /// and the full hash still gates the import before a single element exists.
-    /// </para>
-    /// <para>
-    /// The consequence worth stating: a size-preserving corruption on disk reads as "Downloaded" in
-    /// the list until the import gate catches it. It does catch it, and before anything is built.
-    /// </para>
-    /// </remarks>
     public CacheEntry InspectQuick(
         string orderId,
         long? expectedSizeBytes,
@@ -160,10 +92,6 @@ public sealed class BundleCache
                 sidecar);
         }
 
-        // One slot per host per order, holding the last download. A zip fetched for another host, at
-        // another level, or before the slot recorded either is a miss for this caller, never a hit:
-        // a host's view holds only that host's files, so serving it across hosts hides the files the
-        // other host reads.
         if (sidecar is null || !sidecar.IsSlotOf(_host, level))
         {
             return new CacheEntry(
@@ -172,10 +100,6 @@ public sealed class BundleCache
                 sidecar);
         }
 
-        // Fall back to what the sidecar recorded when the caller has no live listing — the offline
-        // case, where the facts the vault would have supplied are not available. A view is never
-        // described by the listing, which states the whole archive, so a view is checked against its
-        // own record whatever the caller holds (CacheSidecar.HoldsView).
         bool holdsView = sidecar?.HoldsView == true;
         string? expectedHash = holdsView ? sidecar!.Sha256 : expectedSha256 ?? sidecar?.Sha256;
         long? expectedSize = holdsView ? sidecar!.SizeBytes : expectedSizeBytes ?? sidecar?.SizeBytes;
@@ -189,33 +113,6 @@ public sealed class BundleCache
             sidecar);
     }
 
-    /// <summary>
-    /// ⛔<c>HPS-26</c>: streams to <c>.part</c>, verifies, and only then renames over the final path.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The rename is what makes the cache crash-safe. A host that streams onto the final path leaves
-    /// a truncated bundle that looks cached, and the next run imports it.
-    /// </para>
-    /// <para>
-    /// A failed verification deletes the <c>.part</c>. So does a cancellation, and a cancellation
-    /// fires no completion — the caller already knows it cancelled, and a completion event would
-    /// race the UI back into a "done" state.
-    /// </para>
-    /// </remarks>
-    /// <param name="holdsView">
-    /// Whether the body is Revit's download view rather than the whole archive; recorded, so later
-    /// inspections check it against this record rather than the listing (<see cref="CacheSidecar.HoldsView"/>).
-    /// </param>
-    /// <param name="expectedManifestSha256">
-    /// For a view, the digest the platform stated for its manifest member — the root every per-file
-    /// digest is trusted from. Checked before the rename; <c>null</c> when none was stated.
-    /// </param>
-    /// <param name="level">
-    /// The level the body was fetched at, recorded with the host so only a caller asking for the same
-    /// host and level reads it; a download at another level replaces this host's slot for the order.
-    /// </param>
-    /// <returns><c>null</c> on success; the entry is then valid and the sidecar written.</returns>
     public async Task<string?> PromoteAsync(
         string orderId,
         Func<Stream, CancellationToken, Task> writeBody,
@@ -235,8 +132,6 @@ public sealed class BundleCache
 
         string partial = layout.PartialZipPath;
 
-        // A .part left by a killed process is dead weight, never a resume point: nothing recorded
-        // how many of its bytes are good.
         TryDelete(partial);
 
         try
@@ -288,8 +183,6 @@ public sealed class BundleCache
             return "The download's manifest did not match its checksum and was discarded. Try again.";
         }
 
-        // Only now. File.Move with overwrite is atomic enough for this: the rename either happened
-        // or it did not, and a reader never sees a half-written bundle.zip.
         File.Move(partial, layout.BundleZipPath, overwrite: true);
 
         WriteSidecar(layout, new CacheSidecar
@@ -308,14 +201,6 @@ public sealed class BundleCache
         return null;
     }
 
-    /// <summary>
-    /// <c>HPS-44</c>: removes one order's cache, and only when asked.
-    /// </summary>
-    /// <remarks>
-    /// There is no size-based or LRU eviction anywhere in this class. That is the anti-streaming
-    /// guarantee and a product commitment: a host that "helpfully" reclaims disk has silently
-    /// converted an owned asset into a streamed one.
-    /// </remarks>
     public void Remove(string orderId)
     {
         BundleCacheLayout layout = LayoutFor(orderId);
@@ -328,8 +213,6 @@ public sealed class BundleCache
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // A file held open by Revit's own link resolution is the likely cause, and the curator
-            // asked to free disk rather than to see a dialog.
         }
     }
 
@@ -355,8 +238,6 @@ public sealed class BundleCache
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // The bundle is already promoted and importable. Losing the sidecar costs the panel its
-            // "verified" badge on a later run, which is not worth failing a completed download over.
         }
     }
 
@@ -369,8 +250,6 @@ public sealed class BundleCache
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Empty means "nothing computed", which HPS-27 reads as valid-but-unverified rather than
-            // as corrupt.
             return string.Empty;
         }
     }

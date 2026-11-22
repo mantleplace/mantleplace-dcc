@@ -33,13 +33,11 @@ UPCGGraph* BuildGraph(const FString& PackagePath, const FString& AssetName, cons
 	UPackage* Package = CreatePackage(*(PackagePath / AssetName));
 	UPCGGraph* Graph = NewObject<UPCGGraph>(Package, FName(*AssetName), RF_Public | RF_Standalone | RF_Transactional);
 
-	// 1. The table, one point per row, its columns as attributes under their contract names.
 	UPCGLoadDataTableSettings* LoadSettings = nullptr;
 	UPCGNode* Load = Graph->AddNodeOfType(LoadSettings);
 	LoadSettings->DataTable = Inputs.TreePoints;
 	LoadSettings->bSynchronousLoad = true;
 
-	// 2. Ours: binds the columns, applies the rasters, chooses a mesh and a transform per point.
 	UMantlePlaceTreeScatterSettings* ScatterSettings = nullptr;
 	UPCGNode* Scatter = Graph->AddNodeOfType(ScatterSettings);
 	ScatterSettings->CanopyHeight = Inputs.CanopyHeight;
@@ -55,7 +53,6 @@ UPCGGraph* BuildGraph(const FString& PackagePath, const FString& AssetName, cons
 		ScatterSettings->ShrubMeshes.Add(TSoftObjectPtr<UStaticMesh>(Path));
 	}
 
-	// 3. The engine's spawner, selecting each point's mesh by the attribute the scatter wrote.
 	UPCGStaticMeshSpawnerSettings* SpawnerSettings = nullptr;
 	UPCGNode* Spawner = Graph->AddNodeOfType(SpawnerSettings);
 	SpawnerSettings->SetMeshSelectorType(UPCGMeshSelectorByAttribute::StaticClass());
@@ -89,8 +86,6 @@ AMantlePlaceFoliageVolume* SpawnVolume(UWorld* World, const FInputs& Inputs)
 	{
 		return nullptr;
 	}
-	// The ground's range with a margin above for the canopy and below for the trace; an unknown
-	// range takes a kilometre each way, which only the ground trace ever reads.
 	constexpr double MarginCm = 10000.0;
 	const bool bKnownRange = Inputs.GroundMaxZCm > Inputs.GroundMinZCm;
 	const double MinZ = bKnownRange ? Inputs.GroundMinZCm - MarginCm : -100000.0;
@@ -114,11 +109,9 @@ void Generate(AMantlePlaceFoliageVolume* Volume, UPCGGraph* Graph)
 	{
 		return;
 	}
-	// Partitioned in a World Partition level, so foliage generates and streams per cell; a
-	// non-partitioned level generates on the volume, which the same graph does unchanged.
 	Volume->Pcg->SetIsPartitioned(UWorld::IsPartitionedWorld(Volume->GetWorld()));
 	Volume->Pcg->SetGraph(Graph);
-	Volume->Pcg->GenerateLocal(/*bForce*/ true);
+	Volume->Pcg->GenerateLocal(true);
 }
 
 TArray<AActor*> CleanupGenerated(UWorld* World, const TArray<AActor*>& Actors)
@@ -143,9 +136,7 @@ TArray<AActor*> CleanupGenerated(UWorld* World, const TArray<AActor*>& Actors)
 				}
 			}
 		}
-		// Now, not deferred: the volume is destroyed next, and a deferred cleanup would run on a
-		// component that no longer exists, leaving its instances on the partition actors.
-		Component->CleanupLocalImmediate(/*bRemoveComponents*/ true, /*bCleanupLocalComponents*/ true);
+		Component->CleanupLocalImmediate(true, true);
 		for (AActor* PartitionActor : PartitionActors)
 		{
 			Cast<APCGPartitionActor>(PartitionActor)->RemoveGraphInstance(Component);
@@ -167,9 +158,9 @@ int32 DestroyEmptyPartitionActors(UWorld* World, const TArray<AActor*>& Partitio
 	{
 		if (!HoldsNothing(Actor))
 		{
-			continue; // another component still generates on this cell
+			continue;
 		}
-		World->EditorDestroyActor(Actor, /*bShouldModifyLevel*/ true);
+		World->EditorDestroyActor(Actor, true);
 		++Destroyed;
 	}
 	return Destroyed;

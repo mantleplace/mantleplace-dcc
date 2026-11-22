@@ -5,32 +5,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Wpf;
 
-/// <summary>The window in front at one moment, and what the core reads off it.</summary>
 internal readonly record struct ForegroundReading(IntPtr Window, ForegroundFacts Facts);
 
-/// <summary>
-/// Reads the window in front and carries out <see cref="ImportWindowStacking"/>'s decision on the
-/// import window's place in the z-order, once before the window is shown and on every change of
-/// foreground after.
-/// </summary>
-/// <remarks>
-/// <para>
-/// It decides nothing: every rule — float over the host, never over a host modal, go behind another
-/// application, leave the desktop alone — is the pure core's, with its tests. This reads the facts and
-/// makes the one Windows call the decision names.
-/// </para>
-/// <para>
-/// ⛔ <b>It never asks the host's thread anything.</b> Every call here is answered by Windows from its
-/// own records — the foreground window, a window's process, class, styles and enabled state, a ghost's
-/// hung window — and the only window it moves is the import window. <c>GetWindowText</c> on a host
-/// window would send that window a message within one process, and is not used.
-/// </para>
-/// <para>
-/// The hook is out of context: Windows posts each foreground change to the import window's thread,
-/// whose dispatcher delivers it. ⛔ An exception must never unwind from the callback into Windows, so
-/// it is caught there and handed to <c>fault</c>, and the watch carries on.
-/// </para>
-/// </remarks>
 internal sealed class ForegroundWatch : IDisposable
 {
     private const uint EventSystemForeground = 0x0003;
@@ -51,24 +27,13 @@ internal sealed class ForegroundWatch : IDisposable
     private readonly IntPtr _hostWindow;
     private readonly Action<Exception> _fault;
 
-    /// <summary>Held for the hook's lifetime: Windows calls through it, and a collected delegate is a crash.</summary>
     private readonly WinEventProc _callback;
 
     private IntPtr _hook;
     private bool _floating;
 
-    /// <summary>The window to appear directly behind when the import window is first shown, or zero.</summary>
     private IntPtr _showBehind;
 
-    /// <summary>Stacks the window for what was in front as it opened — before it is shown — and watches from then on.</summary>
-    /// <param name="window">The import window's handle. Its thread must pump messages: the hook is delivered there.</param>
-    /// <param name="hostWindow">The host's main window.</param>
-    /// <param name="opening">
-    /// The reading the window decided its focus from (<see cref="ImportWindowStacking.ShowsActivated"/>):
-    /// the same one decides where it goes, so the two cannot disagree over a foreground that changed
-    /// between two reads.
-    /// </param>
-    /// <param name="fault">Told of an exception the hook caught, so it can be logged; the watch carries on.</param>
     internal ForegroundWatch(IntPtr window, IntPtr hostWindow, ForegroundReading opening, Action<Exception> fault)
     {
         _window = window;
@@ -81,9 +46,6 @@ internal sealed class ForegroundWatch : IDisposable
         _floating = first.Floating;
         if (first.Move == StackingMove.SinkBehindForeground)
         {
-            // ⛔ Not moved now: WPF's Show raises the window to the top as it shows it, which would undo
-            // the move and put it over the application in front for a moment. The show's own
-            // WM_WINDOWPOSCHANGING is rewritten instead, so it appears behind that application.
             _showBehind = foreground;
             HwndSource.FromHwnd(window)?.AddHook(OnWindowMessage);
         }
@@ -95,17 +57,12 @@ internal sealed class ForegroundWatch : IDisposable
         _hook = SetWinEventHook(EventSystemForeground, EventSystemForeground, IntPtr.Zero, _callback, 0, 0, WinEventOutOfContext);
     }
 
-    /// <summary>The window in front now, and what the core reads off it — usable before the import window exists.</summary>
     internal static ForegroundReading Read(IntPtr importWindow, IntPtr hostWindow)
     {
         IntPtr foreground = GetForegroundWindow();
         return new ForegroundReading(foreground, FactsOf(foreground, importWindow, hostWindow));
     }
 
-    /// <summary>
-    /// Stops floating now, whatever is in front: the host is about to show a dialog, which must not open
-    /// under this window. The next change of foreground decides again.
-    /// </summary>
     internal void Lower()
     {
         Stacking lowered = ImportWindowStacking.Lowered(_floating);
@@ -122,13 +79,8 @@ internal sealed class ForegroundWatch : IDisposable
         }
     }
 
-    /// <remarks>
-    /// The core's facts name Revit, the host they were written against; they are the host's main
-    /// window and the host's process for every host.
-    /// </remarks>
     private static ForegroundFacts FactsOf(IntPtr foreground, IntPtr importWindow, IntPtr hostWindow)
     {
-        // Read, not judged: what a disabled main window means is the core's.
         bool mainEnabled = hostWindow == IntPtr.Zero || IsWindowEnabled(hostWindow);
         if (foreground == IntPtr.Zero)
         {
@@ -152,10 +104,6 @@ internal sealed class ForegroundWatch : IDisposable
             HungWindowOfThisProcess: inThisProcess ? false : HungWindowIsOurs(foreground));
     }
 
-    /// <summary>
-    /// Whether <paramref name="window"/> is the ghost of one of this process's windows: <c>false</c> for
-    /// a window that is no ghost, <c>null</c> when this Windows cannot say.
-    /// </summary>
     private static bool? HungWindowIsOurs(IntPtr window)
     {
         try
@@ -175,7 +123,6 @@ internal sealed class ForegroundWatch : IDisposable
         }
     }
 
-    /// <summary>Puts the window's first show directly behind the window that was in front.</summary>
     private IntPtr OnWindowMessage(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg != WmWindowPosChanging || _showBehind == IntPtr.Zero)
@@ -196,7 +143,6 @@ internal sealed class ForegroundWatch : IDisposable
         }
         catch (Exception ex)
         {
-            // Inside Windows' own message dispatch: a fault costs a window shown on top, not the thread.
             _showBehind = IntPtr.Zero;
             _fault(ex);
         }
@@ -214,8 +160,6 @@ internal sealed class ForegroundWatch : IDisposable
         }
         catch (Exception ex)
         {
-            // Called by Windows: nothing may unwind into user32. A missed restack leaves the window in
-            // the wrong place until the next change of foreground, which costs less than its thread.
             _fault(ex);
         }
     }
@@ -252,8 +196,6 @@ internal sealed class ForegroundWatch : IDisposable
 
     private delegate void WinEventProc(IntPtr hook, uint eventType, IntPtr window, int objectId, int childId, uint thread, uint time);
 
-    // DllImport rather than LibraryImport: the generator needs AllowUnsafeBlocks, which this project
-    // does not set.
     [DllImport("user32.dll")]
     private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr module, WinEventProc callback, uint processId, uint threadId, uint flags);
 
@@ -274,7 +216,6 @@ internal sealed class ForegroundWatch : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsWindowEnabled(IntPtr window);
 
-    // Exported by user32 since Windows Vista, and resolved at the first call, which is guarded.
     [DllImport("user32.dll")]
     private static extern IntPtr HungWindowFromGhostWindow(IntPtr ghost);
 

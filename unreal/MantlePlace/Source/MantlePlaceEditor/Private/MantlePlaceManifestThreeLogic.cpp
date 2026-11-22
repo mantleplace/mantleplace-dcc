@@ -2,7 +2,7 @@
 
 #include "MantlePlaceManifestThreeLogic.h"
 
-#include "MantlePlaceArtifactHandler.h" // MantlePlaceArtifactId
+#include "MantlePlaceArtifactHandler.h"
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceLandscapeWeightsLogic.h"
 #include "MantlePlaceManifestJson.h"
@@ -18,8 +18,6 @@ namespace
 {
 using namespace MantlePlaceManifestJson;
 
-// The handler ids of the steps a 3.x bundle skips by name. The four with no accessor of their own are
-// spelled here as their handlers spell them (MantlePlaceArtifact<Name>.cpp).
 const FName DrapeId(TEXT("drape"));
 const FName CoverageId(TEXT("coverage_rasters"));
 const FName BuildingsId(TEXT("buildings"));
@@ -27,7 +25,6 @@ const FName RoadsId(TEXT("road_splines"));
 const FName TreesId(TEXT("foliage_points"));
 const FName RecordsId(TEXT("public_records"));
 
-/** A stated unit is the metre: its factor to metres is exactly 1 (format.md §9.4). */
 bool IsMetre(const TSharedPtr<FJsonObject>* Unit)
 {
 	return Unit != nullptr && (*Unit)->HasTypedField<EJson::Number>(TEXT("to_metres"))
@@ -43,7 +40,6 @@ FString UnitWords(const TSharedPtr<FJsonObject>* Unit)
 	return FString::Printf(TEXT("%s (%g m)"), *GetString(*Unit, TEXT("name")), GetNumber(*Unit, TEXT("to_metres")));
 }
 
-/** A raster's `unit` is a free string; the elevation file is metres on every order (format.md section 6), so "m" and "metre" are that unit. Anything else fails closed. */
 bool IsMetreRasterUnit(const FString& Unit)
 {
 	return Unit.IsEmpty() || Unit == TEXT("m") || Unit == TEXT("metre");
@@ -69,7 +65,6 @@ bool ReadNumbers(const TSharedPtr<FJsonObject>& Obj, const TCHAR* Field, int32 E
 	return true;
 }
 
-/** What one step needs of the read: the file the catalog promises, found, with its entry. */
 struct FFound
 {
 	const FMantlePlaceBundleFile* File = nullptr;
@@ -82,7 +77,6 @@ struct FThreeContext
 	TSharedPtr<FJsonObject> Catalog;
 	FMantlePlaceVaultManifest& M;
 
-	/** The promised file, or a named skip of `Step` saying why there is none. */
 	FFound Find(const TCHAR* Path, FName Step) const
 	{
 		FFound Found;
@@ -123,7 +117,6 @@ struct FThreeContext
 	}
 };
 
-/** The raster member of a host-ready PNG in the local site frame, or a named skip. */
 TSharedPtr<FJsonObject> LocalRaster(const FThreeContext& C, const FFound& Found, FName Step)
 {
 	const TSharedPtr<FJsonObject>* Raster = GetObject(Found.Entry, TEXT("raster"));
@@ -136,7 +129,6 @@ TSharedPtr<FJsonObject> LocalRaster(const FThreeContext& C, const FFound& Found,
 	return *Raster;
 }
 
-/** A glTF mesh's path, digest and up axis; false (a named skip) when its up axis is not glTF's. */
 bool ReadMesh(const FThreeContext& C, const FFound& Found, FName Step, FString& OutPath, FString& OutUpAxis, FString& OutSha)
 {
 	const TSharedPtr<FJsonObject>* Mesh = GetObject(Found.Entry, TEXT("mesh"));
@@ -196,14 +188,12 @@ void ReadHeightmap(const FThreeContext& C, double SiteHeightM)
 	H.Path = Found.File->EntryName;
 	H.Sha256 = GetString(Found.Entry, TEXT("sha256"));
 	H.Resolution = Width;
-	H.bRow0IsNorth = true; // fixed by the format: row 0 of every raster is its north edge (format.md §4)
+	H.bRow0IsNorth = true;
 	H.SectionSizeQuads = Layout.SectionSizeQuads;
 	H.SectionsPerComponent = Layout.SectionsPerComponent;
 	H.ComponentCountX = Layout.ComponentCountX;
 	H.ComponentCountY = Layout.ComponentCountY;
-	// The stated numbers, multiplied into the engine's convention and nothing else: a Landscape's
-	// DrawScale is centimetres per quad, and 128 height units per DrawScale.Z centimetre about code 32768.
-	H.ScaleXPercent = Cell[0] * 100.0; // the easting axis, as a 2.x block names it
+	H.ScaleXPercent = Cell[0] * 100.0;
 	H.ScaleYPercent = Cell[1] * 100.0;
 	H.ScaleZPercent = Scale * 100.0 * 128.0;
 	H.LocationZOffsetCm = (SiteHeightM + Offset + 32768.0 * Scale) * 100.0;
@@ -214,11 +204,6 @@ void ReadHeightmap(const FThreeContext& C, double SiteHeightM)
 	H.bPresent = true;
 }
 
-/**
- * The weight maps in `Materials/`, as the one `material_weights` layer the Landscape paints: one 8-bit
- * grayscale PNG per paint layer, the layer named by its file verbatim (format.md §6, U13; HPS-33), in
- * the order the reader lists the files. A map that does not state the local frame or its size is left out and named.
- */
 void ReadMaterials(const FThreeContext& C)
 {
 	FMantlePlaceLandscapeLayer Layer;
@@ -257,7 +242,6 @@ void ReadMaterials(const FThreeContext& C)
 	}
 }
 
-/** The host-ready road table, in the local site frame; its heights are metres above the origin's. */
 void ReadRoads(const FThreeContext& C, double SiteHeightM)
 {
 	const FFound Found = C.Find(FMantlePlaceManifestThreeLogic::RoadsPath(), RoadsId);
@@ -294,7 +278,6 @@ void ReadDrape(const FThreeContext& C)
 	const FMantlePlaceGeoreferenceBlock& G = C.M.Georef;
 	D.Path = Found.File->EntryName;
 	D.Sha256 = GetString(Found.Entry, TEXT("sha256"));
-	// The drape block holds its extent in the origin's grid, as a 2.x block states it.
 	D.LeftM = G.OriginEastingM + Rect[0];
 	D.BottomM = G.OriginNorthingM + Rect[1];
 	D.RightM = G.OriginEastingM + Rect[2];
@@ -330,8 +313,6 @@ void ReadTrees(const FThreeContext& C, double SiteHeightM)
 	F.Path = Found.File->EntryName;
 	F.Sha256 = GetString(Found.Entry, TEXT("sha256"));
 	F.Count = Found.File->bHasCount ? static_cast<int32>(Found.File->Count) : 0;
-	// A host-ready table is in the local site frame, in metres (format.md §4): the frame this host's
-	// origin is stated in, which is what the tree reader compares a stated frame against.
 	F.Crs = C.M.Georef.CrsProjected;
 	F.Units = TEXT("m");
 	F.HorizontalUnits = TEXT("m");
@@ -347,15 +328,6 @@ void ReadTrees(const FThreeContext& C, double SiteHeightM)
 	F.bPresent = true;
 }
 
-/**
- * The public-record layers (format.md §6): each `Records/<Name>.gpkg` and `.dxf` the catalog lists is a
- * file of the family `<name>`, found by its catalog name and never by a folder walk. Every one is in the
- * georeferenced frame the manifest states once, and that statement is written onto each file verbatim for
- * FMantlePlacePublicRecordsLogic::CanPlaceFrame to judge (HPS-53). A file's credit is the sources its entry
- * names; 3.0 publishes no per-layer disclaimer or notice, so those stay empty and the standing notice is
- * the one every import shows. A promised record file the download does not hold is listed with the reason
- * the manifest gives.
- */
 void ReadRecords(const FThreeContext& C, const TSharedPtr<FJsonObject>& Root)
 {
 	const FString Folder = FMantlePlaceManifestThreeLogic::RecordsFolder();
@@ -423,7 +395,6 @@ void ReadRecords(const FThreeContext& C, const TSharedPtr<FJsonObject>& Root)
 	}
 	for (FMantlePlaceRecordLayer& Layer : Block.Layers)
 	{
-		// The GeoPackage first, then the linework, as a 2.x layer lists them.
 		Layer.Files.StableSort([](const FMantlePlaceRecordFile& A, const FMantlePlaceRecordFile& B)
 		{
 			return A.IsDxf() < B.IsDxf();
@@ -489,19 +460,11 @@ const TArray<FString>& FMantlePlaceManifestThreeLogic::RequestedFiles()
 			TreesPath(),
 			RoadsPath(),
 		};
-		// The paint layers: every weight map the published description promises in the folder. The import
-		// reads each PNG it finds there; the request has to name them, since a 3.0 request takes file names.
 		for (const TCHAR* Layer : { TEXT("Water"), TEXT("Grass"), TEXT("Forest"), TEXT("Dirt"),
 				 TEXT("Rock"), TEXT("Sand"), TEXT("Snow"), TEXT("Built") })
 		{
 			Out.Add(FString(MaterialsFolder()) + Layer + TEXT(".png"));
 		}
-		// The public-record linework: each `Records/<Name>.dxf` the published description lists for a 3.0
-		// download, by the platform's own spelling. The DXF is what the import draws; the GeoPackage twin is
-		// never asked for (the plugin verifies and credits one it is given, and draws only the DXF). The
-		// description does not list `Records/Habitat.dxf` yet, so it is not named here: add it with the
-		// rest when the description lists it. A record the order does not hold is answered
-		// `file_not_in_bundle` and asked again without it.
 		for (const TCHAR* Record : { TEXT("Parcels"), TEXT("Zoning"), TEXT("Floodplain"), TEXT("Wetlands"),
 				 TEXT("Soils"), TEXT("Heritage"), TEXT("Conservation"), TEXT("Hydrography"), TEXT("Contamination") })
 		{
@@ -545,7 +508,6 @@ FString FMantlePlaceManifestThreeLogic::NotHeldReason(const FString& Path, const
 bool FMantlePlaceManifestThreeLogic::ChooseLandscapeLayout(int32 Width, int32 Height, FMantlePlaceLandscapeLayout& OutLayout)
 {
 	struct FCandidate { int32 Section; int32 Sections; };
-	// A New Landscape's default first (63 quads, 2 sections), then the other sizes the engine offers.
 	static const FCandidate Candidates[] = {
 		{ 63, 2 }, { 63, 1 }, { 127, 2 }, { 127, 1 }, { 31, 2 }, { 31, 1 },
 		{ 255, 2 }, { 255, 1 }, { 15, 2 }, { 15, 1 }, { 7, 2 }, { 7, 1 },
@@ -594,7 +556,6 @@ bool FMantlePlaceManifestThreeLogic::ToVaultManifest(const FMantlePlaceBundleRea
 	M.bFormatThree = true;
 	M.Version = Read.Version;
 
-	// The bundle statement: the order is the identity (ADR 0002); 3.0 has no job id, so the order stands in.
 	if (const TSharedPtr<FJsonObject>* Order = GetObject(Root, TEXT("order")))
 	{
 		M.OrderId = GetString(*Order, TEXT("id"));
@@ -609,8 +570,6 @@ bool FMantlePlaceManifestThreeLogic::ToVaultManifest(const FMantlePlaceBundleRea
 	}
 	M.JobId = M.OrderId;
 
-	// The local site frame: this host's frame on every order (HPS-54), in metres by the format, and
-	// refused when it says otherwise rather than scaled (format.md §4).
 	const TSharedPtr<FJsonObject>* Frames = GetObject(Root, TEXT("frames"));
 	const TSharedPtr<FJsonObject>* Local = Frames != nullptr ? GetObject(*Frames, TEXT("local")) : nullptr;
 	const TSharedPtr<FJsonObject>* Origin = Local != nullptr ? GetObject(*Local, TEXT("origin")) : nullptr;
@@ -650,9 +609,7 @@ bool FMantlePlaceManifestThreeLogic::ToVaultManifest(const FMantlePlaceBundleRea
 	G.OriginEastingM = (*Projected)->GetNumberField(TEXT("x"));
 	G.OriginNorthingM = (*Projected)->GetNumberField(TEXT("y"));
 	G.GroundOrthometricHM = (*Origin)->GetNumberField(TEXT("height_m"));
-	G.PlanetShape = TEXT("Flat"); // the local site frame is flat by definition (format.md §4)
-	// The same point in longitude and latitude, as the manifest states it: the streamed terrain's Cesium
-	// georeference is set from it, verbatim. Absent, the stream leaves the level's georeference alone.
+	G.PlanetShape = TEXT("Flat");
 	if ((*Origin)->HasTypedField<EJson::Number>(TEXT("longitude")) && (*Origin)->HasTypedField<EJson::Number>(TEXT("latitude")))
 	{
 		G.bHasGeographicOrigin = true;
@@ -684,7 +641,6 @@ bool FMantlePlaceManifestThreeLogic::ToVaultManifest(const FMantlePlaceBundleRea
 	}
 	ReadRecords(C, Root);
 
-	// The steps with no 3.0 input this plugin places, or wired by another release, each with its reason.
 	C.Skip(CoverageId, NoHostReadyFileReason(TEXT("the slope, aspect, hillshade, land-cover, canopy-height and NDVI "
 		"layers")));
 

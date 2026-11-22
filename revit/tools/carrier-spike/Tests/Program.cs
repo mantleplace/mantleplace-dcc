@@ -1,13 +1,8 @@
-// Headless tests of the two prototype carrier readers: each must hand the importer exactly the
-// SiteFeature list today's GeoJSON reader hands it for the same layer, attributes included.
-// Run from this folder: dotnet run -f net8.0 (then net10.0).
 using System.Globalization;
 using System.Text;
 using MantlePlace.Revit.CarrierSpike;
 using MantlePlace.Core;
 
-// "--compare <extracted bundle> <carrier folder>": the headless comparison table over a real bundle,
-// the same table the in-Revit probe writes (README.md).
 if (args.Length == 3 && args[0] == "--compare")
 {
     Console.Write(new CarrierComparison(args[1], args[2]).Table());
@@ -40,14 +35,12 @@ static void Equal<T>(T expected, T actual, string what)
     }
 }
 
-// A State Plane foot order, the frame the carrier must survive: the origin is in ftUS and so are the files.
 SiteFrame frame = new()
 {
     Origin = new GeoOrigin { Epsg = 6605, Easting = 1000.0, Northing = 2000.0, LinearUnit = LinearUnit.UsSurveyFoot },
 };
 LayerFrame layer = new(LayerCoordinates.AbsoluteProjected, LinearUnit.UsSurveyFoot);
 
-// The same three features, written three ways: a 3-D road, and a land-use polygon with a hole.
 const string GeoJson = """
 {"type":"FeatureCollection","features":[
  {"type":"Feature","properties":{"name":"Main St","class":"primary","width_m_estimated":7.5,"subtype":"road","lowest_level":"MED"},
@@ -99,8 +92,6 @@ static void SameFeatures(IReadOnlyList<SiteFeature> expected, IReadOnlyList<Site
     }
 }
 
-// ---- GeoPackage ------------------------------------------------------------------------------
-
 static byte[] Wkb(Action<BinaryWriter> body)
 {
     using MemoryStream stream = new();
@@ -142,7 +133,7 @@ static void Ring(BinaryWriter w, params double[] xy)
 byte[] road = Wkb(w =>
 {
     w.Write((byte)1);
-    w.Write(1002u); // LineString Z, ISO
+    w.Write(1002u);
     w.Write(3);
     foreach (double d in new[] { 1010, 2010, 600.5, 1020, 2030, 601.25, 1040, 2035, 602.0 })
     {
@@ -152,7 +143,7 @@ byte[] road = Wkb(w =>
 byte[] park = Wkb(w =>
 {
     w.Write((byte)1);
-    w.Write(3u); // Polygon
+    w.Write(3u);
     w.Write(2);
     Ring(w, 1100, 2100, 1200, 2100, 1200, 2200, 1100, 2200, 1100, 2100);
     Ring(w, 1120, 2120, 1140, 2120, 1140, 2140, 1120, 2120);
@@ -224,8 +215,6 @@ Test("a missing GeoPackage table is a stated reason, not zero features", () =>
     }
 });
 
-// ---- DXF -------------------------------------------------------------------------------------
-
 string Dxf = DxfText();
 
 Test("a DXF layer with MANTLEPLACE xdata reads as the GeoJSON layer does", () =>
@@ -265,7 +254,6 @@ static string DxfText()
 
     G(0, "SECTION");
     G(2, "ENTITIES");
-    // The road: a 3-D POLYLINE (flag 8), its vertices, SEQEND.
     G(0, "POLYLINE");
     G(8, "land_use");
     G(66, "1");
@@ -283,7 +271,6 @@ static string DxfText()
 
     G(0, "SEQEND");
     G(8, "land_use");
-    // The park: two closed LWPOLYLINEs, the hole naming its polygon.
     foreach ((string role, double[] xy) in new[]
     {
         ("outer", new double[] { 1100, 2100, 1200, 2100, 1200, 2200, 1100, 2200 }),

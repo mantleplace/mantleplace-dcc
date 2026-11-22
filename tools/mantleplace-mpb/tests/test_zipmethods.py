@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""How a 3.x zip's members are compressed (`conformance.md` §7): DEFLATE, or stored where DEFLATE
-would not shrink the member. The archive's own member records are read, so a folder is not checked."""
 
 from __future__ import annotations
 
@@ -45,7 +43,6 @@ class TheZipMembers(Case):
         self.assertRejects(report, "zip.compression")
 
     def test_a_member_stored_where_deflate_does_not_shrink_it(self) -> None:
-        """Nine bytes of `elevation` do not shrink, so storing them is the conforming choice."""
         self.assertEqual("pass", self.zip(**{"Elevation__Elevation.tif": zipfile.ZIP_STORED}).verdict)
 
     def test_the_wrapper_folder_changes_nothing(self) -> None:

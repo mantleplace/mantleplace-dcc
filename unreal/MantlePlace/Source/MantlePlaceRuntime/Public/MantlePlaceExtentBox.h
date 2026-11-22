@@ -46,12 +46,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mantle Place", meta = (ClampMin = "-90", ClampMax = "90", Units = "deg"))
 	double CenterLatitude = 0.0;
 
-	/** The default half-size of the box in Unreal units (cm): 500 m a side, so a 1 km box before any scaling. */
 	static constexpr float DefaultHalfSizeCm = 50000.f;
 
-	/** What Open in curator needs from the box: its centre in degrees and its size in metres. */
 	FMantlePlaceExtentBoxState GetState() const;
 
-	/** The box's extent in W,S,E,N degrees. False while the box is not located or has no size. */
 	bool GetExtent(FMantlePlaceExtent& OutExtent) const;
 };

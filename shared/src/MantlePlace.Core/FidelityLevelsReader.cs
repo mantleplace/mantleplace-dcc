@@ -2,35 +2,8 @@ using System.Text.Json;
 
 namespace MantlePlace.Core;
 
-/// <summary>
-/// Reads one entry's <c>levels</c> block (MPB 1.9.0) into its four levels, or <c>null</c> for an
-/// entry that is MAX only.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The schema's unknown-value rules, each applied where it says:
-/// </para>
-/// <list type="bullet">
-/// <item>An absent block, or one that is not all four levels, is MAX only — what every bundle before
-/// 1.9.0 is, and what an entry whose levels could not be stated in its own frame is.</item>
-/// <item>A <c>same_as</c> naming a level this host does not know fails closed over the WHOLE block:
-/// MAX only.</item>
-/// <item>A cut of an unknown form, a level of no recognisable shape, and a <c>same_as</c> that chains
-/// are that level alone, offered as unavailable and never as the whole file.</item>
-/// <item>An unknown <c>same_as</c> reason is the same level without a reason.</item>
-/// <item>An unknown cost unit keeps its count and loses its unit, so no cost is estimated from it.</item>
-/// </list>
-/// <para>
-/// A pointer level states its own frame with the same keys as its entry, so it is read by the
-/// entry's own shape (<paramref name="pointer"/>) and inherits no frame key from the entry: a level
-/// that does not state its frame is refused by the planner as any such file is.
-/// </para>
-/// </remarks>
 internal static class FidelityLevelsReader
 {
-    /// <param name="levels">The entry's <c>levels</c> member, or <c>null</c> when it has none.</param>
-    /// <param name="pointer">Reads a pointer level as a file of the entry's kind; <c>null</c> for one with no path.</param>
-    /// <param name="extent">Reads a pointer level's own ground extent, for an entry that publishes one.</param>
     internal static FidelityLevels? Read(
         JsonElement? levels,
         Func<JsonElement, BundleArtifact?> pointer,
@@ -52,7 +25,6 @@ internal static class FidelityLevelsReader
             members[level] = member;
         }
 
-        // Every same_as target first: one this host does not know is the whole block's failure.
         foreach ((FidelityLevel level, JsonElement member) in members)
         {
             if (level != FidelityLevel.Max
@@ -65,8 +37,6 @@ internal static class FidelityLevelsReader
 
         List<PublishedLevel> read = [.. FidelityLevelNames.All.Select(level => ReadLevel(level, members[level], pointer, extent))];
 
-        // same_as never chains, and never names itself: a level that does is unavailable, rather than
-        // followed to whatever the chain happens to end at.
         return new FidelityLevels(read.Select(level =>
             level is { Kind: FidelityLevelKind.SameAs, SameAs: { } target }
             && (target == level.Level || read.Single(other => other.Level == target).Kind == FidelityLevelKind.SameAs)
@@ -82,7 +52,6 @@ internal static class FidelityLevelsReader
     {
         CostDriver? cost = ReadCost(member.Object("cost_driver"));
 
-        // MAX is always the entry it sits in, so whatever else it carries names nothing.
         if (level == FidelityLevel.Max)
         {
             return new PublishedLevel { Level = level, Kind = FidelityLevelKind.Max, Cost = cost };
@@ -111,7 +80,6 @@ internal static class FidelityLevelsReader
 
         if (cut)
         {
-            // RAW is never a cut: it is the source-native data, and a cut is of the MAX file.
             return level == FidelityLevel.Raw ? Unavailable(level, cost) : ReadCut(level, member.Object("cut"), cost);
         }
 
@@ -127,7 +95,6 @@ internal static class FidelityLevelsReader
             : Unavailable(level, cost);
     }
 
-    /// <summary>Exactly one known form; an unknown form, both, or neither is unavailable.</summary>
     private static PublishedLevel ReadCut(FidelityLevel level, JsonElement? cut, CostDriver? cost)
     {
         if (cut is not { } form)
@@ -169,7 +136,6 @@ internal static class FidelityLevelsReader
         _ => null,
     };
 
-    /// <summary>The cost driver, or <c>null</c> when absent or without a whole, non-negative count.</summary>
     private static CostDriver? ReadCost(JsonElement? driver)
     {
         if (driver is not { } element

@@ -2,8 +2,6 @@
 
 using UnrealBuildTool;
 
-// Editor-only module: the local-zip vault-package importer (heightmap -> Landscape,
-// Terrain.glb -> StaticMesh, aerial imagery draped on top). Never cooked into a build.
 public class MantlePlaceEditor : ModuleRules
 {
 	public MantlePlaceEditor(ReadOnlyTargetRules Target) : base(Target)
@@ -21,31 +19,31 @@ public class MantlePlaceEditor : ModuleRules
 			new string[]
 			{
 				"CoreUObject",
-				"DataLayerEditor", // UDataLayerEditorSubsystem: per-family World Partition Data Layers at import
-				"DeveloperSettings", // UDeveloperSettings: the generated-content-root project setting
+				"DataLayerEditor",
+				"DeveloperSettings",
 				"Engine",
-				"MantlePlaceRuntime", // auth base + vault client + bundle cache the vault-import orchestrator drives
-				"UnrealEd",      // FScopedTransaction, GEditor, factories, FActorLabelUtilities
-				"EditorSubsystem", // UEditorSubsystem: UMantlePlaceAuthSubsystem holds the editor's one auth session
-				"AssetTools",    // FAssetToolsModule: import tasks + CreateAsset
-				"AssetRegistry", // FAssetRegistryModule::AssetCreated for the landscape layer-info assets
-				"Landscape",     // ALandscapeProxy::Import, ULandscapeInfo, ULandscapeSubsystem
-				"PCG",           // UPCGGraph built at import, UPCGSubsystem partition actors swept at wipe
-				"RHI",           // FRHICommandListImmediate::EndFrame: the import window's Slate tick between steps
-				"RenderCore",    // FlushRenderingCommands (finalize the landscape drape render state)
-				"FileUtilities", // FZipArchiveReader (editor-only, libzip-backed)
-				"ImageWrapper",  // 16-bit grayscale PNG decode
-				"Json",          // Metadata/manifest.json parse
-				"SQLiteCore",    // FSQLiteDatabase: the road-splines GeoPackage (engine plugin SQLiteCore, enabled in the .uplugin)
-				"HTTP",          // FHttpModule: the terrain tiles Extra is downloaded from its minted link
-				"HTTPServer",    // FMantlePlaceLocalTileServer: stream the bundle to Cesium for Unreal
-				"DesktopPlatform", // IDesktopPlatform::OpenFileDialog (Browse button)
-				"Slate",         // SMantlePlaceVaultPanel/Row: the native vault tooling UI
-				"SlateCore",     // Slate widget + style (FAppStyle) types
-				"InputCore",     // EKeys::* referenced by the SListView/SComboBox/STableRow templates
-				"WorkspaceMenuStructure", // GetLevelEditorCategory() -> the Window-menu tab entry
-				"ToolMenus",     // Tools > Mantle Place > Prepare for handover
-				"Projects",      // IPluginManager: locate the plugin Resources dir for the style set's icons
+				"MantlePlaceRuntime",
+				"UnrealEd",
+				"EditorSubsystem",
+				"AssetTools",
+				"AssetRegistry",
+				"Landscape",
+				"PCG",
+				"RHI",
+				"RenderCore",
+				"FileUtilities",
+				"ImageWrapper",
+				"Json",
+				"SQLiteCore",
+				"HTTP",
+				"HTTPServer",
+				"DesktopPlatform",
+				"Slate",
+				"SlateCore",
+				"InputCore",
+				"WorkspaceMenuStructure",
+				"ToolMenus",
+				"Projects",
 			}
 		);
 	}

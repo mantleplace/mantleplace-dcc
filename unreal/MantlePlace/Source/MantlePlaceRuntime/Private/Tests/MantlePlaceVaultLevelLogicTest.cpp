@@ -7,16 +7,10 @@
 #include "MantlePlaceVaultLogic.h"
 #include "MantlePlaceVaultTypes.h"
 
-// An MPB 3.0 order's download: the offer a listing row carries, the request that names one level and
-// this host's files, and the answer's link marked as that level's. Built against a test double of the
-// published Platform API description (the `mpb3` members of the vault list and download routes); a 2.x
-// order keeps its view request, asserted byte for byte in MantlePlace.Vault.Logic.
-
 namespace
 {
 using FLogic = FMantlePlaceVaultLogic;
 
-/** One listing row: a 2.x row plus, when Offer is not empty, an `mpb3` member holding it. */
 FString ListWithRow(const FString& Offer)
 {
 	const FString Row = FString(TEXT("{\"id\":\"order-3\",\"status\":\"available\",\"sizeBytes\":900,\"sha256\":\"ab\""))
@@ -45,7 +39,6 @@ bool FMantlePlaceVaultLevelOfferTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("A 2.x token is not a 3.0 level"), FLogic::IsOfferedLevel(TEXT("MED")));
 	TestFalse(TEXT("RAW is not offered"), FLogic::IsOfferedLevel(TEXT("RAW")));
 
-	// A 3.0 row: the recommendation and each level's size and counts, verbatim.
 	{
 		TArray<FMantlePlaceVaultItem> Items;
 		TArray<FString> Warnings;
@@ -76,7 +69,6 @@ bool FMantlePlaceVaultLevelOfferTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("The 2.x members are read as before"), Item.SizeBytes, static_cast<int64>(900));
 	}
 
-	// A 2.x row: no offer, no warning, nothing changed.
 	{
 		TArray<FMantlePlaceVaultItem> Items;
 		TArray<FString> Warnings;
@@ -86,7 +78,6 @@ bool FMantlePlaceVaultLevelOfferTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("A 2.x row warns of nothing"), Warnings.Num(), 0);
 	}
 
-	// An offer missing a level's size is not half-read: the row stays, as a 2.x row, and a warning says why.
 	{
 		TArray<FMantlePlaceVaultItem> Items;
 		TArray<FString> Warnings;
@@ -99,7 +90,6 @@ bool FMantlePlaceVaultLevelOfferTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("And says so"), Warnings.Num(), 1);
 	}
 
-	// No recommendation, or one not a level: nothing is preselected, and the levels are still offered.
 	for (const TCHAR* Recommended : { TEXT(""), TEXT(",\"recommendedLevel\":\"MAX\"") })
 	{
 		TArray<FMantlePlaceVaultItem> Items;
@@ -121,7 +111,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceVaultLevelRequestTest::RunTest(const FString& Parameters)
 {
-	// The 3.0 request names the files this host reads and one level, in the published description's shape.
 	const TArray<FString> Files = { TEXT("Elevation/Elevation.png"), TEXT("Imagery/Imagery.png") };
 	TestEqual(TEXT("3.0 request, exact bytes"),
 		FLogic::BuildLevelDownloadBody(TEXT("Med"), Files),
@@ -130,12 +119,10 @@ bool FMantlePlaceVaultLevelRequestTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("A 3.0 request never carries a view"),
 		FLogic::BuildLevelDownloadBody(TEXT("Min"), Files).Contains(TEXT("\"view\"")));
 
-	// A 2.x order keeps its request: the view, unchanged.
 	TestEqual(TEXT("2.x request unchanged"),
 		FLogic::BuildViewDownloadBody(),
 		FString(TEXT("{\"format\":\"bundle\",\"view\":{\"host\":\"unreal\",\"levels\":{\"*\":\"MAX\"}}}")));
 
-	// The answer: the link, held as this level's download against its own stated length and digest.
 	FMantlePlacePresignedDownload Download;
 	FString Error;
 	TestTrue(TEXT("A 3.0 answer parses"), FLogic::ParseLevelDownloadResponse(
@@ -152,7 +139,6 @@ bool FMantlePlaceVaultLevelRequestTest::RunTest(const FString& Parameters)
 		TEXT("{\"error\":\"3.0 is not served yet\",\"code\":\"mpb3_not_yet_served\"}"), TEXT("Med"), Refused, Error));
 	TestTrue(TEXT("And names the platform's words"), Error.Contains(TEXT("not served yet")));
 
-	// A 2.x answer read the 2.x way names no level.
 	FMantlePlacePresignedDownload Whole;
 	FLogic::ParseDownloadResponse(TEXT("{\"url\":\"https://r2.example/w.zip\"}"), Whole, Error);
 	TestTrue(TEXT("A 2.x download holds no level"), Whole.Level.IsEmpty());
@@ -166,9 +152,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceVaultLevelNotInBundleTest::RunTest(const FString& Parameters)
 {
-	// A promised file the bundle does not hold (a layer the site lacks) is refused by name: HTTP 404,
-	// code file_not_in_bundle, the names in `files`. An absent file is not an error, so the request is
-	// asked again naming only the rest.
 	const TArray<FString> Asked = { TEXT("Elevation/Elevation.png"), TEXT("Basemap/Roads.csv"), TEXT("Landcover/Trees.csv") };
 	const FString Refusal = TEXT("{\"error\":\"This bundle holds no file named Basemap/Roads.csv\","
 		"\"code\":\"file_not_in_bundle\",\"reason\":\"unknown_file\",\"files\":[\"Basemap/Roads.csv\"]}");
@@ -181,7 +164,6 @@ bool FMantlePlaceVaultLevelNotInBundleTest::RunTest(const FString& Parameters)
 		FString(TEXT("Elevation/Elevation.png,Landcover/Trees.csv")));
 	TestEqual(TEXT("The absent file is named"), FString::Join(Absent, TEXT(",")), FString(TEXT("Basemap/Roads.csv")));
 
-	// Several absent at once: every name the refusal lists goes.
 	{
 		const FString Two = TEXT("{\"error\":\"x\",\"code\":\"file_not_in_bundle\",\"files\":[\"Basemap/Roads.csv\",\"Landcover/Trees.csv\"]}");
 		TArray<FString> R2;
@@ -190,7 +172,6 @@ bool FMantlePlaceVaultLevelNotInBundleTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("One is left"), FString::Join(R2, TEXT(",")), FString(TEXT("Elevation/Elevation.png")));
 	}
 
-	// Anything else stays a failure.
 	TArray<FString> Unused;
 	TArray<FString> UnusedAbsent;
 	TestFalse(TEXT("Another code is not an absent file"), FLogic::FilesLeftAfterNotInBundle(404,
@@ -214,9 +195,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceVaultLevelRecordsAbsentTest::RunTest(const FString& Parameters)
 {
-	// A 3.0 request names the nine public-record linework files beside the step files. An order that holds
-	// few or none of them is refused by name, and the request is asked again without them: the rest still
-	// downloads, and every refused file is reported so the import can hold it against its manifest.
 	const TArray<FString> Records = { TEXT("Records/Parcels.dxf"), TEXT("Records/Zoning.dxf"), TEXT("Records/Floodplain.dxf"),
 		TEXT("Records/Wetlands.dxf"), TEXT("Records/Soils.dxf"), TEXT("Records/Heritage.dxf"),
 		TEXT("Records/Conservation.dxf"), TEXT("Records/Hydrography.dxf"), TEXT("Records/Contamination.dxf") };
@@ -234,7 +212,6 @@ bool FMantlePlaceVaultLevelRecordsAbsentTest::RunTest(const FString& Parameters)
 			"\"reason\":\"unknown_file\",\"files\":[%s]}"), *FString::Join(Quoted, TEXT(",")));
 	};
 
-	// Some absent: only those go, the held records stay in the request.
 	{
 		const TArray<FString> Some = { Records[1], Records[3], Records[8] };
 		TArray<FString> Remaining;
@@ -247,7 +224,6 @@ bool FMantlePlaceVaultLevelRecordsAbsentTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("A refused one is not asked for again"), Remaining.Contains(Records[3]));
 	}
 
-	// Every record absent: the other files still download.
 	{
 		TArray<FString> Remaining;
 		TArray<FString> Absent;
@@ -266,7 +242,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceVaultExtrasTest::RunTest(const FString& Parameters)
 {
-	// The platform's Extras are read as the row lists them, verbatim, and asked for by their id.
 	{
 		const FString Extras = TEXT(",\"extras\":["
 			"{\"id\":\"SiteBrief\",\"name\":\"Site Brief\",\"sizeBytes\":1468006},"
@@ -293,8 +268,6 @@ bool FMantlePlaceVaultExtrasTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("The levels are unharmed"), Items[0].bHasLevels && Items[0].Levels.Num() == 3);
 	}
 
-	// The platform marks each Extra locked or not: the Site Brief never, the plan sheets and terrain tiles on a
-	// free bundle. A row that does not say is a row that does not lock.
 	{
 		const FString Extras = TEXT(",\"extras\":["
 			"{\"id\":\"SiteBrief\",\"name\":\"Site Brief\",\"sizeBytes\":1468006,\"locked\":false},"
@@ -326,7 +299,6 @@ bool FMantlePlaceVaultExtrasTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// A row that lists no terrain tiles has none to ask for: nothing is requested.
 	{
 		TArray<FMantlePlaceVaultItem> Items;
 		FString Error;
@@ -340,7 +312,6 @@ bool FMantlePlaceVaultExtrasTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// A 2.x row lists no Extras at all.
 	{
 		TArray<FMantlePlaceVaultItem> Items;
 		FString Error;
@@ -351,11 +322,10 @@ bool FMantlePlaceVaultExtrasTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// The request names the Extra and nothing else: no level, no files, no view.
 	TestEqual(TEXT("The Extra request, exact bytes"),
 		FLogic::BuildExtraDownloadBody(MantlePlaceTerrainTilesExtraId()),
 		FString(TEXT("{\"format\":\"bundle\",\"mpb3\":{\"version\":\"3.0\",\"extra\":\"TerrainTiles\"}}")));
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

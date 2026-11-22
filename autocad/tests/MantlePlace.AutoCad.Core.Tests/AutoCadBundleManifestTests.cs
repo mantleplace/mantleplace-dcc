@@ -5,13 +5,6 @@ using MantlePlace.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 
-/// <summary>
-/// The <c>PackageContents.xml</c> the AutoCAD release zip carries, from the same function Revit's
-/// does given the other <see cref="BundleHost"/>. Packaging and the storefront cannot run in CI, so
-/// what can be pinned is the manifest itself: the host parameter changes what it should and nothing
-/// else, every supported year is declared with its series bounds and the build it loads, and the
-/// version is the tree's one.
-/// </summary>
 internal static class AutoCadBundleManifestTests
 {
     private static readonly int[] Years = [2025, 2026, 2027];
@@ -64,9 +57,6 @@ internal static class AutoCadBundleManifestTests
 
         run.Case("each year is its own Components group, the one requirement first, because AutoCAD reads one requirement per group", () =>
         {
-            // A live run in Civil 3D 2027 loaded nothing from a single group holding all three years'
-            // requirements: the autoloader registered the bundle and loaded no component. Split into one
-            // group per year, as every Autodesk-shipped bundle on the machine is laid out, it loaded.
             XElement[] groups = [.. Parse("1.0.0", Years).Root!.Elements("Components")];
 
             run.Equal(groups.Length, 3, "one Components group per year");
@@ -131,8 +121,6 @@ internal static class AutoCadBundleManifestTests
 
         run.Case("neither manifest names a customization file: the shell builds the panel", () =>
         {
-            // A partial CUIX cannot add a panel to a tab in the host's main file: AutoCAD and Civil 3D
-            // 2027 showed its tab as a second "Add-ins" tab (autocad/docs/api-record.md).
             run.False(AutodeskBundleManifest.Build("1.0.0", Years, BundleHost.AutoCad).Contains(".cuix", StringComparison.OrdinalIgnoreCase), "AutoCAD's names none");
             run.False(
                 AutodeskBundleManifest.Build("1.0.0", [2026], BundleHost.Revit).Contains(".cuix", StringComparison.OrdinalIgnoreCase),
@@ -220,7 +208,6 @@ internal static class AutoCadBundleManifestTests
         return run.Report("AutoCadBundleManifest");
     }
 
-    /// <summary>The version this build declares: the Core assembly's, minus the commit metadata.</summary>
     private static string DeclaredVersion()
         => BuildIdentity.Parse(
             typeof(AutodeskBundleManifest).Assembly

@@ -1,14 +1,3 @@
-"""Write the two prototype carriers for one extracted bundle, the way the ETL ticket would emit them.
-
-    python make_carriers.py <extracted bundle dir> <out dir>
-
-Needs GDAL's ogr2ogr on PATH and ezdxf (pip install ezdxf). It stands in for the pipeline only to
-give the spike two carriers holding the same features as today's GeoJSON: the Revit plugin itself
-never reprojects, and the one reprojection here (the footprints, which no Revit GeoJSON carries
-today) is GDAL's, on the ETL's side of the line. Writes SiteContext.gpkg and SiteContext.dxf, and
-footprints.geojson, the footprints in the order's CRS, so the probe can compare all three.
-"""
-
 import json
 import os
 import subprocess
@@ -61,12 +50,11 @@ def first_position(coordinates):
 
 def write_dxf(layers, path: str) -> None:
     doc = ezdxf.new("R2010")
-    doc.header["$INSUNITS"] = 21  # US survey feet: the order's unit, and nothing a reader can trust more than the manifest
+    doc.header["$INSUNITS"] = 21
     doc.appids.add(APPLICATION)
     msp = doc.modelspace()
     for name, source in layers:
         doc.layers.add(name)
-        # Numbers stay the text the GeoJSON wrote, so "35.0" is still "35.0" on the far side.
         collection = json.load(open(source, encoding="utf-8"), parse_float=str, parse_int=str)
         polygons = 0
         for feature in collection["features"]:

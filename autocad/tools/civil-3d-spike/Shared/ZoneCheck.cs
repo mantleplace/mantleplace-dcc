@@ -10,15 +10,8 @@ public enum ZoneVerdict
 
 public sealed record ZoneResult(ZoneVerdict Verdict, string Reason);
 
-/// <summary>
-/// The comparison the plugin makes between the drawing's coordinate zone code and the order's, before
-/// it places anything. It only compares: a refusal says why and leaves the drawing as it was, and the
-/// zone is never set for the user. Codes compare exactly (ordinal), because a code is an identifier the
-/// plugin passes through, not a value it interprets.
-/// </summary>
 public static class ZoneCheck
 {
-    /// <summary>The code a drawing with no coordinate system reads, and the first of <c>GetAllCodes()</c>.</summary>
     public const string NoZone = ".";
 
     public static ZoneResult Compare(string? drawingCode, string? orderCode)

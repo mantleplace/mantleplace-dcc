@@ -7,12 +7,11 @@
 #include "Misc/Guid.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeExit.h"
-#include "SQLiteDatabase.h"           // SQLiteCore (engine plugin): FSQLiteDatabase
-#include "SQLitePreparedStatement.h"  // SQLiteCore: FSQLitePreparedStatement
+#include "SQLiteDatabase.h"
+#include "SQLitePreparedStatement.h"
 
 namespace
 {
-/** Bounds-checked little/big-endian reads over a byte range. Every read says whether it fit. */
 struct FByteReader
 {
 	const uint8* Data = nullptr;
@@ -77,16 +76,9 @@ struct FByteReader
 	}
 };
 
-// WKB geometry type codes (the OGC base type, after the dimension is split off).
 constexpr uint32 WkbLineString = 2;
 constexpr uint32 WkbMultiLineString = 5;
 
-/**
- * One WKB geometry: byte-order byte, type, body. Reads LineString and MultiLineString, ISO
- * (1002, 2002, 3002) or extended (flag bits) alike. Any other type leaves OutIsLine false and
- * consumes nothing past its header: the caller skips the feature. OutIsLine is true only when the
- * geometry was a line type and its parts were appended.
- */
 bool DecodeWkb(FByteReader& Reader, TArray<TArray<FVector>>& OutParts, bool& OutIsLine, FString& OutError)
 {
 	OutIsLine = false;
@@ -110,7 +102,7 @@ bool DecodeWkb(FByteReader& Reader, TArray<TArray<FVector>>& OutParts, bool& Out
 	uint32 Type = RawType & 0x1FFFFFFFu;
 	if (Type >= 1000)
 	{
-		const uint32 Dimension = Type / 1000; // ISO: 1 = Z, 2 = M, 3 = ZM
+		const uint32 Dimension = Type / 1000;
 		if (Dimension > 3)
 		{
 			OutError = FString::Printf(TEXT("geometry type %u is not a WKB type"), RawType);
@@ -169,7 +161,7 @@ bool DecodeWkb(FByteReader& Reader, TArray<TArray<FVector>>& OutParts, bool& Out
 			OutError = TEXT("MultiLineString is cut off before its member count");
 			return false;
 		}
-		constexpr int64 SmallestMember = 9; // byte order + type
+		constexpr int64 SmallestMember = 9;
 		if (static_cast<int64>(MemberCount) > Reader.Remaining() / SmallestMember)
 		{
 			OutError = FString::Printf(TEXT("MultiLineString states %u members and is cut off before them"), MemberCount);
@@ -192,10 +184,9 @@ bool DecodeWkb(FByteReader& Reader, TArray<TArray<FVector>>& OutParts, bool& Out
 		return true;
 	}
 
-	return true; // a point, polygon or collection: not a road centreline, skipped by the caller
+	return true;
 }
 
-/** A feature table named by gpkg_contents, with the geometry column and SRS gpkg_geometry_columns gives it. */
 struct FFeatureTable
 {
 	FString Name;
@@ -258,8 +249,6 @@ bool ReadDatabase(
 	TArray<FFeatureTable> Chosen;
 	if (RequestedTables.IsEmpty())
 	{
-		// A row that lists no `tables` holds exactly one (format.md 6.3): that one is read whatever
-		// the producer named it, and a file of several is refused, never read as any one of them.
 		if (Available.Num() > 1)
 		{
 			TArray<FString> Names;
@@ -294,8 +283,6 @@ bool ReadDatabase(
 		return false;
 	}
 
-	// The roads are placed only from the frame this plugin projects. Another is a named refusal,
-	// never a reprojection (HPS-33), and it is checked for every table before any road is read.
 	for (const FFeatureTable& Table : Chosen)
 	{
 		if (Table.SrsId != FMantlePlaceRoadSplinesGpkg::Wgs84SrsId)
@@ -333,19 +320,19 @@ bool ReadDatabase(
 			TArray<uint8> Blob;
 			if (!Rows.GetColumnValueByName(*Table.GeometryColumn, Blob) || Blob.IsEmpty())
 			{
-				continue; // a feature with no geometry has no road to place
+				continue;
 			}
 			TArray<TArray<FVector>> Parts;
 			bool bIsLine = false;
 			FString GeometryError;
 			if (!FMantlePlaceRoadSplinesGpkg::DecodeGeometry(Blob, Parts, bIsLine, GeometryError))
 			{
-				++OutRowsUnreadable; // one bad feature must not drop the whole layer
+				++OutRowsUnreadable;
 				continue;
 			}
 			if (!bIsLine)
 			{
-				continue; // not a road centreline
+				continue;
 			}
 
 			FMantlePlaceRoadSpline Prototype;
@@ -372,7 +359,6 @@ bool FMantlePlaceRoadSplinesGpkg::DecodeGeometry(
 	OutParts.Reset();
 	OutIsLine = false;
 
-	// The GeoPackage geometry header: "GP", version, flags, srs_id, then an optional envelope.
 	if (Blob.Num() < 8 || Blob[0] != 'G' || Blob[1] != 'P')
 	{
 		OutError = TEXT("geometry has no GeoPackage header.");
@@ -386,7 +372,7 @@ bool FMantlePlaceRoadSplinesGpkg::DecodeGeometry(
 	}
 	if ((Flags & 0x10) != 0)
 	{
-		return true; // an empty geometry: nothing to place, and not a fault
+		return true;
 	}
 	int64 EnvelopeBytes = 0;
 	switch ((Flags >> 1) & 0x07)
@@ -443,8 +429,6 @@ bool FMantlePlaceRoadSplinesGpkg::ReadFile(
 		return false;
 	}
 
-	// The database, and every statement opened on it, lives inside this scope: the file is closed
-	// before the caller can delete it.
 	FSQLiteDatabase Database;
 	if (!Database.Open(*GpkgFilePath, ESQLiteDatabaseOpenMode::ReadOnly))
 	{
@@ -478,7 +462,7 @@ bool FMantlePlaceRoadSplinesGpkg::ReadBytes(
 	    FString::Printf(TEXT("RoadSplines-%s.gpkg"), *FGuid::NewGuid().ToString(EGuidFormats::Digits))));
 	ON_SCOPE_EXIT
 	{
-		IFileManager::Get().Delete(*ScratchPath, /*RequireExists*/ false, /*EvenReadOnly*/ true, /*Quiet*/ true);
+		IFileManager::Get().Delete(*ScratchPath, false, true, true);
 	};
 	if (!FFileHelper::SaveArrayToFile(GpkgBytes, *ScratchPath))
 	{

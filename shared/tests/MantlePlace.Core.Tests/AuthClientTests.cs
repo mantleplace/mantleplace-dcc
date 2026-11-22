@@ -3,14 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The impure half of the auth triad — secret store, endpoint config, loopback listener.
-/// </summary>
-/// <remarks>
-/// These run on the hosted runner because <c>MantlePlace.Client</c> references no Revit API.
-/// The platform split is asserted rather than assumed: on Linux the suite proves the <c>HPS-16</c>
-/// null store degrades honestly, which is the branch a Windows-only suite would never reach.
-/// </remarks>
 internal static class AuthClientTests
 {
     internal static int Run()
@@ -33,15 +25,8 @@ internal static class AuthClientTests
 
     private static void RunCases(TestRun run, string sandbox)
     {
-        // The definitive-vs-transient classification itself is asserted from the shared corpus
-        // (auth.rejectionClassification), not here. It used to be a host-local table on both
-        // sides kept in step by hand; the codes are a platform contract, so they live upstream
-        // where both hosts are bound by one artifact.
         run.Case("both hosts spell the store lock the same way", () =>
         {
-            // A lock the two hosts name differently is no lock at all, and nothing would fail
-            // visibly -- the interleaving it guards against needs both hosts, a rotating platform
-            // and unlucky timing. This is the cheapest place to notice a rename.
             run.Equal(ISecretStore.LockName, "MantlePlace.Auth.SecretStore",
                 "and the Unreal host's IMantlePlaceSecretStore::LockName is this literal");
         });
@@ -75,8 +60,6 @@ internal static class AuthClientTests
             MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load(Path.Combine(sandbox, "absent.json"));
             run.Equal(endpoints.WebLoginUrl, "https://mantle.place/auth/native?host=revit", "web login");
             run.Equal(endpoints.TokenEndpointUrl, "https://mantle.place/api/v1/auth/native/token", "token exchange");
-            // No declared ports at all: the OS picks one (HPS-06). Every fixed list this shipped
-            // with was eventually swallowed by a Windows reserved block that moved under it.
             run.Equal(endpoints.LoopbackPorts.Count, 0, "no declared loopback ports by default");
             run.Equal(endpoints.SignInTimeoutSeconds, 300, "sign-in timeout");
             run.Equal(
@@ -114,8 +97,6 @@ internal static class AuthClientTests
                 "https://dev.example/api/v1/auth/native/refresh",
                 "the refresh route points at the same stack as the login route");
 
-            // This runs during Revit's add-in load. Throwing there costs the ribbon button and tells
-            // the curator nothing.
             string broken = Path.Combine(sandbox, "broken.json");
             File.WriteAllText(broken, "{ not json");
             run.Equal(
@@ -129,15 +110,10 @@ internal static class AuthClientTests
             MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load(Path.Combine(sandbox, "absent.json"));
             run.Contains(endpoints.WebLoginUrl, "host=revit", "the manifest's hostId, one vocabulary");
 
-            // It is display-only on the platform side: read off an untrusted query, allowlisted,
-            // never validated against a client registry and never able to fail a request. It is not
-            // a client id, and nothing here should start treating it as one.
             string url = AuthUrls.BuildAuthorizeUrl(
                 endpoints.WebLoginUrl, "http://127.0.0.1:51000/callback", "chal", "st");
             run.Contains(url, "?host=revit&response_type=code", "host rides the base, ahead of the OAuth params");
 
-            // The pinned order is what makes a captured URL from one host a usable reproduction for
-            // the other, so it has to survive the base growing a query.
             run.True(
                 url.IndexOf("response_type=code", StringComparison.Ordinal)
                     < url.IndexOf("code_challenge=", StringComparison.Ordinal)
@@ -157,18 +133,12 @@ internal static class AuthClientTests
                 "the redirect URI names the port it actually bound");
             run.Contains(first.RedirectUri, "127.0.0.1", "the literal loopback IP, never 'localhost'");
 
-            // The whole point of returning null rather than throwing: the caller must be able to
-            // decide NOT to open a browser that would redirect into nothing.
             using LoopbackRedirectListener? second = LoopbackRedirectListener.Start([first.Port], "/callback");
             run.True(second is null, "a declared list with no free port yields no listener");
         });
 
         run.Case("concurrent sessions each get their own port", () =>
         {
-            // The requirement the old fixed list could not meet: Revit and Unreal signed in at once,
-            // or two Revit sessions, or two editors -- all drawing from one five-entry list, with the
-            // Unreal editor holding its port for the life of the process. Eight is deliberately more
-            // than that list ever had, so this case fails against the range-based implementation.
             List<LoopbackRedirectListener> held = [];
             try
             {
@@ -192,16 +162,6 @@ internal static class AuthClientTests
 
         run.Case("cancelling after a finished sign-in is a no-op, not a crash", () =>
         {
-            // The regression. SignInAsync used to hold its CancellationTokenSource in a `using`
-            // while ALSO publishing it to a field, so every exit disposed the source and left the
-            // field pointing at it. CancelSignIn then called Cancel() on a disposed source, which
-            // throws ObjectDisposedException -- and the caller is the sign-in window's Closed
-            // handler, so the throw landed on Revit's dispatcher and terminated the process.
-            // Journals across Revit 2025, 2026 and 2027 all recorded it as ExceptionCode=0xe0434352,
-            // an unhandled managed exception, moments after a SUCCESSFUL sign-in.
-            //
-            // A successful sign-in needs a browser, so this drives the same disposal through the
-            // bind-failure exit instead: same `finally`, same field, same stale source afterwards.
             string occupiedConfig = Path.Combine(sandbox, "occupied-port.json");
             using LoopbackRedirectListener? squatter = LoopbackRedirectListener.StartEphemeral("/callback");
             run.True(squatter is not null, "something is holding the only port the session may use");
@@ -218,8 +178,6 @@ internal static class AuthClientTests
             AuthOutcome outcome = session.SignInAsync().GetAwaiter().GetResult();
             run.False(outcome.Succeeded, "the sign-in could not bind, so it failed before any browser");
 
-            // Both of these reach the same field. The window's Close button raises the first; the
-            // ribbon's Sign out button raises the second.
             run.True(NoThrow(session.CancelSignIn), "Close after a finished sign-in does not throw");
             run.True(NoThrow(session.SignOut), "Sign out after a finished sign-in does not throw");
 
@@ -228,9 +186,6 @@ internal static class AuthClientTests
 
         run.Case("a port lost between probe and bind is retried with a different one", () =>
         {
-            // The probe closes its socket before the real listener binds, so another process can
-            // take the port in between. The recovery is to propose a FRESH port, not to retry the
-            // same number -- retrying the same one just re-runs the lost race.
             using LoopbackRedirectListener? squatter = LoopbackRedirectListener.StartEphemeral("/callback");
             run.True(squatter is not null, "something is holding a port");
 
@@ -240,7 +195,6 @@ internal static class AuthClientTests
                 () =>
                 {
                     probes++;
-                    // First proposal is already taken; after that, behave like the real probe.
                     return probes == 1 ? squatter!.Port : FreeEphemeralPort();
                 });
 
@@ -264,8 +218,6 @@ internal static class AuthClientTests
 
         run.Case("a callback is classified in the HPS-08 precedence", () =>
         {
-            // An explicit error beats a state mismatch beats a missing code. Checking state first
-            // would report "possible CSRF" for an ordinary "user declined".
             AuthCallback declined = new() { Error = "access_denied", ErrorDescription = "User denied", State = "wrong" };
             run.Equal(
                 AuthCallbackQuery.Classify(declined, "right", out string declinedMessage).ToString(),
@@ -295,8 +247,6 @@ internal static class AuthClientTests
 
         run.Case("the browser page escapes in the order that does not double-escape", () =>
         {
-            // & first. Escaping < first would produce &lt; and the later & pass would turn it into
-            // &amp;lt;, which renders as literal "&lt;" on the page.
             run.Equal(BrowserPages.HtmlEscape("<a & b>"), "&lt;a &amp; b&gt;", "escaped once, correctly");
 
             string page = BrowserPages.Error("<script>alert(1)</script>");
@@ -307,11 +257,6 @@ internal static class AuthClientTests
         });
     }
 
-    /// <summary>
-    /// The DPAPI half. Called only under an <see cref="OperatingSystem.IsWindows"/> guard; the
-    /// attribute is what tells CA1416 so, because the analyzer does not carry a caller's guard
-    /// across a method boundary.
-    /// </summary>
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static void RunWindowsCases(TestRun run, string sandbox)
     {
@@ -344,8 +289,6 @@ internal static class AuthClientTests
             Directory.CreateDirectory(root);
             File.WriteAllBytes(Path.Combine(root, "corrupted.bin"), [0x00, 0x01, 0x02, 0x03]);
 
-            // A blob written by a different OS user is indistinguishable from a corrupt one, and
-            // both are indistinguishable from absence to the curator.
             run.False(store.TryLoad("corrupted", out string loaded), "no session");
             run.Equal(loaded, string.Empty, "and nothing handed back");
         });
@@ -372,14 +315,6 @@ internal static class AuthClientTests
         });
     }
 
-    /// <summary>
-    /// True when <paramref name="body"/> completes without throwing.
-    /// </summary>
-    /// <remarks>
-    /// Deliberately total. The assertion is "this does not take the process down", and narrowing to
-    /// <see cref="ObjectDisposedException"/> would let the next lifetime bug through under a
-    /// different exception type while the case still read as covering it.
-    /// </remarks>
     private static bool NoThrow(Action body)
     {
         try
@@ -410,7 +345,6 @@ internal static class AuthClientTests
         }
     }
 
-    /// <summary>A port the OS says is free right now. Mirrors the listener's own probe.</summary>
     private static int FreeEphemeralPort()
     {
         System.Net.Sockets.TcpListener probe = new(System.Net.IPAddress.Loopback, 0);

@@ -1,33 +1,3 @@
-"""The Platform API leg of the conformance gate: the `platform` and `client` corpus groups.
-
-Those two groups hold exchanges with the Platform API rather than documents a parser reads: one
-request a host sends and the answer the platform gives (`corpus/README.md`, "The Platform API
-groups"). A host suite replays each one against its client. This module holds the corpus to the
-spec the platform serves at https://mantle.place/api/v1/openapi.json, so a case can never pin a
-behaviour the platform does not have:
-
-- the operation exists, and the case's method and path are that operation's;
-- every query parameter and header the request sends is one the operation declares, every
-  required one is sent unless the case declares it left out (`omits`), and a case that leaves one
-  out is answered with a refusal;
-- the request body and the response body validate against the operation's own schemas, and the
-  status is one the operation declares;
-- the case's `status` and `code` expectations say what the response says.
-
-Two copies of the spec are read. Pull requests read the vendored copy beside the generated .NET
-client (`shared/src/MantlePlace.PlatformApi/Generated/openapi.json`), which `ci-platform-api` keeps
-equal to the served one, so a pull request fetches nothing. The scheduled live run fetches the
-served copy too.
-
-**The record.** The spec's identity (its `info.version` and the sha256 of its canonical text) is
-recorded in `coverage-baseline.json` (`platformApi`) and in each claiming host's
-`verifiedAgainstPlatformApi`. The gate fails when either names another spec than the vendored one:
-the spec moved, so the cases are re-checked and the record raised in the same change.
-
-The schema validator is the subset of JSON Schema the spec uses, stdlib only like the rest of the
-gate. A keyword it does not know fails loudly rather than passing unread.
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -39,36 +9,27 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
-#: The corpus groups that hold Platform API exchanges.
 PLATFORM_GROUPS = frozenset({"platform", "client"})
 
-#: The spec the generated .NET client was generated from, vendored by
-#: shared/tools/platform-api/sync_platform_api.py and kept current by ci-platform-api.
 VENDORED_SPEC = _REPO_ROOT / "shared" / "src" / "MantlePlace.PlatformApi" / "Generated" / "openapi.json"
 
 SERVED_SPEC_URL = "https://mantle.place/api/v1/openapi.json"
 
-#: Python's default user agent is refused by the edge in front of mantle.place; name the caller.
 _USER_AGENT = "mantleplace-dcc conformance gate"
 
 _VERBS = ("get", "put", "post", "delete", "patch")
 
-#: Headers every request may carry whatever the operation declares: they are HTTP's, not the API's.
 _TRANSPORT_HEADERS = frozenset({"accept", "content-type"})
 
-#: Keywords that describe rather than constrain.
 _ANNOTATIONS = frozenset({"description", "title", "default", "examples", "format", "deprecated",
                           "readOnly", "writeOnly", "$comment"})
 
 
 def canonical(spec: dict) -> str:
-    """The spec as vendored: re-written with a stable indent, key order kept, LF line ends."""
     return json.dumps(spec, indent=2, ensure_ascii=False) + "\n"
 
 
 def spec_identity(spec: dict) -> dict:
-    """`{version, sha256}`: what the record names. The digest is over the canonical text, so line
-    endings and whitespace do not move it and any change of content does."""
     version = spec.get("info", {}).get("version") if isinstance(spec.get("info"), dict) else None
     digest = hashlib.sha256(canonical(spec).encode("utf-8")).hexdigest()
     return {"version": version, "sha256": digest}
@@ -79,7 +40,6 @@ def load_vendored_spec(path: Path = VENDORED_SPEC) -> dict:
 
 
 def fetch_served_spec(timeout: int = 30) -> dict | None:
-    """The spec as the platform serves it now, or None when it cannot be read."""
     request = urllib.request.Request(SERVED_SPEC_URL, headers={"Accept": "application/json",
                                                                "User-Agent": _USER_AGENT})
     try:
@@ -90,7 +50,6 @@ def fetch_served_spec(timeout: int = 30) -> dict | None:
 
 
 def _resolve(node: object, spec: dict) -> object:
-    """Follows a local `$ref` (`#/components/...`) until the node is not one."""
     seen = 0
     while isinstance(node, dict) and isinstance(node.get("$ref"), str):
         ref = node["$ref"]
@@ -129,8 +88,6 @@ def _type_matches(value: object, wanted: str) -> bool:
 
 
 def validate_schema(value: object, schema: object, spec: dict, where: str) -> list[str]:
-    """Validates `value` against `schema` (resolved within `spec`). Returns one line per breach,
-    each naming the JSON path (`where`). An unknown keyword is itself a breach."""
     if schema is True or schema == {}:
         return []
     if schema is False:
@@ -231,8 +188,6 @@ def _allows_bearer(operation: dict, spec: dict) -> bool:
 
 
 def check_exchange(entry: dict, exchange: object, spec: dict, label: str) -> list[str]:
-    """Holds one case to the spec. `entry` is its index entry, `exchange` its file's content,
-    `label` names the spec copy in messages. Returns failure lines."""
     case_id = entry.get("id", "?")
 
     def fail(detail: str) -> str:
@@ -351,7 +306,6 @@ def check_exchange(entry: dict, exchange: object, spec: dict, label: str) -> lis
 
 
 def check_platform_cases(raw_cases: list[dict], corpus: Path, spec: dict, label: str) -> list[str]:
-    """Every `platform`/`client` case held to `spec`. Unreadable files are check_corpus's to report."""
     failures: list[str] = []
     for entry in raw_cases:
         if entry.get("group") not in PLATFORM_GROUPS or not entry.get("file"):
@@ -365,7 +319,6 @@ def check_platform_cases(raw_cases: list[dict], corpus: Path, spec: dict, label:
 
 
 def check_records(identity: dict, baseline_doc: dict, entries: list[tuple[str, dict]]) -> list[str]:
-    """The baseline and every host claiming a Platform API group name `identity`."""
     failures: list[str] = []
     named = f"version {identity['version']!r}, sha256 {identity['sha256'][:12]}..."
     if baseline_doc.get("platformApi") != identity:

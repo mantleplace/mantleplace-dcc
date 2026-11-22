@@ -8,12 +8,6 @@
 #include "MantlePlaceEditorStyle.h"
 #include "Styling/CoreStyle.h"
 
-// The panel draws with the engine's own editor typefaces and ships no font files, so the plugin carries
-// no third-party content and Fab's Third Party Software form does not apply. A role that pointed at a
-// missing file or a misspelt typeface would not fail the panel: Slate quietly draws a fallback. This
-// asserts what a user never sees fail: every MantlePlace.Font.* role resolves to the engine default
-// font, at a typeface that font actually has.
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMantlePlaceEditorStyleFontsTest,
     "MantlePlace.Editor.StyleFonts",
@@ -47,4 +41,4 @@ bool FMantlePlaceEditorStyleFontsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

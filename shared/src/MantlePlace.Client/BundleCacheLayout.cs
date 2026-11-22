@@ -2,32 +2,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Client;
 
-/// <summary>
-/// Where one order's bundle lives on disk: the download, its in-flight <c>.part</c>, its sidecar and
-/// its extracted files, all under a single directory keyed by the order id.
-/// </summary>
-/// <remarks>
-/// <para>
-/// One root per order, not one per source. The zip a curator downloaded by hand from the website and
-/// the zip the vault client fetched for them are the same purchase, and before this they landed in
-/// different directories keyed off different strings — the local path keyed off the zip's file name,
-/// which meant two orders whose files were both called <c>download.zip</c> shared a directory, and
-/// the Revit links from the first pointed at the second's extracted files.
-/// </para>
-/// <para>
-/// The directory name comes from ⛔<see cref="CacheKeySanitiser"/> (<c>HPS-30</c>) so this host and
-/// every other one derive the same path from the same order. The four file names are pinned by
-/// corpus <c>cache.keySanitisation.fileNames</c> and are cross-host contract, not local convention:
-/// a support instruction that says "delete <c>bundle.zip.part</c>" has to be true everywhere.
-/// </para>
-/// <para>
-/// Nothing here evicts. <c>HPS-44</c>: a purchased bundle stays until the curator removes it, and a
-/// host that reclaims disk on their behalf has converted an owned asset into a streamed one.
-/// </para>
-/// </remarks>
 public sealed class BundleCacheLayout
 {
-    /// <summary>Extracted entries, which Revit links point into and which therefore outlive the import.</summary>
     public const string ExtractedDirectoryName = "extracted";
 
     private BundleCacheLayout(string root, SanitisedCacheKey key)
@@ -36,10 +12,8 @@ public sealed class BundleCacheLayout
         Key = key;
     }
 
-    /// <summary>The per-order directory. Every other path here hangs off it.</summary>
     public string Root { get; }
 
-    /// <summary>The sanitisation result, so a caller can report WHY a directory is named as it is.</summary>
     public SanitisedCacheKey Key { get; }
 
     public string BundleZipPath => Path.Combine(Root, BundleCacheFileNames.Bundle);
@@ -50,13 +24,8 @@ public sealed class BundleCacheLayout
 
     public string ExtractedRoot => Path.Combine(Root, ExtractedDirectoryName);
 
-    /// <summary>
-    /// The layout for a bundle's filing key (<c>BundleManifest.FilingKey</c>): its order id, the normal
-    /// case and the one both sources converge on, or the id an older bundle's attribution carries.
-    /// </summary>
     public static BundleCacheLayout ForOrder(string filingKey) => ForOrder(filingKey, CacheRoot());
 
-    /// <summary>As <see cref="ForOrder(string)"/>, with an explicit cache root. For tests.</summary>
     public static BundleCacheLayout ForOrder(string filingKey, string cacheRoot)
     {
         ArgumentException.ThrowIfNullOrEmpty(filingKey);
@@ -66,20 +35,8 @@ public sealed class BundleCacheLayout
         return new BundleCacheLayout(Path.Combine(cacheRoot, key.DirectoryName), key);
     }
 
-    /// <summary>
-    /// The layout for a zip that names no order — a manifest too old to parse, or a file that is not
-    /// a bundle at all.
-    /// </summary>
-    /// <remarks>
-    /// Keyed off the zip's FULL path rather than its file name. The file name is the collision that
-    /// started all of this: every bundle the platform emits used to be called <c>download.zip</c>.
-    /// A full path is unique on the machine, and running it through the same <c>HPS-30</c> mapping
-    /// means the separators are neutralised and the hash suffix is appended by the ordinary rule
-    /// rather than by a special case.
-    /// </remarks>
     public static BundleCacheLayout ForLooseZip(string zipPath) => ForLooseZip(zipPath, CacheRoot());
 
-    /// <summary>As <see cref="ForLooseZip(string)"/>, with an explicit cache root. For tests.</summary>
     public static BundleCacheLayout ForLooseZip(string zipPath, string cacheRoot)
     {
         ArgumentException.ThrowIfNullOrEmpty(zipPath);
@@ -89,16 +46,6 @@ public sealed class BundleCacheLayout
         return new BundleCacheLayout(Path.Combine(cacheRoot, key.DirectoryName), key);
     }
 
-    /// <summary>
-    /// The directory every order's folder hangs off — and so where a vault import's log is found.
-    /// </summary>
-    /// <remarks>
-    /// Public because "where did my import write its log?" is a question the ribbon has to be able to
-    /// answer, and the answer is derived here. An import logs beside the zip it was handed
-    /// (<see cref="Core.LocalBundleSource.LogPathFor"/>), so for a vault download that is inside this
-    /// root; for a zip the curator downloaded by hand it is beside their own file, which they already
-    /// know how to find.
-    /// </remarks>
     public static string DefaultRoot => CacheRoot();
 
     private static string CacheRoot() => Path.Combine(

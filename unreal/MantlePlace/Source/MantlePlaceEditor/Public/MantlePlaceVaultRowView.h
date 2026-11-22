@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "MantlePlaceVaultTypes.h" // FMantlePlaceVaultItem + EMantlePlaceVaultBundleStatus
+#include "MantlePlaceVaultTypes.h"
 #include "MantlePlaceVaultRowView.generated.h"
 
 /**
@@ -58,86 +58,65 @@ struct FMantlePlaceVaultRowView
 	FLinearColor ReasonColor = FLinearColor::White;
 };
 
-/**
- * Pure presentation seam: derive a row's display state from a vault item + the orchestrator's busy
- * flag. No UObject / orchestrator instance needed, so it is trivially unit-testable. bBusy true means
- * an import is already running (only one runs at a time) -> every row's primary action is disabled.
- */
 FMantlePlaceVaultRowView BuildVaultRowView(const FMantlePlaceVaultItem& Item, bool bBusy);
 
-/** Status pill presentation (label + accent) shared by the row and the details page. */
 struct FMantlePlaceVaultStatusView
 {
-	FString Label;                            // "ready" | "processing" | "refunded" | "failed" | "unknown"
-	FLinearColor Color = FLinearColor::White; // accent at full strength; pill fill uses it at ~15% alpha
+	FString Label;
+	FLinearColor Color = FLinearColor::White;
 };
 
-/** Map a bundle status to its pill label + web-brand accent. */
 FMantlePlaceVaultStatusView GetVaultStatusView(EMantlePlaceVaultBundleStatus Status);
 
-/** One artifact row on the details page (an info-only per-format entry; the editor imports, not downloads). */
 struct FMantlePlaceVaultArtifactView
 {
-	FString Label;     // dotted format label, e.g. ".glb" (web format-explainers.ts)
-	FString SizeText;  // human size (e.g. "12.3 MB") or "-" when unrecorded
-	FString OpensWith; // "opens with" tool list (e.g. "Blender, Unreal Engine, three.js"); empty if unknown format
-	FString SubLine;   // precomputed mono sub-line: "{size} · opens with {tools}" (or just "{size}")
+	FString Label;
+	FString SizeText;
+	FString OpensWith;
+	FString SubLine;
 };
 
-/** A bundle artifact format's display label + "opens with" copy (mirror of web format-explainers.ts). */
 struct FMantlePlaceFormatExplainer
 {
-	FString Label;     // dotted, e.g. ".glb"; falls back to "." + lowercased format for unknowns
-	FString OpensWith; // comma-separated tool list; empty for unknown formats
+	FString Label;
+	FString OpensWith;
 };
 
-/** Look up the label + "opens with" copy for a bundle artifact format (case-insensitive). */
 FMantlePlaceFormatExplainer GetFormatExplainer(const FString& Format);
 
-/** Compact "·"-joined dotted label strip for a set of formats (web formatStripLabel), e.g.
- *  ".glb · .geotiff · .pmtiles"; returns "-" when the set is empty. */
 FString FormatDeliveredAs(const TArray<FString>& Formats);
 
-/**
- * Fully-computed presentation state for the bundle details sub-page. Like the row view it is a pure
- * derivation from the item (+ busy flag) so the detail widget stays a dumb painter and the logic is
- * unit-testable. Deliberately omits any advanced-processing / format-catalog fields - the editor
- * surface only imports; format generation lives on the website.
- */
-/** One Extra of an MPB 3.0 bundle on the detail page: a row with its size, or a locked row with the words and no download. */
 struct FMantlePlaceVaultExtraView
 {
-	FString Label;     // the platform's name for it, e.g. "Plan sheets"
-	FString SubLine;   // its size, or "More Extras come with paid sites" when locked
+	FString Label;
+	FString SubLine;
 	bool bLocked = false;
 };
 
 struct FMantlePlaceVaultDetailView
 {
-	FString Codename;                          // capitalized AOI label
-	FString OrderLine;                         // "order #<first 12 of id>"
+	FString Codename;
+	FString OrderLine;
 	FString StatusLabel;
 	FLinearColor StatusColor = FLinearColor::White;
-	FString MetaLine;                          // "{area} km2 - {date}"
-	FString TierLabel;                         // "Base" | "Unreal" | "Unknown"
-	FString ExtentText;                        // "{area} km2"
-	FString DeliveredAsText;                   // "·"-joined dotted formats (".glb · .cog"), or "-" when none
-	FString SizeText;                          // total download size, or "-" when unknown
+	FString MetaLine;
+	FString TierLabel;
+	FString ExtentText;
+	FString DeliveredAsText;
+	FString SizeText;
 	bool bLayersKnown = false;
 	bool bImagery = false;
 	bool bBasemap = false;
 	bool bElevation = false;
 	bool bHasManifestVersion = false;
-	FString ManifestVersion;   // verbatim, both families — rendered, never gated on
+	FString ManifestVersion;
 	TArray<FMantlePlaceVaultArtifactView> Artifacts;
-	TArray<FMantlePlaceVaultExtraView> Extras;  // an MPB 3.0 bundle's Extras; empty on a 2.x bundle
-	FString PaidOnlyNote;                      // "Plan sheets and terrain tiles come with paid builds." on a free bundle, else empty
-	FString PrimaryLabel;                      // "Import"
-	bool bPrimaryEnabled = false;              // Available && !bBusy
+	TArray<FMantlePlaceVaultExtraView> Extras;
+	FString PaidOnlyNote;
+	FString PrimaryLabel;
+	bool bPrimaryEnabled = false;
 };
 
-/** Derive the details-page presentation for a vault item (bBusy disables the import action). */
 FMantlePlaceVaultDetailView BuildVaultDetailView(const FMantlePlaceVaultItem& Item, bool bBusy);
 
-/** Format a byte count as a short human string ("512 KB", "12.3 MB"); returns "-" for a non-positive size. */
 FString FormatVaultBytes(int64 Bytes);

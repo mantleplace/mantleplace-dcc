@@ -20,17 +20,6 @@
 #include "Misc/ScopeExit.h"
 #include "Misc/Paths.h"
 
-// The importer reads a 1.x bundle and a 2.0 bundle, finds every file through the path the manifest
-// points at, and matches that path to the archive entry regardless of case (MPB 2.0, spec/format.md
-// 10.3 rule 6). Nothing here needs an editor world: a synthetic bundle is written as a real zip, opened
-// the way the importer opens one (UMantlePlaceImporterLibrary::ReadVaultManifest), parsed, and walked by
-// the integrity pre-check, which reads every declared payload out of the zip by its pointer.
-//
-// The bundles are synthetic: a few bytes per payload and a manifest with only the members the importer
-// reads, not a bundle the platform would produce. What the layouts change is the pointer values (the
-// folder names and the basenames) and where a PNG's pixel meaning is stated (a 1.x host block, a 2.0
-// `file_entries` entry); both are exercised.
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMantlePlaceBundleLayoutTest,
     "MantlePlace.Import.BundleLayout",
@@ -38,24 +27,23 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 namespace
 {
-/** One synthetic bundle: the manifest version, the pointer values and how the archive spells them. */
 struct FSyntheticBundle
 {
 	const TCHAR* Name = TEXT("");
 	const TCHAR* Version = TEXT("");
-	bool b2 = false;            // the 2.0 shape: no host-block mapping, the meaning in `file_entries`
-	bool bShuffleCase = false;  // the archive holds every entry, the manifest included, in UPPER case
-	bool bUpperEntryKeys = false; // `file_entries` keys spelled in UPPER case against the pointers
+	bool b2 = false;
+	bool bShuffleCase = false;
+	bool bUpperEntryKeys = false;
 
-	FString Terrain;     // layout.cesium_terrain
-	FString Parcels;     // layout.parcels_gpkg
-	FString Heightmap;   // hosts.unreal.heightmap.path
-	FString Drape;       // hosts.unreal.imagery_drape.source
-	FString Mesh;        // hosts.unreal.mesh_alternative.path
-	FString WaterMask;   // hosts.unreal.landscape_layers.water_mask.ue_ready[0].path
+	FString Terrain;
+	FString Parcels;
+	FString Heightmap;
+	FString Drape;
+	FString Mesh;
+	FString WaterMask;
 
-	FString Extra;       // top-level members spliced in after `version`, each ending in a comma (or empty)
-	bool bParcelsInArchive = false; // the archive holds the parcels file, which the layout points at
+	FString Extra;
+	bool bParcelsInArchive = false;
 };
 
 FSyntheticBundle Make1x()
@@ -95,13 +83,11 @@ TArray<uint8> BytesOf(const FString& Text)
 	return TArray<uint8>(reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length());
 }
 
-/** The payload of one pointer: distinct per path, so a read of the wrong entry is a hash mismatch. */
 TArray<uint8> PayloadOf(const FString& Path)
 {
 	return BytesOf(FString::Printf(TEXT("synthetic payload of %s"), *Path.ToLower()));
 }
 
-/** A manifest built from one template, `'` standing for a double quote so the template stays readable. */
 FString ManifestOf(const FSyntheticBundle& B)
 {
 	const FString HeightmapMapping = B.b2 ? FString() : FString(TEXT("'uint16_mapping':{'z_min_m':-10.0,'z_max_m':502.0},"));
@@ -155,12 +141,11 @@ FString ManifestOf(const FSyntheticBundle& B)
 	Text.ReplaceInline(TEXT("@WATER@"), *B.WaterMask);
 	Text.ReplaceInline(TEXT("@WATER_SHA@"), *MantlePlaceSha256::HexDigest(PayloadOf(B.WaterMask)));
 	Text.ReplaceInline(TEXT("@WATER_MEANING@"), *WaterMeaning);
-	Text.ReplaceInline(TEXT("@EXTRA@"), *B.Extra); // last: its own `@` (a part id) must not meet a token
+	Text.ReplaceInline(TEXT("@EXTRA@"), *B.Extra);
 	Text.ReplaceInline(TEXT("'"), TEXT("\""));
 	return Text;
 }
 
-/** Write the bundle as a real zip. Every entry, the manifest's included, in UPPER case when asked. */
 bool WriteZip(const FSyntheticBundle& B, const FString& ZipPath, const FString& ManifestText, bool bCorruptHeightmap)
 {
 	IPlatformFile& Platform = FPlatformFileManager::Get().GetPlatformFile();
@@ -172,7 +157,7 @@ bool WriteZip(const FSyntheticBundle& B, const FString& ZipPath, const FString& 
 	}
 	const auto Spell = [&B](const FString& Name) { return B.bShuffleCase ? Name.ToUpper() : Name; };
 	{
-		FZipArchiveWriter Writer(Out); // takes ownership of the handle; the destructor writes the directory
+		FZipArchiveWriter Writer(Out);
 		const FDateTime Now = FDateTime::UtcNow();
 		Writer.AddFile(Spell(TEXT("README.md")), BytesOf(TEXT("synthetic bundle")), Now);
 		Writer.AddFile(Spell(TEXT("Metadata/manifest.json")), BytesOf(ManifestText), Now);
@@ -193,21 +178,19 @@ bool WriteZip(const FSyntheticBundle& B, const FString& ZipPath, const FString& 
 	return true;
 }
 
-/** The pointer path to the entry the archive holds, as a function of the bundle's spelling. */
 void CheckBundle(FAutomationTestBase& T, const FSyntheticBundle& B)
 {
 	const FString Label = FString::Printf(TEXT("[%s] "), B.Name);
 	const FString ZipPath = FPaths::Combine(
 		FPaths::ProjectSavedDir(), TEXT("MantlePlace"), TEXT("Tests"), FGuid::NewGuid().ToString() + TEXT(".zip"));
 	const FString ManifestText = ManifestOf(B);
-	ON_SCOPE_EXIT { IFileManager::Get().Delete(*ZipPath, /*RequireExists*/ false, /*EvenReadOnly*/ true); };
+	ON_SCOPE_EXIT { IFileManager::Get().Delete(*ZipPath, false, true); };
 
 	if (!T.TestTrue(Label + TEXT("the synthetic zip is written"), WriteZip(B, ZipPath, ManifestText, false)))
 	{
 		return;
 	}
 
-	// --- Opened the way the importer opens a bundle -------------------------------------------------
 	FMantlePlaceVaultManifest M;
 	FString Error;
 	const bool bRead = UMantlePlaceImporterLibrary::ReadVaultManifest(ZipPath, M, Error);
@@ -219,7 +202,6 @@ void CheckBundle(FAutomationTestBase& T, const FSyntheticBundle& B)
 		return;
 	}
 
-	// --- Every file is the one its pointer says, whatever the folder is called ------------------------
 	T.TestEqual(Label + TEXT("heightmap pointer"), M.Heightmap.Path, B.Heightmap);
 	T.TestEqual(Label + TEXT("drape pointer"), M.Drape.Path, B.Drape);
 	T.TestEqual(Label + TEXT("terrain mesh pointer"), M.Mesh.Path, B.Mesh);
@@ -235,7 +217,6 @@ void CheckBundle(FAutomationTestBase& T, const FSyntheticBundle& B)
 			M.PublicRecords.Layers[0].Files[0].Path, B.Parcels);
 	}
 
-	// --- What the pixels mean is read from where the layout states it ---------------------------------
 	T.TestEqual(Label + TEXT("heightmap range, low"), M.Heightmap.ZMinM, -10.0);
 	T.TestEqual(Label + TEXT("heightmap range, high"), M.Heightmap.ZMaxM, 502.0);
 	const FMantlePlaceLandscapeLayer* Water = M.FindLandscapeLayer(TEXT("water_mask"));
@@ -249,7 +230,6 @@ void CheckBundle(FAutomationTestBase& T, const FSyntheticBundle& B)
 		T.TestEqual(Label + TEXT("mask false value"), Raster.ValueMapping.FalseValue, 0.0);
 	}
 
-	// --- A file's terms are found regardless of the case of its key ------------------------------------
 	if (B.b2)
 	{
 		T.TestTrue(Label + TEXT("the heightmap's role is its stated one, whatever case the key is in"),
@@ -260,14 +240,13 @@ void CheckBundle(FAutomationTestBase& T, const FSyntheticBundle& B)
 	T.TestTrue(Label + TEXT("a file the manifest states nothing about reads as the stricter duty"),
 		MantlePlaceOdblLogic::RoleOfPath(M.FileLicensing, TEXT("Site/Unlisted.glb")) == EMantlePlaceOdblRole::Database);
 
-	// --- The pre-check reads every declared payload out of the zip by its pointer -----------------------
 	{
 		IFileHandle* Handle = FPlatformFileManager::Get().GetPlatformFile().OpenRead(*ZipPath);
 		if (!T.TestNotNull(Label + TEXT("the zip opens for the pre-check"), Handle))
 		{
 			return;
 		}
-		FZipArchiveReader Reader(Handle); // takes ownership of the handle
+		FZipArchiveReader Reader(Handle);
 		MantlePlaceImportTiming::FTimeline Timeline;
 		FString IntegrityError;
 		T.TestTrue(
@@ -275,7 +254,6 @@ void CheckBundle(FAutomationTestBase& T, const FSyntheticBundle& B)
 			MantlePlaceImportOrchestration::VerifyAll(M, Reader, Timeline, IntegrityError));
 	}
 
-	// --- And a payload that is not the bytes the manifest hashed is still refused ------------------------
 	{
 		const FString BadZip = ZipPath + TEXT(".bad.zip");
 		ON_SCOPE_EXIT { IFileManager::Get().Delete(*BadZip, false, true); };
@@ -296,7 +274,6 @@ void CheckBundle(FAutomationTestBase& T, const FSyntheticBundle& B)
 	}
 }
 
-/** What the pre-check made of one archive. */
 struct FSelectionOutcome
 {
 	bool bOpened = false;
@@ -305,15 +282,10 @@ struct FSelectionOutcome
 	TArray<FString> Notes;
 };
 
-/**
- * The pre-check over a 2.0 bundle that declares `Records/Parcels.gpkg` with a digest (listed in `files`
- * under the part `records.parcels_gpkg@MAX`), cut as `ViewJson` says (empty: no `view`), the archive
- * holding the parcels file or not. Every other payload is in the archive.
- */
 FSelectionOutcome VerifyCut(FAutomationTestBase& T, const FString& Label, const FString& ViewJson, bool bParcelsInArchive)
 {
 	FSelectionOutcome Outcome;
-	FSyntheticBundle B = Make2(/*bShuffleCase*/ false, /*bUpperEntryKeys*/ false);
+	FSyntheticBundle B = Make2(false, false);
 	B.bParcelsInArchive = bParcelsInArchive;
 	B.Extra = FString::Printf(
 		TEXT("'files':{'%s':{'part':'records.parcels_gpkg@MAX','size_bytes':1,'sha256':'%s'}},%s"),
@@ -321,7 +293,7 @@ FSelectionOutcome VerifyCut(FAutomationTestBase& T, const FString& Label, const 
 
 	const FString ZipPath = FPaths::Combine(
 		FPaths::ProjectSavedDir(), TEXT("MantlePlace"), TEXT("Tests"), FGuid::NewGuid().ToString() + TEXT(".zip"));
-	ON_SCOPE_EXIT { IFileManager::Get().Delete(*ZipPath, /*RequireExists*/ false, /*EvenReadOnly*/ true); };
+	ON_SCOPE_EXIT { IFileManager::Get().Delete(*ZipPath, false, true); };
 	if (!T.TestTrue(Label + TEXT("the synthetic zip is written"), WriteZip(B, ZipPath, ManifestOf(B), false)))
 	{
 		return Outcome;
@@ -339,13 +311,12 @@ FSelectionOutcome VerifyCut(FAutomationTestBase& T, const FString& Label, const 
 		return Outcome;
 	}
 	Outcome.bOpened = true;
-	FZipArchiveReader Reader(Handle); // takes ownership of the handle
+	FZipArchiveReader Reader(Handle);
 	MantlePlaceImportTiming::FTimeline Timeline;
 	Outcome.bPassed = MantlePlaceImportOrchestration::VerifyAll(M, Reader, Timeline, Outcome.Error, &Outcome.Notes);
 	return Outcome;
 }
 
-/** A selection that leaves out a declared payload imports; a missing entry the archive claims to hold does not. */
 void CheckSelections(FAutomationTestBase& T)
 {
 	const FString Parcels = TEXT("Records/Parcels.gpkg");
@@ -354,9 +325,8 @@ void CheckSelections(FAutomationTestBase& T)
 		return O.Notes.ContainsByPredicate([&Parcels](const FString& Note) { return Note.Contains(Parcels); });
 	};
 
-	// --- The control: the archive holds the parcels file and it verifies -------------------------------
 	{
-		const FSelectionOutcome O = VerifyCut(T, TEXT("[whole archive] "), FString(), /*bParcelsInArchive*/ true);
+		const FSelectionOutcome O = VerifyCut(T, TEXT("[whole archive] "), FString(), true);
 		if (O.bOpened)
 		{
 			T.TestTrue(TEXT("[whole archive] every payload verifies, the parcels file included"), O.bPassed);
@@ -364,11 +334,10 @@ void CheckSelections(FAutomationTestBase& T)
 		}
 	}
 
-	// --- A selection whose parts leave out the parcels: skipped, named, and the rest still verifies -----
 	{
 		const FSelectionOutcome O = VerifyCut(T, TEXT("[selection] "),
 			TEXT("'view':{'kind':'selection','partial':false,'parts':['imagery.drape_png@MAX'],'missing':[]},"),
-			/*bParcelsInArchive*/ false);
+			false);
 		if (O.bOpened)
 		{
 			T.TestTrue(TEXT("[selection] a payload the selection left out does not fail the pre-check"), O.bPassed);
@@ -377,11 +346,10 @@ void CheckSelections(FAutomationTestBase& T)
 		}
 	}
 
-	// --- A part the archive claims to hold, with its entry missing: corruption, refused by name ---------
 	{
 		const FSelectionOutcome O = VerifyCut(T, TEXT("[held part missing] "),
 			TEXT("'view':{'kind':'selection','partial':false,'parts':['records.parcels_gpkg@MAX'],'missing':[]},"),
-			/*bParcelsInArchive*/ false);
+			false);
 		if (O.bOpened)
 		{
 			T.TestFalse(TEXT("[held part missing] a missing entry in a part the archive holds is still refused"), O.bPassed);
@@ -389,11 +357,10 @@ void CheckSelections(FAutomationTestBase& T)
 		}
 	}
 
-	// --- `everything`, and no `view` at all: today's refusal, unchanged ------------------------------------
 	{
 		const FSelectionOutcome O = VerifyCut(T, TEXT("[everything] "),
 			TEXT("'view':{'kind':'everything','partial':false,'parts':['imagery.drape_png@MAX'],'missing':[]},"),
-			/*bParcelsInArchive*/ false);
+			false);
 		if (O.bOpened)
 		{
 			T.TestFalse(TEXT("[everything] a sealed archive missing a declared entry is refused"), O.bPassed);
@@ -401,7 +368,7 @@ void CheckSelections(FAutomationTestBase& T)
 		}
 	}
 	{
-		const FSelectionOutcome O = VerifyCut(T, TEXT("[no view] "), FString(), /*bParcelsInArchive*/ false);
+		const FSelectionOutcome O = VerifyCut(T, TEXT("[no view] "), FString(), false);
 		if (O.bOpened)
 		{
 			T.TestFalse(TEXT("[no view] an archive that states no view and lacks a declared entry is refused"), O.bPassed);
@@ -409,26 +376,17 @@ void CheckSelections(FAutomationTestBase& T)
 		}
 	}
 }
-} // namespace
+}
 
 bool FMantlePlaceBundleLayoutTest::RunTest(const FString& Parameters)
 {
-	// --- A selection archive that leaves out a declared payload, and the archives that must still refuse -
 	CheckSelections(*this);
 
-	// --- A 1.x bundle and a 2.0 bundle, each read through its own pointers ------------------------------
 	CheckBundle(*this, Make1x());
-	CheckBundle(*this, Make2(/*bShuffleCase*/ false, /*bUpperEntryKeys*/ false));
+	CheckBundle(*this, Make2(false, false));
 
-	// --- A 2.0 bundle whose archive and whose `file_entries` keys are in another case than its pointers -
-	// The manifest says `Elevation/Heightmap.png` and the archive holds `ELEVATION/HEIGHTMAP.PNG`: the path
-	// is the same path (format.md 10.3 rule 6), so the bundle reads, verifies and states the same terms.
-	CheckBundle(*this, Make2(/*bShuffleCase*/ true, /*bUpperEntryKeys*/ true));
+	CheckBundle(*this, Make2(true, true));
 
-	// --- The engine's zip reader matches an entry regardless of case -----------------------------------
-	// Checked against the engine source (UE 5.8, ZipArchiveReader.cpp: entries live in a TMap<FString,...>
-	// whose hash and key comparison both ignore case) and here, against the engine as built: this is what
-	// the importer's by-pointer reads rely on, and what Python's `zipfile` does not do.
 	{
 		const FString ZipPath = FPaths::Combine(
 			FPaths::ProjectSavedDir(), TEXT("MantlePlace"), TEXT("Tests"), FGuid::NewGuid().ToString() + TEXT(".zip"));
@@ -457,4 +415,4 @@ bool FMantlePlaceBundleLayoutTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

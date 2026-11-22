@@ -3,14 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The Logs button — which log it selects, and what it says when there is not one.
-/// </summary>
-/// <remarks>
-/// The interesting case is the empty one. An empty bundle cache is not an error and must not read
-/// as one, but it is also not self-explanatory: the run the curator is looking for may have logged
-/// beside a zip on their desktop, and an empty Explorer window says nothing about that.
-/// </remarks>
 internal static class OpenLogsTests
 {
     internal static int Run()
@@ -42,9 +34,6 @@ internal static class OpenLogsTests
                 LocalBundleSource.IsLogFileName("bundle.zip" + LocalBundleSource.ProbeLogSuffix),
                 "the probe log");
 
-            // The cache root holds the bundle, its .part and its sidecar beside the logs. Revealing a
-            // zip instead of a log would put the curator one folder from the answer and looking at
-            // the wrong file.
             run.False(LocalBundleSource.IsLogFileName("bundle.zip"), "the bundle itself is not a log");
             run.False(LocalBundleSource.IsLogFileName("bundle.zip.part"), "nor the partial download");
             run.False(LocalBundleSource.IsLogFileName("bundle.json"), "nor the sidecar");
@@ -73,9 +62,6 @@ internal static class OpenLogsTests
             run.True(target.RevealFilePath is null, "with nothing to select");
             run.True(target.Notice is not null, "and a sentence saying no log is there yet");
 
-            // The sentence has to carry the other half, because the folder cannot: a curator whose
-            // run logged beside a zip on their desktop is looking at a window that is empty and
-            // correct at the same time.
             run.True(
                 target.Notice!.Contains("beside that zip", StringComparison.Ordinal),
                 "naming where a hand-picked zip logs instead");
@@ -94,11 +80,6 @@ internal static class OpenLogsTests
             File.SetLastWriteTimeUtc(older, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
             File.SetLastWriteTimeUtc(newer, new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc));
 
-            // ⛔ The one place a log must NOT be looked for. `extracted/` holds every tile, raster and
-            // mesh of every bundle ever imported and is never evicted (HPS-44), so a recursive walk
-            // would stat tens of thousands of files that cannot be logs — on Revit's UI thread,
-            // before the button that exists for "something went wrong" shows anything. A file named
-            // like a log down there is the cheapest way to assert the search never descends.
             Write(
                 Path.Combine(root, "order-b", "extracted", "Surface", "decoy.zip" + LocalBundleSource.ImportLogSuffix),
                 "not a log the search may see");
@@ -119,11 +100,6 @@ internal static class OpenLogsTests
             run.True(target.RevealFilePath is null, "with nothing to select");
             run.True(target.Notice is not null, "and a sentence saying so");
         });
-
-        // ShellLauncher.TryReveal's "the log is gone, open its folder instead" guard is deliberately
-        // NOT covered here. Asserting it means calling it, and calling it starts File Explorer —
-        // which a hosted runner should never be asked to do for a passing test. It is a guard around
-        // a shell call, and a shell call is the one thing this headless suite cannot stand in for.
 
         run.Case("a search over an existing but logless root opens it", () =>
         {

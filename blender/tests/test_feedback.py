@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""HPS-56: the Send Feedback link, one parameter rule per test."""
 
 import unittest
 from urllib.parse import parse_qs, urlsplit
@@ -30,8 +29,6 @@ class FeedbackUrlTests(unittest.TestCase):
                 self.assertEqual(params["hv"], ["5.2.0"])
 
     def test_a_malformed_host_version_is_left_out(self):
-        # bpy.app.version_string reads "5.2.0 LTS" on a long-term release; the suffix is not a
-        # version, so the shim passes the numeric tuple and anything else is dropped here.
         for bad in ("5.2.0 LTS", "4.5.3 Alpha", "", None):
             with self.subTest(bad=bad):
                 self.assertNotIn("hv", query(feedback_url("0.1.0", bad))[1])

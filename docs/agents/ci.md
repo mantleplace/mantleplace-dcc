@@ -5,9 +5,9 @@ description: The pull-request gates this repository runs, the jobs behind them, 
 
 # CI
 
-Twelve workflows live here, all on free hosted runners. Seven run on every pull request:
+Thirteen workflows live here, all on free hosted runners. Eight run on every pull request:
 `ci-manifest-conformance`, `ci-revit-tests`, `ci-autocad-tests`, `ci-public-hygiene`, `ci-unreal-naming`,
-`ci-brand-assets` and `ci-blender-tests`. The other five are not pull-request gates: `release-mpb.yml` (below),
+`ci-brand-assets`, `ci-blender-tests` and `ci-comments`. The other five are not pull-request gates: `release-mpb.yml` (below),
 `ci-platform-api.yml` and `manifest-drift.yml` (both below), `stale.yml`
 and `ci-tracker-hygiene.yml`. The last two are tracker hygiene — the second runs on issue and comment
 events, a pull request's own comments included, and it detects rather than blocks
@@ -73,6 +73,7 @@ python tools/manifest-conformance/check_manifest_conformance.py --mode live     
 python -m unittest discover -s tools/manifest-conformance
 python -m unittest discover -s tools/mantleplace-mpb/tests
 PYTHONPATH=tools/mantleplace-mpb/src python -m mantleplace_mpb corpus tools/manifest-conformance/corpus
+node tools/comment-ratchet/comment-ratchet.mjs check --base origin/main
 python tools/public-hygiene/check_public_references.py
 python tools/public-hygiene/check_docs_integrity.py
 python tools/public-hygiene/check_vocabulary.py

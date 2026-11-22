@@ -21,7 +21,6 @@
 
 namespace
 {
-/** The value of the first tag carrying this prefix; false when there is none. */
 bool TagValue(const AActor& Actor, const FString& Prefix, FString& OutValue)
 {
 	for (const FName& Tag : Actor.Tags)
@@ -36,7 +35,6 @@ bool TagValue(const AActor& Actor, const FString& Prefix, FString& OutValue)
 	return false;
 }
 
-/** One actor of an import, read back from the tags Claim wrote. False for an actor that is not an import's. */
 bool ReadItem(const AActor& Actor, MantlePlaceOdblLogic::FHandoverItem& OutItem)
 {
 	if (!TagValue(Actor, MantlePlaceImportNaming::ImportTagPrefix(), OutItem.Identity))
@@ -54,7 +52,6 @@ bool ReadItem(const AActor& Actor, MantlePlaceOdblLogic::FHandoverItem& OutItem)
 	return true;
 }
 
-/** The credit actor this order already has, or null. */
 ATextRenderActor* FindCreditActor(UWorld* World, const FString& Identity)
 {
 	const FName Tag(*MantlePlaceImportNaming::CreditActorTag(Identity));
@@ -68,7 +65,6 @@ ATextRenderActor* FindCreditActor(UWorld* World, const FString& Identity)
 	return nullptr;
 }
 
-/** Write (or refresh) the order's credit actor: a text actor in the order's outliner folder. */
 ATextRenderActor* WriteCreditActor(UWorld* World, const MantlePlaceOdblLogic::FHandoverCredit& Credit)
 {
 	ATextRenderActor* Actor = FindCreditActor(World, Credit.Identity);
@@ -112,7 +108,7 @@ FMantlePlaceHandoverReport MantlePlaceHandover::Prepare(UWorld* World)
 	}
 
 	TArray<AActor*> Actors;
-	TArray<FString> Labels; // read now: destroying a landscape takes its streaming proxies with it
+	TArray<FString> Labels;
 	TArray<MantlePlaceOdblLogic::FHandoverItem> Items;
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
@@ -129,7 +125,6 @@ FMantlePlaceHandoverReport MantlePlaceHandover::Prepare(UWorld* World)
 
 	const FScopedTransaction Transaction(LOCTEXT("PrepareForHandover", "Mantle Place: Prepare for handover"));
 
-	// A Produced Work that stands in for removed ODbL content must be showing.
 	for (int32 Index = 0; Index < Items.Num(); ++Index)
 	{
 		if (Plan.Decisions[Index] != MantlePlaceOdblLogic::EHandoverDecision::Swap)
@@ -145,8 +140,6 @@ FMantlePlaceHandoverReport MantlePlaceHandover::Prepare(UWorld* World)
 				{
 					Actors[Other]->Modify();
 					Actors[Other]->SetIsTemporarilyHiddenInEditor(false);
-					// And it is the ground now: the terrain mesh the import laid over the Landscape without
-					// collision gets it back. Any other mesh, and collision someone set by hand, stays as it is.
 					MantlePlaceMeshImporter::RestoreCollisionTurnedOff(Cast<AStaticMeshActor>(Actors[Other]));
 				}
 			}
@@ -167,7 +160,7 @@ FMantlePlaceHandoverReport MantlePlaceHandover::Prepare(UWorld* World)
 		Report.Removed.Add(Label);
 		if (IsValid(Actors[Index]))
 		{
-			World->EditorDestroyActor(Actors[Index], /*bShouldModifyLevel*/ true);
+			World->EditorDestroyActor(Actors[Index], true);
 		}
 	}
 

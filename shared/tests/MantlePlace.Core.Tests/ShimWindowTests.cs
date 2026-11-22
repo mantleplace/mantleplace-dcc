@@ -2,30 +2,8 @@ using System.Text.RegularExpressions;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Two faults a storefront review found in the Revit shim, read off the shim's own source, because CI
-/// never builds the shim and no other check here would have seen either.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <b>The title bar.</b> A WPF window given no icon takes the host process's, so every window the
-/// plugin opened carried the host's logo in its title bar. Each one now sets the Mantle Place mark
-/// through <c>BrandChrome.ShowMarkInTitleBar</c>; a window with no title bar at all
-/// (<c>WindowStyle.None</c>, the notices) has nowhere to show it.
-/// </para>
-/// <para>
-/// <b>A task dialog's default command link.</b> Revit checks <c>TaskDialog.DefaultButton</c> when it
-/// is set, and a command link that has not been added yet is refused with "Corresponding button not
-/// found. Parameter name: defaultButton". Set in the object initializer, it ran before every
-/// <c>AddCommandLink</c>, so Open in Curator stopped before its size dialog ever showed.
-/// </para>
-/// <para>
-/// Compiled into the AutoCAD suite too, which runs it over its own shim.
-/// </para>
-/// </remarks>
 internal static class ShimWindowTests
 {
-    /// <summary>The call that puts the mark in a window's title bar.</summary>
     private const string MarkCall = "BrandChrome.ShowMarkInTitleBar(this)";
 
     private static readonly Regex WindowClass = new(@"class\s+(\w+)\s*:\s*Window\b", RegexOptions.CultureInvariant);
@@ -36,13 +14,6 @@ internal static class ShimWindowTests
 
     private static readonly Regex DefaultStatement = new(@"\.DefaultButton\s*=", RegexOptions.CultureInvariant);
 
-    /// <param name="shimRelativePath">The shim's source folder, from the repository root.</param>
-    /// <param name="label">The suite's name for it in the report.</param>
-    /// <param name="declaresWindows">
-    /// Whether the folder declares windows of its own, so finding none means the scan is broken. The
-    /// Revit shim declares none since its import window moved to the shared home: it opens only the
-    /// shared windows, which are scanned in their own folder.
-    /// </param>
     internal static int Run(string shimRelativePath, string label, bool declaresWindows = true)
     {
         TestRun run = new();

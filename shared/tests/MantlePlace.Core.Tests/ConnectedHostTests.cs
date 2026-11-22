@@ -3,12 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The connected host, without a platform or a Revit: which export it acts on, what it reports
-/// next and when it gives up (<see cref="ExportDesk"/>), how it fetches the bundle
-/// (<see cref="ExportBundleFetcher"/>), and the wiring between the channel, the routes and the import
-/// window (<see cref="ConnectedHostService"/>).
-/// </summary>
 internal static class ConnectedHostTests
 {
     private const string Connection = "revit-0123456789abcdef";
@@ -39,7 +33,6 @@ internal static class ConnectedHostTests
 
     private static ExportAdvanceAnswer OkAt(HostExport export, ExportStatus status) => ExportAdvanceAnswer.Ok(export with { Status = status });
 
-    // Seen, then its received answered: the desk now fetches.
     private static ExportDesk Received(string id = "e1", Func<DateTimeOffset>? now = null)
     {
         ExportDesk desk = Desk(now);
@@ -49,7 +42,6 @@ internal static class ConnectedHostTests
         return desk;
     }
 
-    // Through to the window open on its checklist, awaiting_options answered.
     private static ExportDesk Awaiting(string id = "e1", Func<DateTimeOffset>? now = null)
     {
         ExportDesk desk = Received(id, now);
@@ -154,7 +146,6 @@ internal static class ConnectedHostTests
             ExportDesk desk = Awaiting(now: () => clock);
             desk.ImportBegan("e1");
 
-            // The importing report is still in flight.
             clock = clock.AddSeconds(3);
             run.Equal(Of<AdvanceExport>(desk.ImportProgress("e1", 10)).Count, 0, "queued, not sent");
             clock = clock.AddSeconds(3);

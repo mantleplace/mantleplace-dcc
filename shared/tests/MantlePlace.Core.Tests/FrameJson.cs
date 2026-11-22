@@ -2,11 +2,6 @@ using System.Text.Json.Nodes;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The frames a reader found, written back in the words the manifest states them in
-/// (<c>spec/format.md</c> §9.4), so a reader case can state them once as the manifest does and the
-/// suite compares member by member. Nothing is derived: each value is the reader's own field.
-/// </summary>
 internal static class FrameJson
 {
     internal static JsonObject Of(BundleFrames frames)

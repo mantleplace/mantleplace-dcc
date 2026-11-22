@@ -1,24 +1,5 @@
 // Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
-// The public-record layers of the bundle's top level (parcels, zoning, flood zones, and the families
-// that follow them in the `Records/` folder), as one overlay per family: a single actor holding one
-// spline per DXF line, which the user toggles by hiding the actor in the Outliner. Like the buildings
-// and the road splines this is content, not a terrain representation: it imports whenever the bundle
-// ships a layer, whatever the Mode, and a failure is non-fatal.
-//
-// The layers are the public record passed through unchanged. This handler reads the manifest, draws
-// the linework and tells the user what the manifest says about each layer (credit, disclaimer,
-// notice) and about each record it does not deliver; it derives nothing and edits nothing. A file is
-// found through the path its own entry states (or its `layout` key), never by folder, so a bundle
-// built before the `Records/` folder (`Parcels/`, `Zoning/`, `Flood/` at its root) is read by the
-// same code, and a family this reader has never met is read generically.
-//
-// What is drawn is DXF linework, and only where the file states its frame and the frame is this
-// host's (HPS-53). The GeoPackage of a family is declared for the integrity chain and kept in the
-// bundle; reading SQLite is not something this plugin takes a dependency on. The decisions are
-// FMantlePlacePublicRecordsLogic's; the parse of the manifest is here because it walks arbitrary
-// members, and the placement is here because it spawns actors.
-
 #include "MantlePlaceArtifactHandler.h"
 
 #include "MantlePlaceImportManifest.h"
@@ -52,8 +33,6 @@ FMantlePlaceRecordFile ReadFile(
 	File.License = GetString(Entry, TEXT("license"));
 	if (const TSharedPtr<FJsonObject>* Frame = GetObject(Entry, TEXT("file_frame")))
 	{
-		// The file's own statement of its frame, verbatim and judged nowhere here (HPS-53): whether it
-		// is this host's frame is FMantlePlacePublicRecordsLogic::CanPlaceFrame's call.
 		File.Frame.bStated = true;
 		File.Frame.Type = GetString(*Frame, TEXT("type"));
 		File.Frame.Crs = GetString(*Frame, TEXT("crs"));
@@ -62,7 +41,6 @@ FMantlePlaceRecordFile ReadFile(
 	}
 	if (File.Sha256.IsEmpty())
 	{
-		// The same file is listed in `files` with its digest; an entry that states none borrows it.
 		if (const TSharedPtr<FJsonObject>* Listed = GetObject(Files, *File.Path))
 		{
 			File.Sha256 = GetString(*Listed, TEXT("sha256"));
@@ -71,12 +49,6 @@ FMantlePlaceRecordFile ReadFile(
 	return File;
 }
 
-/**
- * What the published manifest states for a record file in the neutral `file_entries[<path>]`
- * (MPB 1.14.0 on): its full frame (`fileEntryFrame`), its licence and the sources it was made from.
- * Each is taken only where the file's own block entry did not already state it, verbatim and judged
- * nowhere here: a frame is CanPlaceFrame's call, a credit is shown as published.
- */
 void ApplyPublishedEntry(FMantlePlaceRecordFile& File, const TSharedPtr<FJsonObject>& Root)
 {
 	const TSharedPtr<FJsonObject> Entry = FindFileEntry(Root, File.Path);
@@ -90,14 +62,14 @@ void ApplyPublishedEntry(FMantlePlaceRecordFile& File, const TSharedPtr<FJsonObj
 		bool bPlaced = true;
 		if (Frame != nullptr)
 		{
-			(*Frame)->TryGetBoolField(TEXT("placed"), bPlaced); // `{ "placed": false }` states no spatial frame
+			(*Frame)->TryGetBoolField(TEXT("placed"), bPlaced);
 		}
 		if (Frame != nullptr && bPlaced)
 		{
 			FString Crs;
 			if (const TSharedPtr<FJsonObject>* Horizontal = GetObject(*Frame, TEXT("horizontal_crs")))
 			{
-				Crs = GetString(*Horizontal, TEXT("code")); // a PROJJSON or WKT2 form states no code: left empty, a named refusal
+				Crs = GetString(*Horizontal, TEXT("code"));
 			}
 			const bool bHasFactor = (*Frame)->HasTypedField<EJson::Number>(TEXT("unit_to_metres"));
 			File.Frame = FMantlePlacePublicRecordsLogic::StatedFrame(
@@ -136,7 +108,7 @@ FMantlePlaceRecordPointer ReadPointer(const TSharedPtr<FJsonObject>& Row)
 	Pointer.RecordHolder = GetString(Row, TEXT("record_holder"));
 	Pointer.Jurisdiction = GetString(Row, TEXT("jurisdiction"));
 	Pointer.State = GetString(Row, TEXT("state"));
-	Pointer.Link = GetString(Row, TEXT("link")); // null reads as empty
+	Pointer.Link = GetString(Row, TEXT("link"));
 	Pointer.Reason = GetString(Row, TEXT("reason"));
 	Pointer.Basis = GetString(Row, TEXT("basis"));
 	Pointer.SourceId = GetString(Row, TEXT("source_id"));
@@ -161,15 +133,12 @@ void AddPointer(FMantlePlaceRecordLayer& Layer, const FMantlePlaceRecordPointer&
 	Layer.Pointers.Add(Pointer);
 }
 
-/** Whether a top-level member is a public-record family block, and if so its layer (otherwise Layer stays empty). */
 bool ReadLayer(
 	const FString& Key, const TSharedPtr<FJsonObject>& Block, const TSharedPtr<FJsonObject>& Layout,
 	const TSharedPtr<FJsonObject>& Files, const TSharedPtr<FJsonObject>& Root, FMantlePlaceRecordLayer& Layer)
 {
 	const bool bKnown = FMantlePlacePublicRecordsLogic::IsKnownFamily(Key);
 
-	// A family this reader has not met is recognised by its shape: file entries under `gpkg` / `dxf`,
-	// or record pointers. `completeness` carries the pointers of every layer and is not one.
 	bool bLooksLikeFamily = bKnown;
 	if (!bKnown && Key != TEXT("completeness"))
 	{
@@ -198,8 +167,6 @@ bool ReadLayer(
 	Layer.Disclaimer = GetString(Block, TEXT("disclaimer"));
 	Layer.Notice = GetString(Block, TEXT("notice"));
 
-	// Each file entry is located by the `path` it states. Sorted by key, so the order does not depend
-	// on how the manifest happened to be written.
 	TArray<FString> EntryKeys;
 	for (const TPair<FString, TSharedPtr<FJsonValue>>& Member : Block->Values)
 	{
@@ -207,7 +174,6 @@ bool ReadLayer(
 	}
 	EntryKeys.Sort([](const FString& A, const FString& B)
 	{
-		// gpkg and dxf first, in that order, then any other key by name.
 		auto Rank = [](const FString& Kind) { return Kind == TEXT("gpkg") ? 0 : (Kind == TEXT("dxf") ? 1 : 2); };
 		return Rank(A) != Rank(B) ? Rank(A) < Rank(B) : A < B;
 	});
@@ -235,8 +201,6 @@ bool ReadLayer(
 		Layer.Files.Add(MoveTemp(File));
 	}
 
-	// A file the block does not point at but the `layout` does: the same pointer doctrine, one level
-	// up. `flood_zones` is the flood family's GeoPackage.
 	auto AddFromLayout = [&](const FString& LayoutKey, const TCHAR* Kind)
 	{
 		const FString Path = GetString(Layout, *LayoutKey);
@@ -289,9 +253,6 @@ public:
 	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::PublicRecords; }
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactPublicRecords", "Public records"); }
 
-	// Read from the manifest's top level, before the `unreal`-presence check, as the road splines are:
-	// the records are addressed to every host, and a bundle with nothing else Unreal imports still
-	// tells the user what it carries.
 	bool ParseFields(const FMantlePlaceParseInput& In, FMantlePlaceVaultManifest& M, FString& OutError) const override
 	{
 		FMantlePlacePublicRecordsBlock& Block = M.PublicRecords;
@@ -321,13 +282,11 @@ public:
 
 		if (const TSharedPtr<FJsonObject>* AttributionPtr = GetObject(In.Root, TEXT("attribution")))
 		{
-			Block.BundleNotice = GetString(*AttributionPtr, TEXT("notice")); // the bundle's own, shown once
+			Block.BundleNotice = GetString(*AttributionPtr, TEXT("notice"));
 		}
 
 		if (const TSharedPtr<FJsonObject>* CompletenessPtr = GetObject(In.Root, TEXT("completeness")))
 		{
-			// The pointers of every layer also stand here, each naming its layer: a layer with no block
-			// of its own (a holder that delivered nothing at all) is still shown to the user.
 			const TArray<TSharedPtr<FJsonValue>>* Pointers = nullptr;
 			if ((*CompletenessPtr)->TryGetArrayField(TEXT("record_pointers"), Pointers) && Pointers != nullptr)
 			{
@@ -371,8 +330,6 @@ public:
 			}
 		}
 
-		// A layer with an empty family key could only come from a pointer row naming no layer: it is
-		// kept (the holder is worth showing) and reads as "Record" in the sentence.
 		FMantlePlacePublicRecordsLogic::OrderLayers(Block.Layers);
 		Block.bPresent = Block.Layers.Num() > 0 || Block.SkippedSources.Num() > 0 || Block.NotHeld.Num() > 0;
 		return true;
@@ -380,9 +337,6 @@ public:
 
 	bool IsPresent(const FMantlePlaceVaultManifest& M) const override { return M.PublicRecords.bPresent; }
 
-	// Every file a layer points at is in the integrity chain, the GeoPackages the editor does not read
-	// included: a record is verified when the bundle carries it, whether or not it is drawn. A file
-	// with no digest is skipped and reported unverified, never refused.
 	void CollectDeclared(const FMantlePlaceVaultManifest& M, TArray<FMantlePlaceDeclaredArtifact>& Out) const override
 	{
 		for (const FMantlePlaceRecordLayer& Layer : M.PublicRecords.Layers)
@@ -404,8 +358,6 @@ public:
 		{
 			return;
 		}
-		// The notice comes first and whatever else follows: it is the one thing every public-record
-		// import says, whether or not the manifest carries a notice of its own for a layer.
 		Ctx.Log.Add(FMantlePlacePublicRecordsLogic::StandingNotice());
 		if (!Block.BundleNotice.IsEmpty())
 		{
@@ -415,13 +367,11 @@ public:
 		{
 			if (Layer.Files.Num() == 0)
 			{
-				continue; // a holder that delivered nothing: its pointer is reported below
+				continue;
 			}
 			Ctx.Log.Append(FMantlePlacePublicRecordsLogic::DescribeLayer(Layer));
 			ImportLayer(Ctx, Layer);
 		}
-		// A record the bundle does not deliver is shown with where its holder publishes it, so the
-		// layer is never silently missing.
 		Ctx.Log.Append(FMantlePlacePublicRecordsLogic::DescribeNotDelivered(Block));
 	}
 
@@ -433,8 +383,8 @@ private:
 
 		TArray<FMantlePlaceRecordPolyline> Lines;
 		TArray<FString> Drawn;
-		int32 LinesDrawn = 0;  // lines and area outlines, as the file states them
-		int32 PointsDrawn = 0; // each drawn as a marker
+		int32 LinesDrawn = 0;
+		int32 PointsDrawn = 0;
 		bool bAnyDxf = false;
 		for (const FMantlePlaceRecordFile& File : Layer.Files)
 		{
@@ -466,13 +416,10 @@ private:
 				continue;
 			}
 			const int32 FileLineCount = FileLines.Num();
-			// A point is drawn as a small marker centred on the file's own coordinates; it joins the lines so the
-			// on-site backstop below weighs it like any other vertex.
 			for (const FVector2D& Point : FilePoints)
 			{
 				FileLines.Add(FMantlePlacePublicRecordsLogic::MarkerOutline(Point));
 			}
-			// The one-way backstop behind a stated frame: a producer can state a frame wrongly.
 			if (!FMantlePlacePublicRecordsLogic::AnyVertexOnSite(
 					FileLines, Manifest.Georef.OriginEastingM, Manifest.Georef.OriginNorthingM, Manifest.GetAoiSizeUeCm()))
 			{
@@ -504,7 +451,7 @@ private:
 		}
 		if (Drawn.Num() == 0)
 		{
-			return; // each refusal above is already named
+			return;
 		}
 		if (Lines.Num() == 0)
 		{
@@ -512,8 +459,6 @@ private:
 			return;
 		}
 
-		// One actor per family, so the layer is one thing to hide or show. Its lines are splines under
-		// it, laid on the imported ground; no height from the record is used.
 		AActor* Actor = Ctx.World->SpawnActor<AActor>();
 		if (Actor == nullptr)
 		{
@@ -535,8 +480,6 @@ private:
 				break;
 			}
 		}
-		// With no Landscape to follow (a mesh-only import) the overlay lies flat at the ground reference
-		// height the manifest publishes, and the log says so.
 		const double FlatZ = Manifest.GetMeshLocation().Z;
 		int32 PointsOffGround = 0;
 
@@ -546,14 +489,12 @@ private:
 			Spline->SetupAttachment(Root);
 			Actor->AddInstanceComponent(Spline);
 			Spline->RegisterComponent();
-			Spline->ClearSplinePoints(/*bUpdateSpline*/ false);
+			Spline->ClearSplinePoints(false);
 			for (const FVector2D& Point : Line.Points)
 			{
 				FVector Position = FMantlePlaceVaultManifest::ProjectedToUeCm(
 					Point.X - Manifest.Georef.OriginEastingM, Point.Y - Manifest.Georef.OriginNorthingM, 0.0);
 				Position.Z = FlatZ;
-				// Into the level's frame before the ground is read: the Landscape sits at the level
-				// offset, so its height is asked of the point where it really lies.
 				Position = Manifest.ToLevelFrame(Position);
 				if (Landscape != nullptr)
 				{
@@ -567,19 +508,17 @@ private:
 						++PointsOffGround;
 					}
 				}
-				Spline->AddSplinePoint(Position, ESplineCoordinateSpace::World, /*bUpdateSpline*/ false);
+				Spline->AddSplinePoint(Position, ESplineCoordinateSpace::World, false);
 			}
-			// Straight segments between the file's vertices: a parcel edge is not a curve.
 			for (int32 Index = 0; Index < Spline->GetNumberOfSplinePoints(); ++Index)
 			{
-				Spline->SetSplinePointType(Index, ESplinePointType::Linear, /*bUpdateSpline*/ false);
+				Spline->SetSplinePointType(Index, ESplinePointType::Linear, false);
 			}
-			Spline->SetClosedLoop(Line.bClosed, /*bUpdateSpline*/ false);
+			Spline->SetClosedLoop(Line.bClosed, false);
 			Spline->SetUnselectedSplineSegmentColor(Color);
 			Spline->UpdateSpline();
 		}
 
-		// One overlay is drawn from these files, so these files' roles are its roles (not the family's every file).
 		Ctx.SourcePaths = Drawn;
 		Ctx.Claim(Actor, MantlePlaceImportNaming::PublicRecordLabel(Ctx.Identity, Layer.Family));
 		Actor->Tags.Add(FName(*FString::Printf(TEXT("record_family=%s"), *Layer.Family)));

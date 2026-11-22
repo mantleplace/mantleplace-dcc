@@ -2,35 +2,25 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Client;
 
-/// <summary>The curator's private channel, as the connected host drives it. <see cref="RealtimeClient"/> is the real one.</summary>
 public interface IConnectedChannel
 {
-    /// <summary>Raised on every <c>SUBSCRIBED</c>: a catch-up is due. On the channel's thread.</summary>
     event EventHandler? Subscribed;
 
-    /// <summary>A row change on a subscribed table. On the channel's thread.</summary>
     event EventHandler<RealtimeRowChange>? RowChanged;
 
-    /// <summary>Joins on this session, tracking <paramref name="presence"/>; <c>false</c> when it will not connect.</summary>
     bool Start(string accessToken, ConnectedHost presence);
 
-    /// <summary>Re-authorises with a renewed access token.</summary>
     void SetAuth(string accessToken);
 
-    /// <summary>Re-tracks presence with a changed payload.</summary>
     void Track(ConnectedHost presence);
 
-    /// <summary>Watches one order's row.</summary>
     void WatchOrder(string orderId);
 
-    /// <summary>Drops the order subscription.</summary>
     void StopWatchingOrder();
 
-    /// <summary>Untracks, leaves and closes, waiting a bounded time.</summary>
     Task StopAsync();
 }
 
-/// <summary>The two v1 export routes. <see cref="ExportsClient"/> is the real one.</summary>
 public interface IExportRoutes
 {
     Task<ExportCall<IReadOnlyList<HostExport>>> ListAsync(string connectionId, CancellationToken cancellationToken);
@@ -42,48 +32,13 @@ public interface IExportRoutes
         CancellationToken cancellationToken);
 }
 
-/// <summary>What the connected host needs from Revit: an import window it can open and close for an export.</summary>
-/// <remarks>
-/// Both calls come from any thread and must return without waiting on Revit: the implementation
-/// queues the work and marshals it (an <c>ExternalEvent</c> for the document, the window's dispatcher
-/// for the window). What happens next comes back through the service's <c>Import…</c> methods.
-/// </remarks>
 public interface IExportImportHost
 {
-    /// <summary>
-    /// Asks Revit to open the import window on <paramref name="zipPath"/> for this export.
-    /// <c>false</c> when another import already holds the window: the export waits its turn.
-    /// </summary>
     bool RequestOpen(HostExport export, string zipPath);
 
-    /// <summary>Closes this export's window if it is still on its checklist; a running import is left alone.</summary>
     void Close(string exportId);
 }
 
-/// <summary>
-/// The connected host: one Revit for the whole session, on the curator's private channel, receiving
-/// exports from the web vault and reporting each one's life (the platform export contract).
-/// </summary>
-/// <remarks>
-/// <para>
-/// Every decision is <see cref="ExportDesk"/>'s, in <c>MantlePlace.Core</c>. What is here is the
-/// wiring: the channel's events and the routes' answers go into the desk, and the desk's actions go
-/// out to the channel, the routes, the fetch and the host's import window.
-/// </para>
-/// <para>
-/// ⛔ <b>Nothing here waits on the network on the caller's thread.</b> Every route call and every
-/// fetch runs on the thread pool; the desk is touched under one lock, briefly, from whichever thread
-/// brings news — the channel's, the pool's, or Revit's own when the import window reports. The host's
-/// two calls are its to marshal (<see cref="IExportImportHost"/>).
-/// </para>
-/// <para>
-/// <b>Joins and leaves.</b> <see cref="Join"/> on a sign-in or a restored session; <see cref="Reauthorise"/>
-/// after each renewal; <see cref="Announce"/> when the active document changes; <see cref="LeaveAsync"/> on
-/// sign-out and when Revit closes. A channel is made fresh for every join, because a stopped one never
-/// starts again. Whatever was in flight when it left is dropped where it stands; news from it that
-/// arrives late is ignored.
-/// </para>
-/// </remarks>
 public sealed class ConnectedHostService
 {
     private readonly object _gate = new();
@@ -100,13 +55,6 @@ public sealed class ConnectedHostService
     private CancellationTokenSource? _work;
     private int _generation;
 
-    /// <param name="connectionId">This launch's connection id.</param>
-    /// <param name="channels">Makes a fresh channel for each join.</param>
-    /// <param name="routes">The export routes, on the bearer session.</param>
-    /// <param name="fetch">Fetches an order's bundle (<see cref="ExportBundleFetcher.FetchAsync"/>).</param>
-    /// <param name="log">Where the one-line notes go.</param>
-    /// <param name="now">The clock progress is paced by; the system clock when <c>null</c>.</param>
-    /// <param name="delay">How a retry waits, for tests; a real delay when <c>null</c>.</param>
     public ConnectedHostService(
         string connectionId,
         Func<IConnectedChannel> channels,
@@ -126,10 +74,8 @@ public sealed class ConnectedHostService
         _desk = new ExportDesk(connectionId, now ?? (() => DateTimeOffset.UtcNow));
     }
 
-    /// <summary>The connection id the channel and the routes are scoped to.</summary>
     public string ConnectionId => _connectionId;
 
-    /// <summary>Whether a channel is running.</summary>
     public bool IsJoined
     {
         get
@@ -141,7 +87,6 @@ public sealed class ConnectedHostService
         }
     }
 
-    /// <summary>The import window this service opens. Set once, before the first join.</summary>
     public void Attach(IExportImportHost host)
     {
         lock (_gate)
@@ -150,7 +95,6 @@ public sealed class ConnectedHostService
         }
     }
 
-    /// <summary>Joins the curator's channel on this session. <c>false</c> when it will not connect (not configured, say).</summary>
     public bool Join(string accessToken, ConnectedHost presence)
     {
         IConnectedChannel channel;
@@ -192,7 +136,6 @@ public sealed class ConnectedHostService
         return false;
     }
 
-    /// <summary>Authorises the channel again after a renewal.</summary>
     public void Reauthorise(string accessToken)
     {
         lock (_gate)
@@ -201,7 +144,6 @@ public sealed class ConnectedHostService
         }
     }
 
-    /// <summary>Re-tracks presence: the active document changed, or there is none now.</summary>
     public void Announce(ConnectedHost presence)
     {
         lock (_gate)
@@ -210,7 +152,6 @@ public sealed class ConnectedHostService
         }
     }
 
-    /// <summary>Untracks and leaves. Exports in hand are dropped where they stand.</summary>
     public async Task LeaveAsync()
     {
         IConnectedChannel? channel;
@@ -232,27 +173,20 @@ public sealed class ConnectedHostService
         }
     }
 
-    /// <summary>The import window for this export is open on its checklist. Revit's thread.</summary>
     public void ImportOpened(string exportId) => Feed(desk => desk.ImportOpened(exportId));
 
-    /// <summary>The window could not open on the bundle, for this reason. Revit's thread.</summary>
     public void ImportRefused(string exportId, string reason, string message)
         => Feed(desk => desk.ImportRefused(exportId, reason, message));
 
-    /// <summary>Another import held the window when this export's came to open. Revit's thread.</summary>
     public void ImportBusy(string exportId) => Feed(desk => desk.ImportBusy(exportId));
 
-    /// <summary>The curator pressed Import. Revit's thread.</summary>
     public void ImportBegan(string exportId) => Feed(desk => desk.ImportBegan(exportId));
 
-    /// <summary>How far the running import has got. Revit's thread; paced by the desk.</summary>
     public void ImportProgress(string exportId, int percent) => Feed(desk => desk.ImportProgress(exportId, percent));
 
-    /// <summary>The window's run ended, or the window went before Import. Revit's thread.</summary>
     public void ImportEnded(string exportId, ImportEnding ending, string message)
         => Feed(desk => desk.ImportEnded(exportId, ending, message));
 
-    /// <summary>No import holds the window any more. Revit's thread.</summary>
     public void TurnFree() => Feed(desk => desk.TurnFree());
 
     private void OnSubscribed(int generation)
@@ -279,7 +213,7 @@ public sealed class ConnectedHostService
             {
                 return;
             }
-#pragma warning disable CA1031 // The next SUBSCRIBED lists again; a fault here is a line, not a dialog.
+#pragma warning disable CA1031
             catch (Exception ex)
 #pragma warning restore CA1031
             {
@@ -331,8 +265,6 @@ public sealed class ConnectedHostService
         }
     }
 
-    // Under the lock. Nothing here waits: channel commands are queued, host calls are queued by the
-    // host, and route calls and fetches are started on the pool.
     private void Execute(IReadOnlyList<ExportAction> actions)
     {
         int generation = _generation;
@@ -397,7 +329,7 @@ public sealed class ConnectedHostService
         {
             return;
         }
-#pragma warning disable CA1031 // A report that faults is a retry, not a fault dialog.
+#pragma warning disable CA1031
         catch (Exception ex)
 #pragma warning restore CA1031
         {
@@ -428,10 +360,8 @@ public sealed class ConnectedHostService
     };
 }
 
-/// <summary>The connected host's log: one file per machine, appended, kept small.</summary>
 public sealed class ConnectedHostLog
 {
-    /// <summary>A log past this is started again at the first line of a launch.</summary>
     public const long MaxBytes = 1_000_000;
 
     private readonly object _gate = new();
@@ -444,13 +374,10 @@ public sealed class ConnectedHostLog
         _path = path;
     }
 
-    /// <summary>Under <c>%LOCALAPPDATA%</c>, beside the machine's other records.</summary>
     public static string DefaultPath => MachineRecordFile.InLocalAppData("connected-host.log");
 
-    /// <summary>Where it is written.</summary>
     public string Path => _path;
 
-    /// <summary>Appends one line. A file that cannot be written costs the line, never the caller.</summary>
     public void Append(string line)
     {
         lock (_gate)

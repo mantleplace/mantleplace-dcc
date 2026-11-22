@@ -98,8 +98,6 @@ def upsert(issue: str, body: str) -> None:
             f"body={body}",
         )
         return
-    # `--body-file -` rather than `--body`: the text is multi-line and carries backticks, and a
-    # command line is the wrong place for either.
     finished = subprocess.run(
         ["gh", "issue", "comment", issue, "--body-file", "-"],
         input=body,
@@ -129,8 +127,6 @@ def main(argv: list[str]) -> int:
         findings = handle.read().strip()
 
     if not findings:
-        # Silence on a clean issue is the correct amount of noise — unless we said something
-        # before, in which case saying it is resolved is what closes the loop.
         label(arguments.issue, add=False)
         if existing_comment_id(arguments.issue):
             upsert(arguments.issue, CLEAN_BODY)

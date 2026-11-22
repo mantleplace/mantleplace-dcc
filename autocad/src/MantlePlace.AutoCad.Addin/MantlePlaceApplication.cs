@@ -8,23 +8,6 @@ using AcApplication = Autodesk.AutoCAD.ApplicationServices.Application;
 
 namespace MantlePlace.AutoCad.Addin;
 
-/// <summary>
-/// Owns the process's one auth session, the vault client and the connected host, and starts and stops
-/// them with the plugin.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Static accessors rather than parameters because AutoCAD constructs the command class itself and
-/// gives no way to inject anything. One of each per process: two sessions would each hold an access
-/// token, and signing out in one would leave the other authenticated.
-/// </para>
-/// <para>
-/// The wiring is the Revit plugin's, minus the parts that need a hook into the drawing or a ledger: a
-/// Prepare watcher with no ledger, so no re-joiner, and no import event, since an import runs on
-/// AutoCAD's own dispatcher. What each part decides is in the shared sources, where the headless suite
-/// holds it; what is here is construction, threads and teardown.
-/// </para>
-/// </remarks>
 internal static class MantlePlaceApplication
 {
     private static AuthSession? _session;
@@ -40,55 +23,32 @@ internal static class MantlePlaceApplication
     private static readonly SignInEdge SignIns = new();
     private static readonly ConnectedHostEdge ConnectedEdge = new();
 
-    /// <summary>The active document's name, as the presence payload last announced it; <c>null</c> for none.</summary>
     private static volatile string? _document;
 
     private static string? _hostVersion;
 
-    /// <summary>AutoCAD's UI dispatcher, held so the handler below can be detached again.</summary>
     private static Dispatcher? _uiDispatcher;
 
-    /// <summary>The one session for this AutoCAD process.</summary>
     internal static AuthSession Session => _session ?? throw NotStarted();
 
-    /// <summary>The routes this process signs in against and sends curators to.</summary>
     internal static MantlePlaceEndpoints Endpoints => _endpoints ?? throw NotStarted();
 
-    /// <summary>The running AutoCAD's release year, read once at startup so a window can build the feedback link (HPS-56).</summary>
     internal static string? HostVersion => _hostVersion;
 
     internal static VaultClient Vault => _vault ?? throw NotStarted();
 
     internal static BundleCache Cache => _cache ?? throw NotStarted();
 
-    /// <summary>This machine's record of announced orders, shared with every other host on it.</summary>
     internal static AnnouncedOrderStore Announced => _announced ?? throw NotStarted();
 
-    /// <summary>
-    /// The connected host: this AutoCAD on the curator's private channel, receiving exports from the
-    /// web vault. <c>null</c> before startup and after shutdown, never otherwise.
-    /// </summary>
     internal static ConnectedHostService? Connected => _connected;
 
-    /// <summary>
-    /// The vault as a send's fetch sees it: the row a send's order was listed with, which a 3.0 send's
-    /// level control is built from, and the download at another level. <c>null</c> before startup and
-    /// after shutdown.
-    /// </summary>
     internal static VaultExportSource? ExportSource => _exportSource;
 
-    /// <summary>
-    /// The session's Prepare watcher, which a Prepare pressed in the vault window outlives the window in.
-    /// Kept for this launch only: AutoCAD keeps no ledger of Prepares, so one AutoCAD closed on is not
-    /// re-joined at the next launch.
-    /// </summary>
     internal static PrepareWatcher Watcher => _watcher ?? throw NotStarted();
 
-    /// <summary>Starts everything. AutoCAD's UI thread, from <c>IExtensionApplication.Initialize</c>.</summary>
     internal static void Start()
     {
-        // Initialize runs on AutoCAD's UI thread, the only moment this plugin is certain to see the
-        // dispatcher it needs to guard.
         _uiDispatcher = Dispatcher.CurrentDispatcher;
         _uiDispatcher.UnhandledException += OnDispatcherUnhandledException;
 
@@ -97,7 +57,6 @@ internal static class MantlePlaceApplication
         MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load();
         _endpoints = endpoints;
 
-        // Before the first Platform API call (the restore below), so a 426 on it is heard.
         ClientUpdateDialog.Attach();
         _session = new AuthSession(endpoints, SecretStores.ForCurrentPlatform());
         _vault = new VaultClient(endpoints, _session, threeFiles: AutoCadImportPlan.ThreeFiles);
@@ -105,10 +64,6 @@ internal static class MantlePlaceApplication
         _announced = new AnnouncedOrderStore(AnnouncedOrderStore.DefaultPath);
         _news = new VaultNewsChecker(new SessionNewsSource(_session, _vault), _announced, () => VaultBrowser.IsOpen);
 
-        // One connected host for the whole AutoCAD session, under this launch's connection id. It joins
-        // on the first sign-in (the restore below included) and stays off while the channel is not
-        // configured. Its route calls and fetches run on the pool; the window it opens is posted to
-        // the UI thread by AutoCadExportImportHost.
         ConnectedHostLog connectedLog = new(ConnectedHostLog.DefaultPath);
         string connectionId = ConnectionIdSource.ThisLaunch.Id;
         _exportSource = new VaultExportSource(_vault, _cache);
@@ -125,36 +80,26 @@ internal static class MantlePlaceApplication
         AcApplication.DocumentManager.DocumentBecameCurrent += OnDocumentBecameCurrent;
         PluginRibbon.Attach();
 
-        // Subscribed before the restore, so a transition it makes is not missed.
         _session.StateChanged += OnAuthStateChanged;
 
-        // Renews ahead of each lapse: the connected host's channel makes no route call to renew on.
         _renewer = new SessionRenewer(_session);
         _news.Arrived += OnNewsArrived;
         BeginSessionRestore(_session);
 
-        // Its first listing is now, and asks nothing while the restore above is still signing in;
-        // the restore's own sign-in wakes it (OnAuthStateChanged, SignInEdge).
         _news.Start();
     }
 
-    /// <summary>Stops everything, in the order the Revit plugin does. AutoCAD's UI thread, from <c>Terminate</c>.</summary>
     internal static void Stop()
     {
         AcApplication.DocumentManager.DocumentBecameCurrent -= OnDocumentBecameCurrent;
         PluginRibbon.Detach();
 
-        // Leaves the channel before the window goes, so no export is opened behind it. Bounded: the
-        // client waits at most two seconds for the leave to be answered, and AutoCAD's close waits no
-        // longer than that for the untrack to go out rather than leaning on the socket dropping.
         if (_connected is { } connected)
         {
             _connected = null;
             _ = Task.Run(() => LeaveQuietlyAsync(connected)).Wait(TimeSpan.FromSeconds(3));
         }
 
-        // Stopped before it is unsubscribed: a listing that lands after the stop claims nothing, so no
-        // order is recorded as announced with nobody left to announce it.
         if (_news is not null)
         {
             _news.Stop();
@@ -165,7 +110,6 @@ internal static class MantlePlaceApplication
         ArrivalNotifier.Forget();
         ClientUpdateDialog.Detach();
 
-        // A Prepare still running stops with AutoCAD; with no ledger, nothing is left to re-join.
         _watcher?.InterruptAll();
         _watcher = null;
         _exportSource = null;
@@ -176,8 +120,6 @@ internal static class MantlePlaceApplication
             _uiDispatcher = null;
         }
 
-        // Before the session is disposed: a transition raised after the windows are gone would post to
-        // a dispatcher that is shutting down.
         if (_session is not null)
         {
             _session.StateChanged -= OnAuthStateChanged;
@@ -194,14 +136,13 @@ internal static class MantlePlaceApplication
         _session = null;
     }
 
-    /// <summary>AutoCAD's main window, for owning a window to. Zero when there is none to own it.</summary>
     internal static IntPtr MainWindowHandle()
     {
         try
         {
             return AcApplication.MainWindow?.Handle ?? IntPtr.Zero;
         }
-#pragma warning disable CA1031 // A window with no owner is worse than no window; a missing main window is not an error to raise.
+#pragma warning disable CA1031
         catch (Exception)
 #pragma warning restore CA1031
         {
@@ -209,14 +150,9 @@ internal static class MantlePlaceApplication
         }
     }
 
-    /// <summary>Writes a line to the active drawing's command line, if there is one.</summary>
     internal static void Say(string text)
         => AcApplication.DocumentManager.MdiActiveDocument?.Editor.WriteMessage("\n" + text + "\n");
 
-    /// <summary>
-    /// Runs <paramref name="action"/> on AutoCAD's UI thread: now when already on it, posted otherwise,
-    /// and not at all once the plugin has shut down.
-    /// </summary>
     internal static void OnUiThread(Action action)
     {
         Dispatcher? dispatcher = _uiDispatcher;
@@ -234,7 +170,6 @@ internal static class MantlePlaceApplication
         _ = dispatcher.BeginInvoke(action);
     }
 
-    /// <summary>Tells the curator a fault of this plugin's was caught and AutoCAD is still running.</summary>
     internal static void SayFault(Exception fault)
     {
         ArgumentNullException.ThrowIfNull(fault);
@@ -243,15 +178,6 @@ internal static class MantlePlaceApplication
             + "drawing is untouched. If this keeps happening, please report it.");
     }
 
-    /// <summary>
-    /// Resumes a stored session at startup (<c>HPS-13</c>), without making AutoCAD wait for it.
-    /// </summary>
-    /// <remarks>
-    /// Fire-and-forget on purpose: <c>Initialize</c> runs on AutoCAD's thread during startup, and
-    /// blocking it on a network call delays AutoCAD by however long the platform takes to answer. The
-    /// restore is silent when there is no stored token and keeps the token on a network failure, so
-    /// the worst case is that the plugin comes up signed out.
-    /// </remarks>
     private static void BeginSessionRestore(AuthSession session)
     {
         _ = Task.Run(async () =>
@@ -260,7 +186,7 @@ internal static class MantlePlaceApplication
             {
                 await session.RestoreAsync().ConfigureAwait(false);
             }
-#pragma warning disable CA1031 // Nothing observes this task, and an unobserved fault can take the process down.
+#pragma warning disable CA1031
             catch (Exception)
 #pragma warning restore CA1031
             {
@@ -268,10 +194,6 @@ internal static class MantlePlaceApplication
         });
     }
 
-    /// <summary>
-    /// Keeps a throw out of one of our own UI handlers from terminating AutoCAD, when a frame on the
-    /// stack is ours (<see cref="AddinFaults.IsOurs"/>); anything else passes through untouched.
-    /// </summary>
     private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         string?[] declaringTypes = new StackTrace(e.Exception, fNeedFileInfo: false)
@@ -288,11 +210,9 @@ internal static class MantlePlaceApplication
         SayFault(e.Exception);
     }
 
-    /// <summary>A drawing became current, or the last one closed (a null document): presence follows the active drawing.</summary>
     private static void OnDocumentBecameCurrent(object? sender, DocumentCollectionEventArgs e)
         => AnnounceDocument(e?.Document is { } document ? Path.GetFileName(document.Name) : null);
 
-    /// <summary>Re-tracks presence when the active document changed; an unchanged one sends nothing.</summary>
     private static void AnnounceDocument(string? title)
     {
         string? document = string.IsNullOrWhiteSpace(title) ? null : title;
@@ -305,18 +225,9 @@ internal static class MantlePlaceApplication
         _connected?.Announce(Presence());
     }
 
-    /// <summary>The presence payload for this AutoCAD, its plugin and its active drawing.</summary>
     private static ConnectedHost Presence()
         => ConnectedHosts.Announce(_hostVersion ?? string.Empty, PluginVersion.Current, _document, Environment.MachineName);
 
-    /// <summary>
-    /// Joins, re-authorises or leaves the curator's channel as the session moves (<see cref="ConnectedHostEdge"/>),
-    /// and wakes the vault listing on a sign-in (<see cref="SignInEdge"/>).
-    /// </summary>
-    /// <remarks>
-    /// Raised on whichever thread finished the work. Nothing here waits: a join opens its socket on the
-    /// pool, and a leave is not awaited. Locked because the session raises this outside its own lock.
-    /// </remarks>
     private static void OnAuthStateChanged(object? sender, AuthState state)
     {
         bool signedIn;
@@ -363,23 +274,16 @@ internal static class MantlePlaceApplication
         {
             await connected.LeaveAsync().ConfigureAwait(false);
         }
-#pragma warning disable CA1031 // Nothing observes this task, and a leave that faults leaves a socket the process drops anyway.
+#pragma warning disable CA1031
         catch (Exception)
 #pragma warning restore CA1031
         {
         }
     }
 
-    /// <summary>Marshals orders the background listing found onto AutoCAD's UI thread, then tells the curator.</summary>
-    /// <remarks>
-    /// ⛔ <see cref="VaultNewsChecker.Arrived"/> is raised on a thread-pool thread, and the notifier
-    /// touches windows. Whether the vault is open is read after the hop.
-    /// </remarks>
     private static void OnNewsArrived(object? sender, IReadOnlyList<VaultBundle> arrivals)
         => OnUiThread(() => ArrivalNotifier.OnArrived(arrivals, VaultBrowser.IsOpen));
 
-    /// <summary>The release year AutoCAD reports (2025, 2026, 2027), for the feedback link and the presence payload.</summary>
-    /// <remarks>The version is not a year (2026 is R25.1, 2027 is R26.0); <see cref="HostReleaseYear"/> maps it.</remarks>
     private static string HostYear()
     {
         try
@@ -387,7 +291,7 @@ internal static class MantlePlaceApplication
             Version version = AcApplication.Version;
             return HostReleaseYear.From(version.Major, version.Minor);
         }
-#pragma warning disable CA1031 // The host year is a label; its absence is not worth a failed start.
+#pragma warning disable CA1031
         catch (Exception)
 #pragma warning restore CA1031
         {

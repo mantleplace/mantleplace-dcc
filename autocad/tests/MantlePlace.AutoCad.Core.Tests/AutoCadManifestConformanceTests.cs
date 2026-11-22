@@ -5,23 +5,6 @@ namespace MantlePlace.AutoCad.Tests;
 
 using CorpusCase = ConformanceCorpus.CorpusCase;
 
-/// <summary>
-/// Drives the corpus' <c>manifest</c> group for the <c>autocad</c> host (HPS-40, HPS-41): its own
-/// <c>hosts.autocad</c> cases through the import plan, and the host-invariant cases through the shared
-/// reader the plugin compiles in.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Each AutoCAD case is planned twice, as plain AutoCAD and as Civil 3D, into a drawing with no
-/// geographic location, and every expectation is asserted against both plans: the cases say a plain
-/// AutoCAD reader and a Civil 3D reader read the same block and agree on everything it states. The
-/// values asserted are the PLAN's (what the import would place, where, and in which unit), not a
-/// separate parse, so the corpus binds what the drawing receives.
-/// </para>
-/// <para>
-/// Keys are tracked as asserted (HPS-46): a key the corpus adds that this suite does not read fails it.
-/// </para>
-/// </remarks>
 internal static class AutoCadManifestConformanceTests
 {
     internal const string HostKey = AutoCadBlockReader.HostKey;
@@ -101,8 +84,6 @@ internal static class AutoCadManifestConformanceTests
             }
             else
             {
-                // The host-invariant cases bind the shared reader this plugin compiles in: the version
-                // gate, the order identity and the materialisation verdict it refuses before planning.
                 run.Case(corpusCase.Id, () => ManifestConformanceTests.DriveCase(run, corpusCase));
             }
         }
@@ -127,7 +108,6 @@ internal static class AutoCadManifestConformanceTests
         AssertExpectations(run, corpusCase, plain, "plain AutoCAD");
         AssertExpectations(run, corpusCase, civil, "Civil 3D");
 
-        // What every plan of an AutoCAD case holds, whatever the case asserts.
         run.False(plain.Part(AutoCadPart.Surface).Place, "plain AutoCAD never places the surface: it needs Civil 3D");
         run.Equal(civil.Part(AutoCadPart.Surface).Place, civil.Part(AutoCadPart.Surface).Present, "Civil 3D builds the surface exactly when the bundle ships it");
 
@@ -407,7 +387,6 @@ internal static class AutoCadManifestConformanceTests
             run.True(insertion is not null, $"{host}: {key}: the plan carries the aerial's insertion");
             if (insertion is not null)
             {
-                // Verbatim: exactly the published number, no tolerance to hide a derivation behind.
                 run.True(read(insertion).Equals(expected), $"{host}: {key} is {expected}, as published (got {read(insertion)})");
             }
         }

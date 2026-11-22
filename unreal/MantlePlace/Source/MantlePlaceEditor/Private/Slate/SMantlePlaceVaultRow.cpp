@@ -35,22 +35,16 @@ void SMantlePlaceVaultRow::Construct(const FArguments& InArgs, const TSharedRef<
 		STableRow<TSharedPtr<FMantlePlaceVaultItem>>::FArguments()
 		.Style(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FTableRowStyle>("MantlePlace.TableRow"))
 		.ShowSelection(false)
-		.Padding(FMargin(0.f, 0.f, 0.f, FMantlePlaceEditorStyle::S2)) // inter-card gap == edge gutter
+		.Padding(FMargin(0.f, 0.f, 0.f, FMantlePlaceEditorStyle::S2))
 		[
-			// The whole card is a clickable frame (opens details); the Import button below is a nested
-			// button that consumes its own click, so it never triggers the card's OnClicked.
 			SNew(SButton)
-			// Every card carries the same tag; tag lookup returns the first
-			// visible match, i.e. the top row — resolve-then-click tooling that
-			// needs a specific bundle should search the vault first.
 			.Tag(TEXT("MantlePlace.Vault.BundleCard"))
 			.ButtonStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FButtonStyle>("MantlePlace.CardButton"))
-			.ContentPadding(FMargin(FMantlePlaceEditorStyle::S2)) // card inner padding, symmetric 16
+			.ContentPadding(FMargin(FMantlePlaceEditorStyle::S2))
 			.OnClicked(this, &SMantlePlaceVaultRow::OnCardClicked)
 			[
 				SNew(SVerticalBox)
 
-				// Tier 1: codename + meta (left) / status word (top-right).
 				+ SVerticalBox::Slot()
 				.AutoHeight()
 				[
@@ -80,8 +74,6 @@ void SMantlePlaceVaultRow::Construct(const FArguments& InArgs, const TSharedRef<
 						]
 					]
 
-					// Status word: plain tinted text, no pill / no dot (web STATUS_LABEL_CLASS), vertically
-					// centred against the identity block (web self-center).
 					+ SHorizontalBox::Slot()
 					.AutoWidth()
 					.VAlign(VAlign_Center)
@@ -94,7 +86,6 @@ void SMantlePlaceVaultRow::Construct(const FArguments& InArgs, const TSharedRef<
 					]
 				]
 
-				// Action row: Import on its own right-aligned line (web moves the CTA below the meta).
 				+ SVerticalBox::Slot()
 				.AutoHeight()
 				.Padding(0.f, FMantlePlaceEditorStyle::S3, 0.f, 0.f)
@@ -102,8 +93,6 @@ void SMantlePlaceVaultRow::Construct(const FArguments& InArgs, const TSharedRef<
 					SNew(SHorizontalBox)
 					+ SHorizontalBox::Slot().FillWidth(1.f)[ SNullWidget::NullWidget ]
 
-					// Report a problem (HPS-56): bundle-scoped, opens the web Feedback form with this
-					// bundle's order id. A nested button, so it consumes its own click.
 					+ SHorizontalBox::Slot()
 					.AutoWidth()
 					.VAlign(VAlign_Center)
@@ -140,7 +129,6 @@ void SMantlePlaceVaultRow::Construct(const FArguments& InArgs, const TSharedRef<
 					]
 				]
 
-				// Progress bar (hidden until UpdateProgress; marquee when Fraction < 0).
 				+ SVerticalBox::Slot()
 				.AutoHeight()
 				.Padding(0.f, FMantlePlaceEditorStyle::S3, 0.f, 0.f)
@@ -154,7 +142,6 @@ void SMantlePlaceVaultRow::Construct(const FArguments& InArgs, const TSharedRef<
 					})
 				]
 
-				// Progress caption.
 				+ SVerticalBox::Slot()
 				.AutoHeight()
 				.Padding(0.f, FMantlePlaceEditorStyle::S6, 0.f, 0.f)

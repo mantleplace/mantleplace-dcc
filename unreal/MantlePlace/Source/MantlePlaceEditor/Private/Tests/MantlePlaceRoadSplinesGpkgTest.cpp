@@ -17,12 +17,6 @@
 #include "SQLiteDatabase.h"
 #include "SQLitePreparedStatement.h"
 
-// The road splines read from the layer's GeoPackage. Headless: the GeoPackage is built here, row by
-// row, through the same engine SQLite module the reader uses, so nothing in this test is a binary
-// fixture. The geometry blobs are written byte by byte, which is what makes the reader's
-// decode a thing this test can break: the ISO and extended type codes, both byte orders, the
-// envelope, and a blob cut off partway.
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMantlePlaceRoadSplinesGpkgTest,
     "MantlePlace.Import.RoadSplinesGpkg",
@@ -48,7 +42,6 @@ void PutDouble(TArray<uint8>& Out, double Value, bool bLittle)
 	}
 }
 
-/** One WKB LineString. TypeCode is written as given, so a test picks ISO (1002) or plain (2). */
 void PutLineString(TArray<uint8>& Out, const TArray<FVector>& Points, uint32 TypeCode, bool bWithZ, bool bLittle)
 {
 	Out.Add(bLittle ? 1 : 0);
@@ -65,7 +58,6 @@ void PutLineString(TArray<uint8>& Out, const TArray<FVector>& Points, uint32 Typ
 	}
 }
 
-/** The GeoPackage geometry header: GP, version 0, flags, srs_id, then the envelope bytes asked for. */
 TArray<uint8> Header(bool bLittle, int32 EnvelopeIndicator, bool bEmpty, int32 SrsId = 4326)
 {
 	TArray<uint8> Out;
@@ -116,13 +108,12 @@ bool Exec(FSQLiteDatabase& Database, const TCHAR* Statement)
 
 struct FRoadRow
 {
-	TArray<uint8> Geometry; // empty = a NULL geometry
+	TArray<uint8> Geometry;
 	FString RoadClass;
 	FString Name;
 	double Width = 0.0;
 };
 
-/** Build a synthetic GeoPackage at Path: one feature table of road rows, in the given SRS. */
 bool BuildGpkg(const FString& Path, const FString& Table, int32 SrsId, const TArray<FRoadRow>& Rows)
 {
 	FSQLiteDatabase Database;
@@ -165,7 +156,6 @@ bool BuildGpkg(const FString& Path, const FString& Table, int32 SrsId, const TAr
 	return bOk;
 }
 
-/** Add a second feature table to a GeoPackage BuildGpkg made: just what the reader lists tables from. */
 bool AddFeatureTable(const FString& Path, const FString& Table, int32 SrsId)
 {
 	FSQLiteDatabase Database;
@@ -194,7 +184,6 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 	using FGpkg = FMantlePlaceRoadSplinesGpkg;
 	using FLogic = FMantlePlaceRoadSplinesLogic;
 
-	// A UTM 13N origin at a known lon/lat, so the roads below land at known offsets.
 	constexpr int32 Epsg = 32613;
 	constexpr double OriginLon = -105.0;
 	constexpr double OriginLat = 40.0;
@@ -203,7 +192,6 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 
 	const TArray<FVector> Comet = { FVector(OriginLon, OriginLat, 2640.0), FVector(OriginLon + 0.001, OriginLat, 2641.0) };
 
-	// --- DecodeGeometry: the blob, in every shape the ETL's writer or another could produce -------
 	{
 		TArray<TArray<FVector>> Parts;
 		bool bIsLine = false;
@@ -219,7 +207,6 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("z"), Parts[0][1].Z, 2641.0, 1e-9);
 		}
 
-		// Big-endian, no Z, with a 32-byte envelope: z is 0, the envelope is stepped over.
 		TArray<uint8> BigEndian = Header(false, 1, false);
 		PutLineString(BigEndian, Comet, 2u, false, false);
 		TestTrue(TEXT("a big-endian XY LineString with an envelope decodes"),
@@ -231,7 +218,6 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("no Z reads as 0"), Parts[0][1].Z, 0.0, 1e-12);
 		}
 
-		// The extended (EWKB) Z flag, 0x80000002, reads the same as ISO 1002.
 		TArray<uint8> Extended = Header(true, 0, false);
 		PutLineString(Extended, Comet, 0x80000002u, true, true);
 		TestTrue(TEXT("an EWKB LineString Z decodes"), FGpkg::DecodeGeometry(Extended, Parts, bIsLine, Error));
@@ -245,7 +231,6 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("and is a line"), bIsLine);
 		TestEqual(TEXT("one part per member"), Parts.Num(), 2);
 
-		// Not a road centreline: skipped, not a fault.
 		TestTrue(TEXT("a Point decodes without error"), FGpkg::DecodeGeometry(PointBlob(OriginLon, OriginLat), Parts, bIsLine, Error));
 		TestFalse(TEXT("but is not a line"), bIsLine);
 		TestEqual(TEXT("and yields no part"), Parts.Num(), 0);
@@ -253,7 +238,6 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 			FGpkg::DecodeGeometry(Header(true, 0, true), Parts, bIsLine, Error));
 		TestFalse(TEXT("and is not a line"), bIsLine);
 
-		// Malformed: refused, not read past the end.
 		TArray<uint8> Truncated = LineBlob(Comet);
 		Truncated.SetNum(Truncated.Num() - 5);
 		TestFalse(TEXT("a blob cut off inside its points fails"), FGpkg::DecodeGeometry(Truncated, Parts, bIsLine, Error));
@@ -264,11 +248,10 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 		TArray<uint8> Lying = Header(true, 0, false);
 		Lying.Add(1);
 		PutU32(Lying, 2u, true);
-		PutU32(Lying, 0x7FFFFFFFu, true); // states far more points than it carries
+		PutU32(Lying, 0x7FFFFFFFu, true);
 		TestFalse(TEXT("a point count the blob cannot hold fails"), FGpkg::DecodeGeometry(Lying, Parts, bIsLine, Error));
 	}
 
-	// --- ReadBytes: a synthetic GeoPackage through the engine's SQLite module -------------------
 	{
 		TArray<FRoadRow> Rows;
 		Rows.Add({ LineBlob(Comet), TEXT("residential"), TEXT("Comet Rd"), 6.0 });
@@ -316,7 +299,6 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("and its width"), Splines[2].WidthMEstimated, 3.5, 1e-9);
 		}
 
-		// The same roads from GeoJSON are the same splines: one projection, whichever file.
 		const FString GeoJson = FString::Printf(
 		    TEXT("{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\","
 		         "\"properties\":{\"class\":\"residential\",\"name\":\"Comet Rd\",\"width_m_estimated\":6.0},"
@@ -336,7 +318,6 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 			}
 		}
 
-		// `tables` narrows the read to the named table; one the file does not hold is refused by name.
 		TArray<FMantlePlaceRoadSpline> Named;
 		TestTrue(TEXT("a named table that exists is read"),
 			FGpkg::ReadBytes(Bytes, { TEXT("RoadSplines") }, OriginEastingM, OriginNorthingM, Epsg, Named, LinesSeen, Unreadable, Error));
@@ -346,13 +327,11 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("by name"), Error.Contains(TEXT("RoadSplines_line")));
 		TestEqual(TEXT("and nothing is kept"), Named.Num(), 0);
 
-		// A non-UTM origin refuses the layer before the file is opened, as ParseGeoJson does.
 		TestFalse(TEXT("a non-UTM origin refuses the layer"),
 			FGpkg::ReadBytes(Bytes, {}, OriginEastingM, OriginNorthingM, 3857, Named, LinesSeen, Unreadable, Error));
 		TestTrue(TEXT("naming the EPSG"), Error.Contains(TEXT("3857")));
 	}
 
-	// --- Refusals: another frame, and not a GeoPackage at all ------------------------------------
 	{
 		const FString Path = ScratchPath();
 		ON_SCOPE_EXIT { IFileManager::Get().Delete(*Path, false, true, true); };
@@ -375,7 +354,6 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("with a reason"), Error.IsEmpty());
 	}
 
-	// --- A row that lists no `tables` holds one table: read whatever it is named, never picked out of several
 	{
 		const FString Path = ScratchPath();
 		ON_SCOPE_EXIT { IFileManager::Get().Delete(*Path, false, true, true); };
@@ -403,7 +381,6 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("with the same road"), Listed.Num(), 1);
 	}
 
-	// --- The manifest pointer: the gpkg row is taken, the geojson row stays the fallback ----------
 	{
 		const FString Template = TEXT(R"JSON({
   "version": "1.0.0",
@@ -438,11 +415,9 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("geojson only: no gpkg is declared"), GeoJsonOnly.RoadSplines.bGpkgPresent);
 		TestTrue(TEXT("geojson only: the current source is read"), GeoJsonOnly.RoadSplines.bPresent);
 
-		// Another family's file is never taken for the lines'.
 		const FMantlePlaceVaultManifest PolygonOnly = ParseWith(PolygonRow);
 		TestFalse(TEXT("a polygon-family gpkg row is not the road lines"), PolygonOnly.RoadSplines.bGpkgPresent);
 
-		// Both files are declared payloads, so both are verified before anything is placed.
 		const TArray<FMantlePlaceDeclaredArtifact> Declared = FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(Both);
 		auto DeclaresPath = [&Declared](const TCHAR* Path)
 		{
@@ -452,7 +427,6 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("and so is the geojson"), DeclaresPath(TEXT("Vector/RoadSplines.geojson")));
 	}
 
-	// --- The Unreal block's own copy (MPB 1.16.0): read from its own pointer, preferred, verified ---
 	{
 		const FString Template = TEXT(R"JSON({
   "version": "%VERSION%",
@@ -473,7 +447,6 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 			    Template.Replace(TEXT("%VERSION%"), Version).Replace(TEXT("%ENGINE%"), *Engine), Error);
 		};
 
-		// 1.x: the pointer is read verbatim, beside the shared layer, which is untouched.
 		const FMantlePlaceVaultManifest Us = ParseWith(TEXT("1.16.0"), TEXT("Vector/RoadSplinesEngine.gpkg"), TEXT("EGM2008-orthometric"));
 		TestTrue(TEXT("a 1.16.0 manifest with the pointer parses"), Us.bValid);
 		TestTrue(TEXT("the pointer is declared"), Us.RoadSplines.bEnginePresent);
@@ -485,7 +458,6 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("with its own path"), Us.RoadSplines.GpkgPath, FString(TEXT("Vector/RoadSplines.gpkg")));
 		TestEqual(TEXT("and its own NAVD88 datum"), Us.RoadSplines.VerticalDatum, FString(TEXT("NAVD88 (GEOID18)")));
 
-		// The importer tries the copy first and places it; the NAVD88 layer behind it is refused by name.
 		const TArray<FMantlePlaceRoadSplinesCandidate> Plan = Us.GetRoadSplinesPlan();
 		if (TestEqual(TEXT("two sources are declared"), Plan.Num(), 2))
 		{
@@ -496,15 +468,12 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 			TestTrue(TEXT("by its datum"), Plan[1].Refusal.Contains(TEXT("NAVD88 (GEOID18)")));
 		}
 
-		// 2.0: the same pointer names the -Engine twin.
 		const FMantlePlaceVaultManifest Two = ParseWith(TEXT("2.0.0"), TEXT("Features/RoadsDraped-Engine.gpkg"), TEXT("EGM2008-orthometric"));
 		TestTrue(TEXT("a 2.0 manifest with the twin parses"), Two.bValid);
 		TestEqual(TEXT("the twin is read from the same pointer"), Two.RoadSplines.EnginePath, FString(TEXT("Features/RoadsDraped-Engine.gpkg")));
 		const TArray<FMantlePlaceRoadSplinesCandidate> TwoPlan = Two.GetRoadSplinesPlan();
 		TestTrue(TEXT("and placed first"), TwoPlan.Num() > 0 && TwoPlan[0].bPlaceable);
 
-		// The pointer states NAVD88: refused by name, so a US order that carries such a file under
-		// the pointer still places no road and nothing is shifted.
 		const FMantlePlaceVaultManifest Wrong = ParseWith(TEXT("1.16.0"), TEXT("Vector/RoadSplinesEngine.gpkg"), TEXT("NAVD88 (GEOID18)"));
 		bool bAnyPlaceable = false;
 		for (const FMantlePlaceRoadSplinesCandidate& Candidate : Wrong.GetRoadSplinesPlan())
@@ -513,14 +482,12 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 		}
 		TestFalse(TEXT("a copy stating NAVD88 and a NAVD88 layer place no road"), bAnyPlaceable);
 
-		// Without the pointer (1.8.0 to 1.15.0) the manifest declares the shared layer alone.
 		FString NoEngineError;
 		const FMantlePlaceVaultManifest Older = MantlePlaceImportManifest::Parse(
 		    Template.Replace(TEXT("%VERSION%"), TEXT("1.15.0")).Replace(TEXT("%ENGINE%"), TEXT("")), NoEngineError);
 		TestFalse(TEXT("no pointer: no engine copy is declared"), Older.RoadSplines.bEnginePresent);
 		TestEqual(TEXT("no pointer: the shared layer is the only source"), Older.GetRoadSplinesPlan().Num(), 1);
 
-		// The copy is a declared payload, so it is verified before anything is placed.
 		const TArray<FMantlePlaceDeclaredArtifact> Declared = FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(Us);
 		TestTrue(TEXT("the engine copy is verified"), Declared.ContainsByPredicate(
 			[](const FMantlePlaceDeclaredArtifact& Artifact) { return Artifact.Path == TEXT("Vector/RoadSplinesEngine.gpkg"); }));
@@ -529,4 +496,4 @@ bool FMantlePlaceRoadSplinesGpkgTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

@@ -3,16 +3,6 @@ using MantlePlace.Client;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The line the import window shows once a bundle has imported, "Did this import come in right?"
-/// (<c>HPS-56</c>): whether to ask, the once-per-bundle memory, and the two links Yes and No open.
-/// </summary>
-/// <remarks>
-/// The window only paints what <see cref="ImportFeedbackPrompt"/> returns and CI never builds it
-/// (<c>HPS-02</c>), so every rule is decided here: which endings ask, which order ids can be asked
-/// about, that a bundle is asked about once and never again, and that a memory that cannot be kept
-/// asks nothing rather than asking twice.
-/// </remarks>
 internal static class ImportFeedbackPromptTests
 {
     private const string Order = "3f2b8c1e-9d4a-4e7b-8a61-0c5d2e9f7a14";
@@ -39,7 +29,6 @@ internal static class ImportFeedbackPromptTests
             }
             catch (IOException)
             {
-                // A leftover temp folder is not a test failure.
             }
         }
 

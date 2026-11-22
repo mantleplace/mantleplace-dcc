@@ -1,81 +1,30 @@
-# The real-Revit timing driver. One run = one Revit process, launched quiet, stopped by PID at the end.
-# See README.md beside this script for the two phases and the flags.
-#
-#   ./Invoke-TimingRun.ps1 -Phase layers -Tag main-d4f3453 -Year 2027 -Commit d4f3453 -Bundle <zip> -Layers All
-#   ./Invoke-TimingRun.ps1 -Phase window -Tag main-d4f3453 -Year 2025 -Bundle <zip> -Boxes All
-#
-# Quiet by construction: Revit is created through WMI with SW_SHOWMINNOACTIVE (a child of the foreground
-# terminal would inherit the right to steal focus; a WMI-created process does not), windows are parked on
-# a secondary screen without activation, the unsigned add-in prompts are answered with TDM_CLICK_BUTTON to
-# the dialog window, and the import window is driven by UI Automation Toggle/Invoke only. No mouse move, no
-# key, no click. Only the PID this script launched is ever stopped; the real add-in's install slot is
-# never read or written. No run launches while any other Revit is up.
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][ValidateSet('window', 'layers')][string]$Phase,
     [Parameter(Mandatory)][string]$Tag,
     [Parameter(Mandatory)][ValidateSet('2025', '2026', '2027')][string]$Year,
-    # The folder that contains revit\src. Needed the first time a tag is built (or with -Rebuild), unless -Commit.
     [string]$SourceRoot = '',
-    # A commit of this repository to export (Export-TimingSource.ps1) and build, in place of -SourceRoot.
     [string]$Commit = '',
     [string]$SourceCommit = '',
-    # layers phase: ImportLayer names (Terrain, PublishedContours, ...), All, or Default (the checklist's own defaults).
     [string]$Layers = '',
-    # layers phase: the fidelity level of each layer - Default (ImportLayers.DefaultLevel, what the window opens on),
-    # All=<RAW|MAX|MED|MIN>, or a list such as 'Planting=Min,RoadSubdivisions=Med'. Empty: every layer at MAX, except
-    # with -Layers Default, which takes the default levels too. The window phase always imports the window's levels.
     [string]$Levels = '',
-    # layers phase: an ImportLayer name. Plans with the full -Layers choice, runs the staged import slice by slice and
-    # stops cleanly in front of the first step that builds that layer: every earlier step committed, the named step
-    # not started, no transaction open. Combine with -SaveCheckpoint to keep the project as a full import leaves it at
-    # that point (e.g. -Layers All -StopBefore ImageryDrape -SaveCheckpoint predrape). Which steps ran, and that the
-    # named one did not, is recorded in stop-before.txt, result.json and the checkpoint's sidecar.
     [string]$StopBefore = '',
-    # layers phase: after the import, measure the open project and run Prepare for Handover on it (Harness\Verify.cs),
-    # writing placement.csv, link-buildings.csv, verify.json and site-context.png to the run folder; verify_report.py
-    # judges them. Not with -StopBefore, which leaves an import unfinished.
     [switch]$Verify,
-    # window phase: which boxes end up checked - All, Default (the boxes as the window opens them, untouched), or a
-    # list of layer names (Published Contours or PublishedContours).
     [string]$Boxes = 'All',
-    # A .rvt (a bare name means checkpoints\<year>\<name>.rvt). The run works on a COPY of it.
     [string]$OpenCheckpoint = '',
-    # layers phase: save the project here after the import, every transaction closed.
     [string]$SaveCheckpoint = '',
     [switch]$OverwriteCheckpoint,
-    # The bundle zip to import. Only ever read: each run imports a copy of it. Default: MANTLEPLACE_TIMING_BUNDLE.
     [string]$Bundle = $env:MANTLEPLACE_TIMING_BUNDLE,
-    # Where builds, run folders, checkpoints and pid records go. Default: MANTLEPLACE_TIMING_ROOT, else
-    # %LOCALAPPDATA%\MantlePlaceTiming. Refused inside the repository.
     [string]$WorkRoot = '',
-    # The folder holding one "Revit <year>" folder per installed year. Default: Revit's standard install folder.
     [string]$RevitRoot = (Join-Path $env:ProgramFiles 'Autodesk'),
-    # The screen to park Revit's windows on (a device name such as \\.\DISPLAY2). Default: the smallest
-    # non-primary screen; with only one screen, windows stay minimised off-screen.
     [string]$ParkScreen = '',
-    # When another Revit is up, wait up to this many seconds for it to exit before refusing. 0 refuses at once.
     [int]$WaitForRevitSeconds = 0,
-    # Wall-clock cutoff counted from launching Revit. A cutoff is recorded as a measurement, not a failure.
     [int]$TimeoutSeconds = 3600,
-    # window phase: seconds between readings of the window.
     [int]$SampleSeconds = 5,
     [switch]$Rebuild,
-    # Measure a source tree with uncommitted changes under revit/. Refused without this: a run is evidence about a
-    # commit. With it the record says so (meta.json dirtyTree, and -dirty on sourceCommit).
     [switch]$AllowDirty,
-    # window phase: minimise Revit's main window (and with it the import window) once Import is pressed.
     [switch]$Minimize,
-    # Keep the bundle copy, the project copy and the harness copy in the run dir afterwards.
     [switch]$KeepFiles,
-    # ON by default (turn off with -ColdIfc:$false). Before launch, MOVE this year's converted site model,
-    # <extracted folder>\Site\Site.<year>.rvt, and nothing else, aside into the run dir (ifc-cache-original\), so
-    # that the Site Model step converts the IFC instead of reusing the companion an earlier run left. However the
-    # run ends (success, cutoff, error, Ctrl-C) the original is moved back over whatever the run left at that path,
-    # verified byte-identical by sha256, and the run's own file is kept in ifc-cache-run\. The extracted folder is
-    # %LOCALAPPDATA%\MantlePlace\bundles\<order id>\extracted: keyed by the manifest's order id, shared by every run
-    # of the order (and the real add-in), not the zip copy in the run dir. Only acts when the run imports the
-    # Site Model layer. What it did is recorded in meta.json (ifcLink, extractedFolder) and ifc-cache.json.
     [switch]$ColdIfc = $true
 )
 $ErrorActionPreference = 'Stop'
@@ -86,8 +35,6 @@ $root = $PSScriptRoot
 
 $clock = [Diagnostics.Stopwatch]::StartNew()
 $script:driverLog = $null
-# Every number this driver writes for a machine to read (driver.txt, window.txt, meta.json) is formatted with the
-# invariant culture and no group separators: a session set to en-US used to write 2,754.0, which a parser dropped.
 $inv = [Globalization.CultureInfo]::InvariantCulture
 function Stamp($text) {
     $line = "{0,7}s {1}" -f $clock.Elapsed.TotalSeconds.ToString('F0', $inv), $text
@@ -96,7 +43,6 @@ function Stamp($text) {
 }
 function Iso([datetime]$d) { $d.ToString('yyyy-MM-ddTHH:mm:ss.fff', $inv) }
 
-# ---- arguments ---------------------------------------------------------------------------------------
 if ($Tag -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$') { throw "Tag '$Tag' must match ^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$" }
 if ($Phase -eq 'layers' -and -not $Layers) { throw '-Layers is required for the layers phase (ImportLayer names, All, or Default).' }
 if ($Phase -eq 'window' -and ($Layers -or $Levels -or $SaveCheckpoint)) { throw '-Layers, -Levels and -SaveCheckpoint belong to the layers phase; the window phase takes -Boxes and imports the levels the window opens on.' }
@@ -129,13 +75,11 @@ if ($SaveCheckpoint) {
     New-Item -ItemType Directory -Force (Split-Path $savePath) | Out-Null
 }
 
-# A dirty source tree is not a commit; refuse it unless -AllowDirty says the run is knowingly not one.
 if ($SourceRoot -and (Test-Path -LiteralPath (Join-Path $SourceRoot '.git')) -and -not $AllowDirty) {
     $dirtyFiles = @(& git -C $SourceRoot status --porcelain --untracked-files=all -- revit shared 2>$null)
     if ($dirtyFiles.Count -gt 0) { throw "$SourceRoot has uncommitted changes under revit/ ($($dirtyFiles.Count) paths). Commit them and time the commit (-Commit), or pass -AllowDirty to stamp the record as dirty." }
 }
 
-# ---- the build ---------------------------------------------------------------------------------------
 $buildDir = Join-Path $work "builds\$Tag"
 $buildJson = Join-Path $buildDir 'build.json'
 if ($Commit) { $SourceRoot = @(& (Join-Path $root 'Export-TimingSource.ps1') -Commit $Commit -WorkRoot $work)[-1] }
@@ -153,7 +97,6 @@ $outDir = Join-Path $buildDir 'out'
 $dllName = "$($build.assemblyName).dll"
 if ((Get-FileHash (Join-Path $outDir $dllName) -Algorithm SHA256).Hash -ne $build.dllSha256) { throw "$outDir\$dllName does not match build.json; rebuild the tag (-Rebuild)" }
 
-# layers named on the command line, checked against the enum in the source this tag was built from
 if ($Phase -eq 'layers') {
     $enumFile = Join-Path $build.sourceRoot 'shared\src\MantlePlace.Core\ImportLayers.cs'
     if (-not (Test-Path $enumFile)) { $enumFile = Join-Path $build.sourceRoot 'revit\src\MantlePlace.Revit.Core\ImportLayers.cs' }
@@ -167,23 +110,13 @@ if ($Phase -eq 'layers') {
         }
         if ($StopBefore -and $valid -and ($valid -notcontains $StopBefore)) { throw "-StopBefore '$StopBefore' is not an ImportLayer in this source. Valid: $($valid -join ', ')" }
     }
-    # The stop layer must be one the run plans, or the run would go to its end without ever stopping.
     if ($StopBefore -and $Layers -notin @('All', 'Default') -and (@($Layers -split ',' | ForEach-Object { ($_.Trim() -replace '\s', '') } | Where-Object { $_ }) -notcontains $StopBefore)) {
         throw "-StopBefore $StopBefore is not among -Layers ($Layers), so the plan has no step to stop in front of."
     }
 }
 
-# ---- who else is running ------------------------------------------------------------------------------
-# One Revit at a time, whatever its year and whoever launched it. Two reasons. Timings taken beside another Revit
-# measure the contention, not the code. And Revit watches %APPDATA%\Autodesk\Revit\Addins\<year>\ while it runs:
-# this run's temporary manifest is written there, so a Revit of the same year that is already up picks it up,
-# raises an unsigned add-in prompt and loads this run's harness DLL into its own process, whose environment is not
-# this run's (README, "Traps"). The harness declines outside its own tag, but that is the second line of defence.
-# The first is this: no run launches while any other Revit is up. -WaitForRevitSeconds waits for it instead.
 $pidDir = Join-Path $work 'pids'
 New-Item -ItemType Directory -Force $pidDir | Out-Null
-# Reads who is up: $script:ours (pid -> pid file, this tool's Revits that are alive; dead pid files are removed) and
-# $script:foreign (every other Revit). Called again under the launch lock.
 function Read-LiveRevits {
     $script:ours = @{}
     foreach ($f in (Get-ChildItem $pidDir -Filter '*.json' -ErrorAction SilentlyContinue)) {
@@ -196,7 +129,6 @@ function Read-LiveRevits {
     }
     $script:foreign = @(Get-Process Revit -ErrorAction SilentlyContinue | Where-Object { -not $script:ours.ContainsKey($_.Id) })
 }
-# Every Revit that is up, as text: this tool's (any tag) and the ones it did not launch.
 function Get-OtherRevits {
     @($script:ours.GetEnumerator() | Sort-Object Key | ForEach-Object { "pid $($_.Key), Revit $($_.Value.year), a run of this harness, tag $($_.Value.tag)" }) +
     @($script:foreign | ForEach-Object {
@@ -205,7 +137,6 @@ function Get-OtherRevits {
         "pid $($_.Id), $year, '$($_.MainWindowTitle)', not launched by this tool"
     })
 }
-# Waits up to -WaitForRevitSeconds for every other Revit to exit; returns the ones still up.
 function Wait-NoOtherRevit {
     $deadline = (Get-Date).AddSeconds($WaitForRevitSeconds)
     $said = $false
@@ -222,14 +153,6 @@ if ($otherRevits.Count -gt 0) {
     throw "another Revit is up ($($otherRevits -join '; ')). Not launching beside it: one Revit at a time. Wait for it to exit, or pass -WaitForRevitSeconds."
 }
 
-# ---- the IFC link's companion: cold or warm --------------------------------------------------------------
-# The plugin does NOT extract beside the zip copy this run imports. It extracts to
-# %LOCALAPPDATA%\MantlePlace\bundles\<order id>\extracted, keyed by the manifest's order_id, so every run of an
-# order (and the real add-in) shares one folder. The Site Model step converts Site\Site.ifc into
-# Site\Site.<year>.rvt there only when that file is missing and reuses it otherwise, so without moving it away the
-# second run of a year is warm. The plan below reads the manifest of the source zip and touches nothing. The move
-# itself (Move-IfcAside) happens just before Revit is launched, inside a try/finally whose finally is
-# Restore-IfcCache: the user's file goes back over whatever the run left, however the run ends.
 function Get-BundleOrderId([string]$ZipPath) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $archive = [IO.Compression.ZipFile]::OpenRead($ZipPath)
@@ -244,11 +167,10 @@ function Get-BundleOrderId([string]$ZipPath) {
     }
     finally { $archive.Dispose() }
 }
-# Whether this run imports the layer whose step links the site IFC (ImportLayer.SiteModel, "Site Model").
 function Test-ImportsSiteModel {
     $wanted = if ($Phase -eq 'layers') { $Layers } else { $Boxes }
     if ($wanted -ieq 'All') { return $true }
-    if ($wanted -ieq 'Default') { return $false }   # the Site Model starts unticked
+    if ($wanted -ieq 'Default') { return $false }
     @($wanted -split ',' | ForEach-Object { ($_.Trim() -replace '\s', '') }) -contains 'SiteModel'
 }
 $ifcLink = [ordered]@{
@@ -259,8 +181,6 @@ $ifcLink = [ordered]@{
     restored = $null; restoreStatus = 'not armed: this run moved nothing, so there is nothing to put back'
     runFileKeptAt = ''; runFileBytes = 0; runFileSha256 = ''
 }
-# 'none' - this run owns no cache state; 'armed' - a cold run began and owes the cache its state back;
-# 'restored' - paid; 'failed' - could not (loud). Restore-IfcCache is idempotent and retries from 'failed'.
 $script:ifcCacheState = 'none'
 $extractedDir = ''
 $ifcLink.appliesToThisRun = [bool](Test-ImportsSiteModel)
@@ -269,7 +189,6 @@ try { $orderId = Get-BundleOrderId $Bundle } catch { $ifcLink.summary = "unknown
 if ($orderId) {
     $ifcLink.orderId = $orderId
     if ($orderId -notmatch '^[A-Za-z0-9._-]+$' -or $orderId -in @('.', '..')) {
-        # The plugin would hash-suffix this id (its directory-name sanitiser); this driver does not reimplement that.
         $ifcLink.summary = "unknown: order id '$orderId' needs the plugin's directory-name sanitiser, which this driver does not reproduce; the extracted folder was not located"
     }
     else {
@@ -280,11 +199,6 @@ if ($orderId) {
 }
 elseif (-not $ifcLink.summary) { $ifcLink.summary = "unknown: the manifest carries no order id, so the plugin keys the extraction by the zip copy's own path; not touched" }
 if ($ifcLink.companion -and $ifcLink.appliesToThisRun -and $ColdIfc) {
-    # Moving the file away is only safe when no other Revit can be reading it; the check above already refused one,
-    # and it is made again under the launch lock before anything moves.
-    # An earlier cold run that could not put the user's original back (or whose driver was killed) leaves it in
-    # its own run dir. The file at the cache path is then that run's REBUILT copy, and a new run would take it
-    # for the original. So: no cold run until the original is back.
     foreach ($earlier in @(Get-ChildItem (Join-Path $work 'runs') -Directory -ErrorAction SilentlyContinue)) {
         $stranded = Join-Path $earlier.FullName "ifc-cache-original\Site.$Year.rvt"
         if (-not (Test-Path -LiteralPath $stranded -PathType Leaf)) { continue }
@@ -295,12 +209,8 @@ if ($ifcLink.companion -and $ifcLink.appliesToThisRun -and $ColdIfc) {
     }
 }
 
-# ---- moving the companion aside, and putting it back ------------------------------------------------------
 function Get-FileSha256([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash }
-# The record of what this run did to the cache, in the run dir. Written BEFORE the original leaves the cache and
-# again whenever the state changes, so a driver that is killed outright still leaves the way home in writing.
 function Save-IfcRecord { $ifcLink | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $runDir 'ifc-cache.json') -Encoding UTF8 }
-# Adds fields to result.json (creating it if a cutoff meant the harness never wrote one).
 function Set-ResultFields([hashtable]$Fields) {
     $path = Join-Path $runDir 'result.json'
     $obj = if (Test-Path -LiteralPath $path) { Get-Content -LiteralPath $path -Raw | ConvertFrom-Json } else { [pscustomobject]@{} }
@@ -310,9 +220,6 @@ function Set-ResultFields([hashtable]$Fields) {
     $obj | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $path -Encoding UTF8
 }
 
-# Run once, just before Revit is launched, INSIDE the try whose finally is Restore-IfcCache. Moves exactly one file,
-# <extracted>\Site\Site.<year>.rvt, out of the cache after copying it into the run dir and proving the copy has the
-# same sha256; never another year's companion, the IFC, or anything else in the folder.
 function Move-IfcAside {
     if (-not $ifcLink.companion) { Stamp "IFC link: $($ifcLink.summary)"; return }
     if (-not $ifcLink.appliesToThisRun) {
@@ -329,7 +236,7 @@ function Move-IfcAside {
         $ifcLink.writtenBefore = Iso $item.LastWriteTime
     }
     if ($ColdIfc) {
-        $script:ifcCacheState = 'armed'   # from here on the cache's state is owed back, whatever happens next
+        $script:ifcCacheState = 'armed'
         if ($item) {
             $expected = [IO.Path]::GetFullPath((Join-Path ([IO.Path]::GetFullPath($extractedDir)) "Site\Site.$Year.rvt"))
             if ($item.FullName -ine $expected -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
@@ -346,13 +253,13 @@ function Move-IfcAside {
                     throw "the copy of $companion in $keepDir does not match it (size or sha256); nothing was moved"
                 }
                 $ifcLink.originalKeptAt = $kept
-                Save-IfcRecord                                    # the copy is proven and recorded; only now does the original leave
+                Save-IfcRecord
                 Remove-Item -LiteralPath $companion -Force
                 $ifcLink.movedAside = $true
                 Save-IfcRecord
             }
             catch {
-                if (-not $ifcLink.movedAside) { Remove-Item -LiteralPath $kept -Force -ErrorAction SilentlyContinue; $ifcLink.originalKeptAt = '' }   # the file never left the cache
+                if (-not $ifcLink.movedAside) { Remove-Item -LiteralPath $kept -Force -ErrorAction SilentlyContinue; $ifcLink.originalKeptAt = '' }
                 throw
             }
         }
@@ -367,19 +274,12 @@ function Move-IfcAside {
     Stamp "IFC link: $($ifcLink.summary) [$extractedDir]"
 }
 
-# Run when the run is over, from the inner finally (Revit already stopped) and again from the outer finally as a
-# safety net (a no-op once done). Puts the cache back exactly as it was: the run's own file, if any, is copied to
-# ifc-cache-run; the original is copied beside the target, proven equal by sha256, renamed over whatever is at the
-# target, proven again, and only then is the copy in the run dir removed. Retries three times (a file handle may
-# outlive Revit by a moment). A failure is loud: driver.txt, result.json, ifc-cache.json and the record in meta.json.
 function Restore-IfcCache {
     if ($script:ifcCacheState -notin @('armed', 'failed')) { return }
     $companion = $ifcLink.companion
     $kept = Join-Path $runDir "ifc-cache-original\Site.$Year.rvt"
     $runKeepDir = Join-Path $runDir 'ifc-cache-run'
     $lastError = ''
-    # Whatever sits at the target is the RUN's file only if the original was moved away, or there never was one.
-    # If a move that began did not complete, the original is still in the cache and nothing here may touch it.
     $runOwnsPath = $ifcLink.movedAside -or -not $ifcLink.existedBefore
     for ($attempt = 1; $attempt -le 3; $attempt++) {
         try {
@@ -401,17 +301,16 @@ function Restore-IfcCache {
                 $back = Get-Item -LiteralPath $companion -Force
                 if ($back.Length -ne $ifcLink.originalBytes -or (Get-FileSha256 $companion) -ne $ifcLink.originalSha256) { throw "$companion does not match the original's size or sha256 after the restore" }
                 Remove-Item -LiteralPath $kept -Force
-                try { [IO.Directory]::Delete((Split-Path $kept)) } catch { }   # throws, harmlessly, unless it is now empty
+                try { [IO.Directory]::Delete((Split-Path $kept)) } catch { }
                 $ifcLink.restored = $true
                 $ifcLink.restoreStatus = "restored: the original is back at $companion, byte-identical ($($ifcLink.originalBytes) bytes, sha256 $($ifcLink.originalSha256))"
             }
             elseif ($ifcLink.existedBefore) {
-                # armed, but the move never completed: the original is still at the target, untouched
                 $ifcLink.restored = $true
                 $ifcLink.restoreStatus = 'restored: the file never left the cache'
             }
             else {
-                if (Test-Path -LiteralPath $companion -PathType Leaf) { Remove-Item -LiteralPath $companion -Force }   # the run's copy is kept above
+                if (Test-Path -LiteralPath $companion -PathType Leaf) { Remove-Item -LiteralPath $companion -Force }
                 $ifcLink.restored = $true
                 $ifcLink.restoreStatus = "restored: the cache had no Site.$Year.rvt before the run and has none now (the run's own, if it made one, is in ifc-cache-run)"
             }
@@ -438,12 +337,10 @@ function Restore-IfcCache {
     try { Set-ResultFields @{ ifc_cache_restore_failed = $true; ifc_cache_restore_message = $ifcLink.restoreStatus; ifc_cache_original_at = $kept } } catch { Stamp "could not write the restore failure into result.json: $($_.Exception.Message.Split("`n")[0])" }
 }
 
-# ---- the run dir ------------------------------------------------------------------------------------
 $runsRoot = Join-Path $work 'runs'
 New-Item -ItemType Directory -Force $runsRoot | Out-Null
 $runDir = Join-Path $runsRoot "$Tag-$Year"
 if ((Test-Path $runDir) -and (Get-ChildItem $runDir -Force | Select-Object -First 1)) {
-    # An earlier run of this same tag and year. Kept, never wiped.
     $kept = "$runDir.prev-" + (Get-Item $runDir).LastWriteTime.ToString('yyyyMMdd-HHmmss')
     Move-Item -LiteralPath $runDir -Destination $kept
 }
@@ -474,8 +371,6 @@ Copy-Item -Path (Join-Path $outDir '*') -Destination $addinDir -Recurse
 $addinsFolder = Join-Path $env:APPDATA "Autodesk\Revit\Addins\$Year"
 $madeAddins = -not (Test-Path $addinsFolder)
 $manifest = Join-Path $addinsFolder "MantlePlace.Timing.$Tag.addin"
-# Written just before Revit is launched, and only then (as short a time in the watched folder as possible), and
-# removed as soon as the harness reports started.txt, or when the run ends however it ends.
 $manifestXml = @"
 <?xml version="1.0" encoding="utf-8"?>
 <RevitAddIns>
@@ -489,7 +384,6 @@ $manifestXml = @"
 </RevitAddIns>
 "@
 
-# The child's environment: ours, minus every other harness's variables, plus this run's.
 $envMap = [ordered]@{}
 foreach ($kv in [Environment]::GetEnvironmentVariables().GetEnumerator()) {
     if ($kv.Key -like 'MANTLEPLACE_TIMING_*' -or $kv.Key -like 'MANTLEPLACE_SCRATCH*' -or "$($kv.Key)".StartsWith('=')) { continue }
@@ -508,14 +402,11 @@ if ($Phase -eq 'layers') {
 }
 $envBlock = [string[]]@($envMap.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" })
 
-# One launch at a time. The check near the top cannot see a run that has decided to launch but has not launched
-# yet: a run's pid file exists only once its Revit does. So a run takes this lock (a named mutex, one for every
-# year, released by the OS if the driver dies), checks again under it, and holds it until its pid file is written.
 $script:launchLock = $null
 function Enter-LaunchLock {
     $m = New-Object Threading.Mutex($false, "Global\MantlePlaceTimingLaunch")
     $got = $false
-    try { $got = $m.WaitOne(300000) } catch [Threading.AbandonedMutexException] { $got = $true }   # a driver died holding it; the lock is ours
+    try { $got = $m.WaitOne(300000) } catch [Threading.AbandonedMutexException] { $got = $true }
     if (-not $got) { $m.Dispose(); throw "another driver has held the Revit launch lock for 5 minutes; try again" }
     $script:launchLock = $m
 }
@@ -527,25 +418,16 @@ function Exit-LaunchLock {
     }
 }
 
-# ---- from here to the end of the script, the user's IFC cache is on loan -----------------------------------
-# Everything below, launch included, is inside one try whose finally (at the very end) puts the cache back
-# whatever happens: a throw before Revit exists, a cutoff, a crash, Ctrl-C. The body is not re-indented, so the
-# launch reads top to bottom at the script's own level. A driver killed outright (Stop-Process,
-# power) cannot run a finally; ifc-cache.json and ifc-cache-original\ in the run dir then say where the original
-# is, and the next cold run refuses to start until it is back.
 try {
-# From here until the pid file exists, this is the only driver launching a Revit, and the check for any other
-# Revit is made again under that lock, before anything is moved or written.
 Enter-LaunchLock
 Read-LiveRevits
 $otherRevits = @(Get-OtherRevits)
 if ($otherRevits.Count -gt 0) {
-    Remove-Item -LiteralPath $zip, $addinDir -Recurse -Force -ErrorAction SilentlyContinue   # the copies this run made in its run dir
+    Remove-Item -LiteralPath $zip, $addinDir -Recurse -Force -ErrorAction SilentlyContinue
     throw "another Revit came up while this run was preparing to launch ($($otherRevits -join '; ')). Not launching beside it; try again when it has exited."
 }
 Move-IfcAside
 
-# ---- launch ------------------------------------------------------------------------------------------
 function Get-Spot {
     if ($ParkScreen) {
         $named = @([System.Windows.Forms.Screen]::AllScreens | Where-Object { $_.DeviceName -eq $ParkScreen }) | Select-Object -First 1
@@ -558,7 +440,6 @@ $spot = Get-Spot
 $userWindow = [Q.W2]::GetForegroundWindow()
 $cursor0 = Get-Cursor; $fore0 = Get-ForegroundOwner
 $startup = New-CimInstance -ClassName Win32_ProcessStartup -ClientOnly -Property @{ ShowWindow = [uint16]7; EnvironmentVariables = $envBlock }
-# The temporary manifest goes into the watched folder now, and not a moment earlier (see the manifest's comment above).
 if ($madeAddins) { New-Item -ItemType Directory -Force $addinsFolder | Out-Null }
 $manifestXml | Set-Content -Encoding UTF8 $manifest
 $launchedAt = Get-Date
@@ -568,11 +449,11 @@ if ($created.ReturnValue -ne 0) {
     throw "WMI would not start Revit (Win32_Process.Create returned $($created.ReturnValue))"
 }
 $revit = Get-Process -Id $created.ProcessId
-$runClock = [Diagnostics.Stopwatch]::StartNew()   # the cutoff counts from here, the moment Revit was launched
+$runClock = [Diagnostics.Stopwatch]::StartNew()
 $revitStart = $revit.StartTime
 [ordered]@{ tag = $Tag; year = $Year; runDir = $runDir; driverPid = $PID } | ConvertTo-Json | Set-Content (Join-Path $pidDir "$($revit.Id).json")
 Set-Content (Join-Path $runDir 'revit.pid') $revit.Id
-Exit-LaunchLock   # the pid file exists: the next driver's check sees this Revit
+Exit-LaunchLock
 Stamp "Revit $Year pid $($revit.Id), minimized; parking at $($spot.X),$($spot.Y) ($($spot.Screen)); cursor $cursor0; foreground $fore0"
 
 $doneFile = Join-Path $runDir 'done.txt'
@@ -585,16 +466,15 @@ $meta = [ordered]@{
     timeoutSeconds = $TimeoutSeconds; sampleSeconds = $SampleSeconds
     revitPid = $revit.Id; launchedAt = (Iso $launchedAt); revitProcessStart = (Iso $revitStart)
     driverShell = "PowerShell $($PSVersionTable.PSVersion)"
-    compiledTag = $(if ($build.PSObject.Properties['compiledTag']) { "$($build.compiledTag)" } else { '' })   # the tag compiled into the DLL, verified at build time; '' for a build made without PowerShell 7
-    extractedFolder = $extractedDir   # where the plugin extracts this order (shared by every run of it); '' when it could not be located
-    ifcLink = $ifcLink                # cold or warm at launch, and how the restore went; existsAfter/bytesAfter/writtenAfter (the cache path after the restore) are added when the run ends
+    compiledTag = $(if ($build.PSObject.Properties['compiledTag']) { "$($build.compiledTag)" } else { '' })
+    extractedFolder = $extractedDir
+    ifcLink = $ifcLink
     outcome = 'error'
 }
 
-# ---- keeping Revit quiet -------------------------------------------------------------------------------
 $parked = @{}
 $script:stolen = $false
-$dialogClass = [char]35 + '32770'   # the Win32 dialog window class, spelled so it never reads as an issue reference
+$dialogClass = [char]35 + '32770'
 function Tend {
     foreach ($h in (Get-PidWindows $revit.Id)) {
         $class = Get-WindowClass $h
@@ -629,7 +509,6 @@ function Wait-Tending([scriptblock]$Until, [double]$Seconds) {
 }
 function Get-MainWindow { $p = Get-Process -Id $revit.Id -ErrorAction SilentlyContinue; if (-not $p) { return [IntPtr]::Zero }; $p.Refresh(); $p.MainWindowHandle }
 
-# The last non-blank line of the plugin's log, for the heartbeat and for a cutoff.
 function Get-LogTail([int]$Lines = 3) {
     if (-not (Test-Path -LiteralPath $pluginLog)) { return @() }
     try {
@@ -645,7 +524,6 @@ function Get-LogTail([int]$Lines = 3) {
     catch { @() }
 }
 
-# The step the plugin's log says is in flight: the last "[Kind] started." with no "(Kind took" after it.
 function Get-LogStep {
     if (-not (Test-Path -LiteralPath $pluginLog)) { return '' }
     try {
@@ -662,7 +540,6 @@ function Get-LogStep {
     catch { '' }
 }
 
-# ---- the window phase's steps -------------------------------------------------------------------------
 function Get-ImportWindow {
     foreach ($h in (Get-PidWindows $revit.Id)) {
         $el = [Windows.Automation.AutomationElement]::FromHandle($h)
@@ -682,8 +559,6 @@ function Set-Boxes($win, [string]$Want) {
     $wantList = @($Want -split ',' | ForEach-Object { & $squash $_.Trim() } | Where-Object { $_ })
     foreach ($w in $wantList) { if (-not $wantAll -and -not ($boxes | Where-Object { (& $squash $_.Name) -ieq $w })) { throw "no checklist box called '$w'. The window offers: $(($boxes | ForEach-Object { $_.Name }) -join ', ')" } }
     $isWanted = { param($name) $wantAll -or ($wantList -contains (& $squash $name)) }
-    # Each box is read live from its own element. Wanted boxes go on first (a prerequisite is listed
-    # before what needs it); unwanted ones go off after, dependents first.
     foreach ($b in $boxes) {
         if ((& $isWanted $b.Name) -and "$($b.Toggle.Current.ToggleState)" -eq 'Off') {
             if (-not $b.Element.Current.IsEnabled) { throw "box '$($b.Name)' is wanted but disabled" }
@@ -754,10 +629,6 @@ try {
         $windowLog = Join-Path $runDir 'window.txt'
         "# elapsed_s`tclock`tcurrent_step`tstatus_line`tstates`tprogress_bar`tclose_button`thung_main`thung_window`tuia_ms`tstale_s`tlog_step`tnote" | Set-Content $windowLog -Encoding UTF8
 
-        # The window is read on a thread of its own: a UI Automation call to a window whose thread is inside a
-        # long commit blocks until the commit ends (or times out after about a minute), and the 5 s lines
-        # must not wait for that. The driver asks for a read each tick when the window is not hung, writes
-        # the line with the newest completed reading, and says how old it is (stale_s).
         $shared = [hashtable]::Synchronized(@{ Request = $false; Busy = $false; Reading = $null; ReadAt = $null; UiaMs = 0; Error = ''; Stop = $false; Hwnd = [int64]$winHwnd; BusySince = $null })
         $readerRunspace = [runspacefactory]::CreateRunspace()
         $readerRunspace.ApartmentState = 'MTA'
@@ -865,11 +736,9 @@ finally {
     if ($null -ne $exitCode) { $meta['revitExitCodeBeforeKill'] = $exitCode }
     Remove-Item (Join-Path $pidDir "$($revit.Id).json") -Force -ErrorAction SilentlyContinue
 
-    # Revit is gone: put the user's IFC cache back as it was, before meta.json records how that went
     Restore-IfcCache
     $meta['ifcCacheRestored'] = $ifcLink.restored
 
-    # what the run left behind: the harness's result, the plugin's log, Revit's journal
     if (Test-Path (Join-Path $runDir 'result.json')) { $meta['result'] = Get-Content (Join-Path $runDir 'result.json') -Raw | ConvertFrom-Json }
     try { if (Test-Path -LiteralPath $pluginLog) { Copy-Shared $pluginLog (Join-Path $runDir 'import.log') } else { [void](Stamp 'no plugin log beside the zip copy') } }
     catch { [void](Stamp "could not copy the plugin log: $($_.Exception.Message)") }
@@ -884,8 +753,6 @@ finally {
     }
     catch { [void](Stamp "could not copy the journal: $($_.Exception.Message)") }
 
-    # -StopBefore: the harness wrote which steps ran (stop-before.txt, result.json). Here the plugin's own log is asked
-    # whether the named step ever announced itself: a step that never started writes no "[Kind] started." marker.
     if ($StopBefore) {
         try {
             $sr = $meta['result']
@@ -907,7 +774,6 @@ finally {
         catch { [void](Stamp "stop-before log check failed: $($_.Exception.Message.Split("`n")[0])") }
     }
 
-    # the checkpoint moves into place only when the import finished and the harness saved it
     $saved = Join-Path $runDir 'checkpoint-saving.rvt'
     if ($savePath -and (Test-Path $saved) -and $meta['result'] -and $meta['result'].checkpoint_saved) {
         Move-Item -LiteralPath $saved -Destination $savePath -Force
@@ -931,7 +797,6 @@ finally {
     }
     elseif ($savePath) { [void](Stamp 'no checkpoint was written') }
 
-    # a cutoff is a measurement: say where everything stood
     if ($outcome -eq 'timeout' -or $outcome -eq 'revit-exited') {
         $t = @("outcome: $outcome after $([math]::Round($runClock.Elapsed.TotalSeconds)) s of a $TimeoutSeconds s limit (counted from launching Revit)")
         if ($null -ne $pressedAt) { $t += "Import was pressed at $(Iso $pressedAt); $([math]::Round(((Get-Date) - $pressedAt).TotalSeconds)) s later" }
@@ -948,7 +813,6 @@ finally {
         [void](Stamp 'wrote timeout.txt')
     }
 
-    # the cache path after the restore (a cold run has put the original back, so this should match originalBytes/writtenBefore)
     try {
         if ($ifcLink.companion) {
             $after = Get-Item -LiteralPath $ifcLink.companion -Force -ErrorAction SilentlyContinue
@@ -973,11 +837,8 @@ finally {
 }
 }
 finally {
-    # The safety net for the try that opened before Move-IfcAside: any way out of the launch-and-run body that did
-    # not pass through the inner finally (a throw before Revit existed, a stop between the launch and the inner
-    # try) ends here. A no-op when Restore-IfcCache already ran.
-    Exit-LaunchLock                                                                     # never held past a throw
-    if (Test-Path -LiteralPath $manifest) { Remove-Item -LiteralPath $manifest -Force -ErrorAction SilentlyContinue }   # nor the manifest, whatever state the IFC cache is in
+    Exit-LaunchLock
+    if (Test-Path -LiteralPath $manifest) { Remove-Item -LiteralPath $manifest -Force -ErrorAction SilentlyContinue }
     if ($script:ifcCacheState -in @('armed', 'failed')) {
         $orphan = $null
         try { if ($revit -and -not $revit.HasExited) { $orphan = $revit } } catch { }

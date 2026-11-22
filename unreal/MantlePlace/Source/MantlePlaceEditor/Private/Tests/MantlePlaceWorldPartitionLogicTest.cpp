@@ -6,13 +6,6 @@
 
 #include "MantlePlaceWorldPartitionLogic.h"
 
-// The decisions an import into a World Partition level makes, asserted without a world: how many
-// streaming proxies a split yields, the order a wipe destroys in, which actors are kept always
-// loaded, when a re-import loads the prior import's unloaded actors to wipe them and when it must
-// refuse instead (one it cannot load) rather than leave part of the prior import behind,
-// including the foliage a prior scatter generated onto PCG partition actors in cells now unloaded,
-// and not when the only "unloaded" actors are ones this session destroyed and has not saved since.
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceWorldPartitionLogicTest,
 	"MantlePlace.Import.WorldPartition.Logic",
@@ -22,20 +15,17 @@ bool FMantlePlaceWorldPartitionLogicTest::RunTest(const FString& Parameters)
 {
 	using namespace MantlePlaceWorldPartitionLogic;
 
-	// --- Proxy count: the component grid divided by the grid size, per axis, rounded up -----------
 	{
 		TestEqual(TEXT("4x4 components on a grid of 2 is four proxies"), ProxyCount(4, 4, 2), 4);
 		TestEqual(TEXT("a partial cell is still a proxy: 5x5 on 2 is nine"), ProxyCount(5, 5, 2), 9);
 		TestEqual(TEXT("a grid of 1 is one proxy per component"), ProxyCount(3, 2, 1), 6);
 		TestEqual(TEXT("a grid wider than the landscape is one proxy"), ProxyCount(4, 4, 16), 1);
-		// The worst case the bundle can publish: 8129 squared over 32x32 components.
 		TestEqual(TEXT("32x32 components on the engine default is 256 proxies"), ProxyCount(32, 32, 2), 256);
 		TestEqual(TEXT("no components is no proxies"), ProxyCount(0, 4, 2), 0);
 		TestEqual(TEXT("an unusable grid size yields no count rather than a division by zero"),
 			ProxyCount(4, 4, 0), 0);
 	}
 
-	// --- Wipe order: streaming proxies before everything, the landscape parent last --------------
 	{
 		const TArray<EWipeRank> Ranks = {
 			EWipeRank::LandscapeParent, EWipeRank::Other, EWipeRank::StreamingProxy,
@@ -53,17 +43,15 @@ bool FMantlePlaceWorldPartitionLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("an empty wipe orders nothing"), WipeOrder(TArray<EWipeRank>()).Num(), 0);
 	}
 
-	// --- Spatial loading, v1: everything we spawn stays loaded, except the landscape family ------
 	{
 		TestFalse(TEXT("a non-partitioned level is left alone"),
-			ShouldForceNonSpatiallyLoaded(/*bPartitioned*/ false, /*bStreamedFamily*/ false));
+			ShouldForceNonSpatiallyLoaded(false, false));
 		TestTrue(TEXT("a mesh, spline or record actor in a partitioned level is kept loaded"),
 			ShouldForceNonSpatiallyLoaded(true, false));
 		TestFalse(TEXT("a landscape, its proxies and the HLOD families stream, so the proxies stream and HLODs stand in"),
 			ShouldForceNonSpatiallyLoaded(true, true));
 	}
 
-	// --- Unloaded prior actors: a refusal, never a partial wipe -----------------------------------
 	{
 		TestTrue(TEXT("nothing unloaded is no refusal"), ExplainUnloadedPriorActors(0).IsEmpty());
 		const FString One = ExplainUnloadedPriorActors(1);
@@ -72,7 +60,6 @@ bool FMantlePlaceWorldPartitionLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("and what to do about it"), One.Contains(TEXT("Load")));
 	}
 
-	// --- v2: the wipe loads them first; the refusal is only the fallback for one it cannot load ----
 	{
 		TestTrue(TEXT("nothing unloaded loads nothing and is no refusal"), ExplainUnloadablePriorActors(0, 0).IsEmpty());
 		TestTrue(TEXT("every unloaded prior actor loaded is no refusal"), ExplainUnloadablePriorActors(5, 5).IsEmpty());
@@ -84,9 +71,7 @@ bool FMantlePlaceWorldPartitionLogicTest::RunTest(const FString& Parameters)
 			ExplainUnloadablePriorActors(2, 3).IsEmpty());
 	}
 
-	// --- Unloaded PCG cells: a prior scatter's instances live on untagged partition actors ---------
 	{
-		// A 400 m AOI about the origin, and 256 m PCG cells: the four cells about the origin hold it.
 		const TArray<FBox2D> Scatter = { FBox2D(FVector2D(-20000.0, -20000.0), FVector2D(20000.0, 20000.0)) };
 		const FBox2D Inside(FVector2D(0.0, 0.0), FVector2D(25600.0, 25600.0));
 		const FBox2D Beyond(FVector2D(25600.0, 0.0), FVector2D(51200.0, 25600.0));
@@ -101,7 +86,6 @@ bool FMantlePlaceWorldPartitionLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("any one of several prior scatters is enough"), CellHoldsPriorScatter(Inside, Two));
 	}
 
-	// --- Stale descriptors: an actor this session destroyed is not an unloaded one ----------------
 	{
 		FDescriptorPackage Destroyed;
 		Destroyed.bInMemory = true;
@@ -127,4 +111,4 @@ bool FMantlePlaceWorldPartitionLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

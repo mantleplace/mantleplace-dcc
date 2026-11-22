@@ -8,36 +8,10 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Wpf;
 
-/// <summary>
-/// One notice (<c>HPS-62</c>): a Prepare that ended, or an order new in the vault. A small window in
-/// the corner of the host's that never takes focus, the same in every host that shows one.
-/// </summary>
-/// <remarks>
-/// <para>
-/// ⛔ <b>It must never take focus.</b> A curator modelling when a bundle finishes is typing into a
-/// view, and a notice that grabs the keyboard eats their next keystroke. Neither host has a notification
-/// API of its own, so this is a WPF window made unable to activate twice over: <c>ShowActivated</c>
-/// keeps showing it from activating, and <c>WS_EX_NOACTIVATE</c> keeps a click on it from doing so.
-/// A click still reaches it; only activation is refused.
-/// </para>
-/// <para>
-/// Owned by the host's main window, so it stays with the host — in front of it, minimised with it — and
-/// is never a stray top-level window. Not topmost: another application in front of the host stays in
-/// front.
-/// </para>
-/// <para>
-/// A click anywhere but the close box opens the vault on the bundle; that is the only thing it leads
-/// to. It closes itself after <see cref="PrepareNotices.ShowSeconds"/>, though not while the pointer
-/// is on it — a curator reading it is not a curator who missed it.
-/// </para>
-/// </remarks>
 public sealed class NoticePopup : Window
 {
     private readonly DispatcherTimer _timer;
 
-    /// <param name="selectOrderId">The order a click selects in the vault; <c>null</c> for none in particular.</param>
-    /// <param name="text">What the notice says.</param>
-    /// <param name="hostWindow">The host's main window, which the notice belongs to.</param>
     public NoticePopup(string? selectOrderId, string text, IntPtr hostWindow)
     {
         SelectOrderId = selectOrderId;
@@ -75,13 +49,10 @@ public sealed class NoticePopup : Window
         MouseLeftButtonUp += (_, _) => Chosen?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>The curator clicked the notice: open the vault on its bundle.</summary>
     public event EventHandler? Chosen;
 
-    /// <summary>The order a click selects in the vault, when the notice is about one.</summary>
     public string? SelectOrderId { get; }
 
-    /// <summary>Moves the notice to <paramref name="place"/>, in device-independent pixels.</summary>
     public void PlaceAt(ScreenRect place)
     {
         Left = place.Left;
@@ -102,7 +73,6 @@ public sealed class NoticePopup : Window
             VerticalAlignment = VerticalAlignment.Top,
         };
 
-        // Handled here so the click that closes the notice is not also the click that opens the vault.
         dismiss.PreviewMouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;
@@ -135,8 +105,6 @@ public sealed class NoticePopup : Window
         root.Children.Add(top);
         root.Children.Add(body);
 
-        // The brand orange as a strip down the leading edge: enough to say whose notice this is,
-        // without painting a window that stops looking like part of the host (BrandChrome's rule).
         Border accent = new() { Width = 4, Background = BrandChrome.Frozen(BrandPalette.Mantle) };
         DockPanel frame = new();
         DockPanel.SetDock(accent, Dock.Left);

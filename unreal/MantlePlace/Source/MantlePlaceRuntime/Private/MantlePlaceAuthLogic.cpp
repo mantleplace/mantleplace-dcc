@@ -3,7 +3,7 @@
 #include "MantlePlaceAuthLogic.h"
 
 #include "Dom/JsonObject.h"
-#include "Policies/CondensedJsonPrintPolicy.h" // TCondensedJsonPrintPolicy: not transitively available in a game target
+#include "Policies/CondensedJsonPrintPolicy.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonWriter.h"
 #include "Serialization/JsonSerializer.h"
@@ -11,7 +11,6 @@
 
 namespace
 {
-	/** Serialize a JSON object to a condensed (single-line) string suitable for a request body. */
 	FString SerializeCondensed(const TSharedRef<FJsonObject>& Root)
 	{
 		FString Out;
@@ -21,7 +20,6 @@ namespace
 		return Out;
 	}
 
-	/** Deserialize a JSON object; returns null on malformed input. */
 	TSharedPtr<FJsonObject> DeserializeObject(const FString& JsonStr)
 	{
 		TSharedPtr<FJsonObject> Root;
@@ -33,7 +31,6 @@ namespace
 		return nullptr;
 	}
 
-	/** Value of a single hex digit, or -1 if not a hex digit. */
 	int32 HexValue(TCHAR Ch)
 	{
 		if (Ch >= TEXT('0') && Ch <= TEXT('9')) return Ch - TEXT('0');
@@ -42,7 +39,6 @@ namespace
 		return -1;
 	}
 
-	/** RFC 3986 percent-encoding over UTF-8 bytes (unreserved set A-Za-z0-9-._~ pass through). */
 	FString PercentEncode(const FString& In)
 	{
 		const FTCHARToUTF8 Utf8(*In);
@@ -72,7 +68,6 @@ namespace
 		return Out;
 	}
 
-	/** Decode a query-string component ('+' → space, %XX → byte), then interpret the bytes as UTF-8. */
 	FString PercentDecode(const FString& In)
 	{
 		TArray<uint8> Bytes;
@@ -98,11 +93,6 @@ namespace
 		return FString(UTF8_TO_TCHAR(reinterpret_cast<const ANSICHAR*>(Bytes.GetData())));
 	}
 
-	// --- Self-contained SHA-256 (FIPS 180-4). ---
-	// Kept local so this pure auth-logic layer needs no platform/engine crypto:
-	// FPlatformMisc::GetSHA256Signature asserts "No SHA256 Platform implementation" on Windows in
-	// UE 5.8, and this layer must run deterministically headless on any platform. The RFC 7636
-	// Appendix B vector in the automation test verifies this implementation end-to-end.
 	struct FSha256Context
 	{
 		uint32 State[8];
@@ -181,7 +171,7 @@ namespace
 		{
 			const uint64 TotalBits = BitCount + static_cast<uint64>(BlockLen) * 8;
 
-			Block[BlockLen++] = 0x80; // append the '1' bit
+			Block[BlockLen++] = 0x80;
 			if (BlockLen > 56)
 			{
 				while (BlockLen < 64) { Block[BlockLen++] = 0; }
@@ -190,7 +180,7 @@ namespace
 			}
 			while (BlockLen < 56) { Block[BlockLen++] = 0; }
 
-			for (int32 i = 7; i >= 0; --i) // 64-bit big-endian length
+			for (int32 i = 7; i >= 0; --i)
 			{
 				Block[BlockLen++] = static_cast<uint8>((TotalBits >> (i * 8)) & 0xFF);
 			}
@@ -229,7 +219,6 @@ bool FMantlePlaceAuthLogic::IsValidBaseUrl(const FString& BaseUrl)
 {
 	const FString Trimmed = BaseUrl.TrimStartAndEnd();
 
-	// Require an explicit http(s) scheme, then isolate everything after "://".
 	FString Rest;
 	if (Trimmed.StartsWith(TEXT("https://"), ESearchCase::IgnoreCase))
 	{
@@ -244,8 +233,6 @@ bool FMantlePlaceAuthLogic::IsValidBaseUrl(const FString& BaseUrl)
 		return false;
 	}
 
-	// The authority (up to the first '/') must carry a non-empty host. This rejects
-	// "https://" (empty) and "https:///path" (empty host before the path).
 	int32 SlashIdx = INDEX_NONE;
 	const FString Host = Rest.FindChar(TEXT('/'), SlashIdx) ? Rest.Left(SlashIdx) : Rest;
 	return !Host.IsEmpty();
@@ -270,7 +257,6 @@ bool FMantlePlaceAuthLogic::ParseTokenResponse(const FString& JsonStr, FMantlePl
 	FMantlePlaceAuthTokens Parsed;
 	if (!Root->TryGetStringField(TEXT("access_token"), Parsed.AccessToken) || Parsed.AccessToken.IsEmpty())
 	{
-		// Not a token body — surface the error body's message if present.
 		if (!ParseErrorResponse(JsonStr, OutError))
 		{
 			OutError = TEXT("Token response missing access_token");
@@ -286,13 +272,11 @@ bool FMantlePlaceAuthLogic::ParseTokenResponse(const FString& JsonStr, FMantlePl
 		Parsed.ExpiresInSeconds = static_cast<int32>(ExpiresIn);
 	}
 
-	// A token body that omits (or zeroes) expires_in must not stamp an already-expired session.
 	if (Parsed.ExpiresInSeconds <= 0)
 	{
 		Parsed.ExpiresInSeconds = DefaultAccessTokenLifetimeSeconds;
 	}
 
-	// user.id is nested and optional — its absence must not fail the parse.
 	const TSharedPtr<FJsonObject>* UserObj = nullptr;
 	if (Root->TryGetObjectField(TEXT("user"), UserObj) && UserObj != nullptr && UserObj->IsValid())
 	{
@@ -311,7 +295,6 @@ bool FMantlePlaceAuthLogic::ParseErrorResponse(const FString& JsonStr, FString& 
 		return false;
 	}
 
-	// GoTrue error shapes vary across versions; try the known keys most-specific-first.
 	static const TCHAR* const Keys[] = {
 		TEXT("error_description"),
 		TEXT("msg"),
@@ -335,8 +318,6 @@ bool FMantlePlaceAuthLogic::ParseErrorResponse(const FString& JsonStr, FString& 
 
 bool FMantlePlaceAuthLogic::IsDefinitiveRejection(int32 HttpStatus, const FString& Body)
 {
-	// Only the platform saying "this grant is bad" counts. A 500, a 502 from something in front of
-	// the platform, or a transport failure that never produced a status at all, are all transient.
 	if (HttpStatus != 400 && HttpStatus != 401)
 	{
 		return false;
@@ -345,17 +326,11 @@ bool FMantlePlaceAuthLogic::IsDefinitiveRejection(int32 HttpStatus, const FStrin
 	const TSharedPtr<FJsonObject> Root = DeserializeObject(Body);
 	if (!Root.IsValid())
 	{
-		// A client-error status we cannot read is still not proof the credential is dead - an HTML
-		// error page from a proxy lands here. Keep the token.
 		return false;
 	}
 
-	// Read the CODE fields, never the human-readable description: error_description is prose that
-	// changes between platform versions, and matching on prose is how this kind of check quietly
-	// stops working.
 	static const TCHAR* const CodeKeys[] = { TEXT("error"), TEXT("error_code"), TEXT("code") };
 
-	// GoTrue's spellings for "that refresh token is not one I will honour".
 	static const TCHAR* const DefinitiveCodes[] = {
 		TEXT("invalid_grant"),
 		TEXT("invalid_refresh_token"),
@@ -398,18 +373,14 @@ EMantlePlaceAuthState FMantlePlaceAuthLogic::NextState(EMantlePlaceAuthState Cur
 	switch (Event)
 	{
 	case EMantlePlaceAuthEvent::SignOut:
-		// Sign-out always returns to a clean unauthenticated state.
 		return EMantlePlaceAuthState::Unauthenticated;
 
 	case EMantlePlaceAuthEvent::Cancel:
-		// Aborting an in-flight browser sign-in returns to a clean state — never latches Failed.
 		return (Current == EMantlePlaceAuthState::Authenticating)
 			? EMantlePlaceAuthState::Unauthenticated
 			: Current;
 
 	case EMantlePlaceAuthEvent::BeginSignIn:
-		// Allowed from any settled state (incl. Authenticated, to re-auth as another user);
-		// ignored only while a request is already in flight.
 		if (Current == EMantlePlaceAuthState::Authenticating || Current == EMantlePlaceAuthState::Refreshing)
 		{
 			return Current;
@@ -432,7 +403,6 @@ EMantlePlaceAuthState FMantlePlaceAuthLogic::NextState(EMantlePlaceAuthState Cur
 			: Current;
 
 	case EMantlePlaceAuthEvent::BeginRestore:
-		// Cold-start restore: refresh a persisted token from a settled, signed-out state.
 		return (Current == EMantlePlaceAuthState::Unauthenticated || Current == EMantlePlaceAuthState::Failed)
 			? EMantlePlaceAuthState::Refreshing
 			: Current;
@@ -463,8 +433,6 @@ FString FMantlePlaceAuthLogic::Base64UrlEncode(const TArray<uint8>& Bytes)
 
 FString FMantlePlaceAuthLogic::MakeCodeVerifier(const TArray<uint8>& RandomBytes)
 {
-	// The verifier is simply base64url of the entropy; its charset is within RFC 7636's
-	// unreserved set, so no further escaping is required.
 	return Base64UrlEncode(RandomBytes);
 }
 
@@ -486,8 +454,6 @@ FString FMantlePlaceAuthLogic::BuildLoopbackRedirectUri(int32 Port, const FStrin
 	{
 		Path = TEXT("/") + Path;
 	}
-	// Use 127.0.0.1 (not "localhost") per RFC 8252 §8.3 — it forces the loopback interface
-	// and side-steps DNS / hosts-file surprises.
 	return FString::Printf(TEXT("http://127.0.0.1:%d%s"), Port, *Path);
 }
 
@@ -508,7 +474,6 @@ bool FMantlePlaceAuthLogic::AcquireEphemeralLoopbackPort(
 		int32 Proposed = 0;
 		if (!ProposePort(Proposed))
 		{
-			// No socket to be had. Another attempt is cheap, and the subsystem may just be busy.
 			continue;
 		}
 
@@ -559,14 +524,12 @@ bool FMantlePlaceAuthLogic::ParseCallbackQuery(const FString& RawQuery, FMantleP
 
 	FString Query = RawQuery.TrimStartAndEnd();
 
-	// Tolerate a full URL ("http://127.0.0.1:51000/callback?code=..") or a bare query.
 	int32 QuestionIdx = INDEX_NONE;
 	if (Query.FindChar(TEXT('?'), QuestionIdx))
 	{
 		Query = Query.RightChop(QuestionIdx + 1);
 	}
 
-	// Drop any trailing fragment.
 	int32 HashIdx = INDEX_NONE;
 	if (Query.FindChar(TEXT('#'), HashIdx))
 	{
@@ -579,7 +542,7 @@ bool FMantlePlaceAuthLogic::ParseCallbackQuery(const FString& RawQuery, FMantleP
 	}
 
 	TArray<FString> Pairs;
-	Query.ParseIntoArray(Pairs, TEXT("&"), /*InCullEmpty=*/true);
+	Query.ParseIntoArray(Pairs, TEXT("&"), true);
 
 	bool bFoundAny = false;
 	for (const FString& Pair : Pairs)
@@ -610,15 +573,6 @@ bool FMantlePlaceAuthLogic::IsStateValid(const FString& Expected, const FString&
 
 namespace
 {
-	/**
-	 * The brand ground, as MantlePlacePalette states it for the editor UI -- one palette across
-	 * both hosts, and the Revit listener serves the same markup.
-	 *
-	 * Dark is the fix, not a preference: the platform's own hand-off page is dark, and arriving
-	 * from it onto default white read as something having gone wrong. The font stack stays on
-	 * system faces -- the brand typeface would be a network request, and HPS-08's whole point is
-	 * that this page renders with no network at all.
-	 */
 	const TCHAR* const BrowserPageStylesheet = TEXT(
 		":root{color-scheme:dark}"
 		"html,body{height:100%}"
@@ -633,35 +587,8 @@ namespace
 		".body{margin:0;font-size:.9375rem;line-height:1.55;color:rgba(255,255,255,.7)}"
 		".close{margin:1rem 0 0;font-size:.875rem;line-height:1.5;color:rgba(255,255,255,.4)}");
 
-	/**
-	 * The platform's branded completion page. It carries the real typeface and lockup and names the
-	 * signed-in email -- which the listener cannot know, because it never sees a session.
-	 *
-	 * `host` is the bundle manifest's hosts.<hostId> id, the same vocabulary
-	 * UMantlePlaceAuthSystemBase::WebLoginUrl uses. Named here rather than inlined into the script
-	 * below so this host has one definition of it, the way the Revit listener has
-	 * BrowserPages.DoneUrl.
-	 */
 	const TCHAR* const BrowserDoneUrl = TEXT("https://mantle.place/auth/native/done?host=unreal");
 
-	/**
-	 * Markup that probes BrowserDoneUrl and navigates to it only if something answered.
-	 *
-	 * A <meta http-equiv="refresh"> would navigate unconditionally, and with no network the browser
-	 * would land on its own "can't reach this site" page -- so the branded page would have been
-	 * rendered and then thrown away in exactly the case it exists for. The probe inverts that: no
-	 * response, no navigation, and the curator keeps looking at a complete page on brand. The
-	 * hand-off is an upgrade, never a dependency, which is what keeps this inside HPS-08's "small
-	 * self-contained HTML page" rather than beside it.
-	 *
-	 * no-cors because the done page is another origin and nothing here reads the response -- an
-	 * opaque resolution is the entire signal. This ships on the success page only: the failure page
-	 * interpolates a string the authorization server wrote, and keeping that string off any page
-	 * that executes anything leaves the escape pass as the only thing that has to be right about it.
-	 *
-	 * Built at call time rather than written as a literal so the URL above stays the single
-	 * definition; a literal here would be a second copy to drift.
-	 */
 	FString BrowserHandOffScript()
 	{
 		return FString::Printf(
@@ -671,28 +598,8 @@ namespace
 			BrowserDoneUrl);
 	}
 
-	/**
-	 * One inline document, no external references (HPS-08). The browser may have no network by the
-	 * time it renders this, and a page that reaches for a stylesheet renders as unstyled text.
-	 *
-	 * @param Title     Plain text, already safe -- this host's two titles are literals.
-	 * @param BodyHtml  Already-escaped markup. Callers escape, because only they know which part of
-	 *                  the sentence came from the authorization server.
-	 * @param Script    Trailing markup that is ours alone, or empty. Never rendered on a page
-	 *                  carrying a string the authorization server wrote.
-	 */
 	FString BuildBrowserPage(const TCHAR* Title, const FString& BodyHtml, const FString& Script)
 	{
-		// The tab separator is written &middot; rather than as the character itself so this file
-		// stays ASCII: no compiler's source-encoding guess can turn it into mojibake in a tab title.
-		//
-		// The closing line gets its own paragraph, not a sentence appended to the body: on the
-		// failure page the body ends with an error_description the authorization server wrote, which
-		// carries no promise of a full stop -- run together, the two read as one broken sentence.
-		//
-		// And it is on BOTH pages, not just success: HPS-08 asks each of them to tell the user to
-		// close the tab, and the failure page is the one where a curator left staring at a dead tab
-		// is most likely to go looking for a button that is not there.
 		return FString::Printf(TEXT(
 			"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
 			"<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
@@ -718,9 +625,6 @@ FString FMantlePlaceAuthLogic::BuildBrowserSuccessHtml()
 
 FString FMantlePlaceAuthLogic::BuildBrowserErrorHtml(const FString& Message)
 {
-	// Escape the message so an error string can't inject markup into the page. The order is the
-	// whole rule: escaping '<' first would produce &lt; and the later '&' pass would double-escape
-	// it to &amp;lt;, which renders as literal "&lt;" on the page.
 	FString Safe = Message;
 	Safe.ReplaceInline(TEXT("&"), TEXT("&amp;"));
 	Safe.ReplaceInline(TEXT("<"), TEXT("&lt;"));

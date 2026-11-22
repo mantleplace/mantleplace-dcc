@@ -3,14 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Where a later bundle goes against the shared coordinates the project already holds: the anchor
-/// and offset decision, and every refusal.
-/// </summary>
-/// <remarks>
-/// The numbers are UTM 13N tiles 1,000 m apart, the shape of an adjacent order. The decision is
-/// asserted here, headlessly (<c>HPS-02</c>); the add-in only applies what it says.
-/// </remarks>
 internal static class AdjacentBundleTests
 {
     private const int Utm13North = 32613;
@@ -68,8 +60,6 @@ internal static class AdjacentBundleTests
 
         run.Case("a third bundle is offset against the anchor, not against the second", () =>
         {
-            // The anchor stays the first bundle's point however many follow it, so a third tile lands
-            // against the first two without either of them being read back.
             AnchorDecision second = AdjacentBundle.Decide(Anchor(), Incoming(501_000.0, 4_400_000.0));
             AnchorDecision third = AdjacentBundle.Decide(Anchor(), Incoming(500_000.0, 4_401_000.0));
 
@@ -88,8 +78,6 @@ internal static class AdjacentBundleTests
 
         run.Case("the offset is converted with the unit each side states", () =>
         {
-            // The anchor was read back from Revit in metres. The bundle publishes US survey feet:
-            // 1 ftUS is exactly 1200/3937 m, so 3,280.8333... ftUS is 1,000 m.
             double metresPerFoot = 1200.0 / 3937.0;
             double eastFeet = 501_000.0 / metresPerFoot;
             double northFeet = 4_400_000.0 / metresPerFoot;
@@ -122,7 +110,6 @@ internal static class AdjacentBundleTests
 
         run.Case("height is never offset: every artifact's Z is already absolute", () =>
         {
-            // The decision has no vertical component, so none can be applied twice.
             run.True(typeof(AnchorDecision).GetProperty("OffsetElevationM") is null, "no elevation offset");
         });
 
@@ -170,8 +157,6 @@ internal static class AdjacentBundleTests
 
         run.Case("the same point on the same non-zero angle is an offset of zero: a re-import of a rotated bundle", () =>
         {
-            // 0.629 degrees, as a live order publishes. Re-importing the bundle that set the position
-            // needs no rotation, because the offset is zero.
             double angle = 0.629 * Math.PI / 180.0;
             AnchorDecision decision = AdjacentBundle.Decide(
                 Anchor(angleRadians: angle),
@@ -215,7 +200,6 @@ internal static class AdjacentBundleTests
 
         run.Case("the limit is on the distance, not on each axis", () =>
         {
-            // 0.8 of the limit on both axes is 1.13 of it on the diagonal.
             double each = AdjacentBundle.MaxOffsetM * 0.8;
             AnchorDecision decision = AdjacentBundle.Decide(Anchor(), Incoming(500_000.0 + each, 4_400_000.0 + each));
 
@@ -271,9 +255,6 @@ internal static class AdjacentBundleTests
 
         run.Case("an offset bundle's drape is written for its corner in the document, not in its own frame", () =>
         {
-            // Image corner (-709.5, -706.5) in the bundle's frame; the bundle stands 1,419 m east. Under
-            // smooth shading the offset is the image corner minus the element's corner, both read in the
-            // document, so it must equal the unshifted offset when the element moved with the image.
             DrapePlacement placement = new()
             {
                 LeftM = -709.5,

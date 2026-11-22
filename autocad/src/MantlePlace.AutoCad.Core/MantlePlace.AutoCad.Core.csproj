@@ -1,23 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    The AutoCAD plugin's host-free half: everything that needs neither AutoCAD nor Civil 3D, so a
-    hosted runner builds and tests it with no Autodesk install (HPS-42).
-
-    It references the shared Core, Client and generated Platform API client (shared/), the same
-    projects the Revit plugin references, and holds only what is the AutoCAD plugin's own: the
-    Civil 3D presence decision, the AutoCAD block reader, the import plan. Each plugin ships its own
-    copy of the shared assemblies beside its own. A change to a shared file is a change to both
-    plugins; the shared suite tests it once, and this host's suite runs the shared conformance
-    runners as AutoCAD (ci-autocad-tests).
-
-    The host id the shared code reports is set at load by the shell (HostRegistration.cs) and by
-    the suite's entry point, not compiled in.
-
-    Two targets, the two runtimes the plugin loads on: .NET 8 for AutoCAD and Civil 3D 2025 and 2026,
-    .NET 10 for 2027. Both build on a hosted runner; the suite runs on both.
-  -->
-
   <PropertyGroup>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
     <RootNamespace>MantlePlace.AutoCad</RootNamespace>

@@ -6,7 +6,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.CarrierSpike;
 
-/// <summary>Which reader a read went through.</summary>
 public enum Carrier
 {
     GeoJson,
@@ -14,17 +13,10 @@ public enum Carrier
     Dxf,
 }
 
-/// <summary>One layer as one carrier gave it, and what that took.</summary>
 public sealed record CarrierRead(string Layer, Carrier Carrier, IReadOnlyList<SiteFeature> Features, double Milliseconds, string? Refusal);
 
-/// <summary>
-/// Reads one bundle's vector layers through each carrier and says where they differ from today's
-/// GeoJSON: features, vertex positions, and each attribute the importer reads. Shared by the
-/// headless comparison and the in-Revit probe, so both report the same table.
-/// </summary>
 public sealed class CarrierComparison
 {
-    /// <summary>The layer the GeoPackage table and the DXF layer of footprints are named.</summary>
     public const string Footprints = "building_footprints";
 
     private static readonly SiteGeometryKinds Everything = SiteGeometryKinds.Lines | SiteGeometryKinds.Areas;
@@ -51,14 +43,9 @@ public sealed class CarrierComparison
 
         FileUnit = _layers.Count > 0 ? _layers[0].GeoJsonFrame.Unit : LinearUnit.Metre;
 
-        // No Revit GeoJSON carries footprints today (the context buildings come from the site IFC,
-        // ADR 0012). The shared lon/lat set is what there is, through the one projection HPS-45
-        // permits, and on a State Plane order that projection cannot reach the frame at all; so the
-        // baseline is the GeoJSON make_carriers.py wrote in the order's CRS, the source of both carriers.
         _layers.Add((Footprints, Path.Combine(carrierFolder, "footprints.geojson"), new LayerFrame(LayerCoordinates.AbsoluteProjected, FileUnit)));
     }
 
-    /// <summary>How many of the shared lon/lat footprints this order's frame places, of how many there are.</summary>
     public (int Placed, int Features) SharedFootprints()
     {
         string text = File.ReadAllText(Path.Combine(_bundle, "Vector", "Building.geojson"));
@@ -69,7 +56,6 @@ public sealed class CarrierComparison
 
     public SiteFrame Frame { get; }
 
-    /// <summary>The unit the carriers are written in: the Revit block's files' own.</summary>
     public LinearUnit FileUnit { get; }
 
     public IEnumerable<string> Layers => _layers.Select(layer => layer.Name);
@@ -78,7 +64,6 @@ public sealed class CarrierComparison
 
     public string DxfPath => Path.Combine(_carriers, "SiteContext.dxf");
 
-    /// <summary>Reads one layer through one carrier, timed. The DXF's text is read once and its time charged to the first layer.</summary>
     public CarrierRead Read(Carrier carrier, string name)
     {
         (string _, string geoJsonPath, LayerFrame geoJsonFrame) = _layers.First(layer => layer.Name == name);
@@ -94,7 +79,6 @@ public sealed class CarrierComparison
         return new CarrierRead(name, carrier, features, clock.Elapsed.TotalMilliseconds, refusal);
     }
 
-    /// <summary>The comparison of one carrier's read of a layer against the GeoJSON baseline, one line of a Markdown table.</summary>
     public static string Compare(CarrierRead baseline, CarrierRead candidate)
     {
         ArgumentNullException.ThrowIfNull(baseline);
@@ -170,7 +154,6 @@ public sealed class CarrierComparison
         }
     }
 
-    /// <summary>The whole table: every layer, both candidates against the baseline.</summary>
     public string Table()
     {
         StringBuilder table = new();

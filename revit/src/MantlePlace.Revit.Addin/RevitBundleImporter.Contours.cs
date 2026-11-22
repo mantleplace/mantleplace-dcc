@@ -4,28 +4,10 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// The published-contours step.
 internal sealed partial class RevitBundleImporter
 {
-    /// <summary>The subcategory every published contour's lines are drawn on.</summary>
     private const string PublishedContoursSubcategory = "Published Contours";
 
-    /// <summary>
-    /// The bundle's published contours, one DirectShape per contour — see
-    /// <c>docs/adr/0013-revit-published-contours-are-directshapes.md</c>.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Everything but the element calls is decided in Core: <see cref="PublishedContourReader"/> reads
-    /// the file, <see cref="PublishedContours"/> places, clips and thins it, and
-    /// <see cref="ContourIdentity"/> decides whether this build's layer is already here. The step
-    /// commits in one transaction, because the layer's stamp has no row to resume from.
-    /// </para>
-    /// <para>
-    /// ⛔ The toposolid's own contour display is never touched: it is the curator's setting. The
-    /// summary says where it lives, for a curator who wants only one set.
-    /// </para>
-    /// </remarks>
     private void ImportPublishedContours(ImportStep step)
     {
         if (step.Frame is not { } frame || step.Layer is not { } layer || HeightsRefused(step))
@@ -69,8 +51,6 @@ internal sealed partial class RevitBundleImporter
 
         if (step.Crop is null)
         {
-            // SurfaceCrop.Unavailable says why — on every State Plane delivery, by design — and the
-            // terrain is left uncropped for the same reason.
             Say("The published contours were not clipped to the area you ordered: "
                 + (step.CropUnavailable ?? "no crop window could be made for this bundle's frame")
                 + ". They were left unclipped, as the terrain was.");
@@ -94,10 +74,6 @@ internal sealed partial class RevitBundleImporter
             List<GeometryObject> curves = [];
             foreach (IReadOnlyList<ContourPoint> piece in contour.Pieces)
             {
-                // Core has already skipped every vertex within tolerance of the last one kept. This
-                // repeats that rule against the unit round-trip — from the last point DRAWN, so the
-                // line stays continuous — since a Line under tolerance throws rather than failing
-                // quietly.
                 XYZ start = SitePoint(piece[0].EastM, piece[0].NorthM, z);
                 for (int index = 1; index < piece.Count; index++)
                 {
@@ -142,7 +118,6 @@ internal sealed partial class RevitBundleImporter
 
         if (!CommitAndReport(transaction, swallower))
         {
-            // The swallower already said why, and the rollback took everything below with it.
             return;
         }
 
@@ -181,14 +156,6 @@ internal sealed partial class RevitBundleImporter
             + "toposolid's type properties.");
     }
 
-    /// <summary>
-    /// The projection style of the "Published Contours" subcategory, made if the project lacks it, or
-    /// <c>null</c> when the category takes no subcategory.
-    /// </summary>
-    /// <remarks>
-    /// An existing subcategory is used as it is: its colour and weight are the curator's, set in
-    /// Object Styles, and a re-import must not reset them.
-    /// </remarks>
     private ElementId? PublishedContoursStyle(ElementId categoryId)
     {
         if (Category.GetCategory(_document, categoryId) is not { } parent)

@@ -10,32 +10,12 @@ using RevitApplication = Autodesk.Revit.ApplicationServices.Application;
 
 namespace MantlePlace.Scratch.Timing;
 
-// Real-Revit timing harness for the Mantle Place Revit plugin. It does nothing unless the Revit it is loaded into was
-// launched by Invoke-TimingRun.ps1 with MANTLEPLACE_TIMING_TAG equal to the tag compiled into this assembly
-// (BuildInfo.Tag, see OnStartup), so a user's Revit, or another agent's Revit that happens to read this
-// add-in's temporary manifest, never runs it. Declining leaves one line in %TEMP%\mantleplace-timing-declined.log.
-//
-// Two phases, chosen by MANTLEPLACE_TIMING_PHASE:
-//   layers  ApplicationInitialized: a new project (or the run dir's project.rvt when the driver copied a
-//           checkpoint there), ActiveImport.Open, Begin(ImportLayerChoice.Only([...])), RunToEnd. No window,
-//           no UI Automation. Optionally saves the project after the import as a checkpoint.
-//           With MANTLEPLACE_TIMING_STOP_BEFORE=<ImportLayer> the run steps the staged import slice by slice
-//           instead of RunToEnd and stops at the boundary in front of that layer's step: every earlier step
-//           committed, the named one not started (see StepUntilBefore). The checkpoint is then the project
-//           as a full import leaves it at that point.
-//           With MANTLEPLACE_TIMING_VERIFY=1, the open project is then measured (Verify.cs): placement against
-//           the bundle's own check points, the linked site model, the ODbL containers, and Prepare for Handover.
-//   window  the real path a curator gets: a project opened and activated by an ExternalEvent, the import
-//           opened with ActiveImport.Open and handed to the handler with TakeOver, which shows the real
-//           import window on its checklist. The driver ticks the boxes and presses Import through UI
-//           Automation; this side only watches ActiveImport/IsImporting to timestamp the run.
 public sealed class Harness : IExternalApplication
 {
     private static readonly object Gate = new();
     private static string _dir = "";
     private static string _phase = "";
 
-    // window phase
     private static BundleImportEventHandler? _handler;
     private static ExternalEvent? _openEvent;
     private static volatile ActiveImport? _active;
@@ -43,8 +23,6 @@ public sealed class Harness : IExternalApplication
     private static DateTime _beganAt;
     private static DateTime _endedAt;
 
-    // The tag this assembly was built for: a const in BuildInfo.g.cs, written by Build-TimingHarness.ps1 and read back out of
-    // the finished DLL there. Not read from the environment, not from a file beside the DLL.
     private static string Tag => BuildInfo.Tag;
 
     private static string Meta(string key)
@@ -54,11 +32,6 @@ public sealed class Harness : IExternalApplication
 
     public Result OnStartup(UIControlledApplication application)
     {
-        // The gate. Revit watches Addins\<year> while it runs, so a same-year Revit that is already up can
-        // pick up ANOTHER run's temporary manifest and load this DLL into its own process, which carries its own
-        // run's MANTLEPLACE_TIMING_* environment. Unless that process was launched for exactly this tag, do nothing
-        // at all: no event subscription, no thread, no file in any run dir. The one exception is a single line in
-        // %TEMP%\mantleplace-timing-declined.log, so the refusal can be seen.
         string processTag = Env("TAG");
         if (BuildInfo.Tag.Length == 0 || processTag != BuildInfo.Tag || string.IsNullOrEmpty(Env("DIR")))
         {
@@ -94,7 +67,6 @@ public sealed class Harness : IExternalApplication
 
     public Result OnShutdown(UIControlledApplication application) => Result.Succeeded;
 
-    /// <summary>The only thing a declining harness does: one line in %TEMP%\mantleplace-timing-declined.log. Never throws.</summary>
     private static void Decline(string processTag)
     {
         try
@@ -108,11 +80,8 @@ public sealed class Harness : IExternalApplication
         }
         catch (Exception)
         {
-            // A refusal that cannot be logged is still a refusal; Revit must not notice either way.
         }
     }
-
-    // ---- shared ---------------------------------------------------------------------------------
 
     private static string Now() => DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fff");
 
@@ -147,7 +116,6 @@ public sealed class Harness : IExternalApplication
 
     private static string ProjectPath => Path.Combine(_dir, "project.rvt");
 
-    /// <summary>The run dir's project.rvt when the driver put a checkpoint copy there, else a fresh metric project saved there.</summary>
     private static (Document Document, bool FromCheckpoint) OpenProject(RevitApplication app, UIApplication? ui)
     {
         bool fromCheckpoint = File.Exists(ProjectPath);
@@ -163,8 +131,6 @@ public sealed class Harness : IExternalApplication
         Say($"{(fromCheckpoint ? "opened the checkpoint copy" : "opened a fresh project")} in {clock.Elapsed.TotalSeconds:N1} s");
         return (document, fromCheckpoint);
     }
-
-    // ---- layers phase ---------------------------------------------------------------------------
 
     private static ImportLayerChoice ParseLayers(string list, out string[] names)
     {
@@ -182,8 +148,6 @@ public sealed class Harness : IExternalApplication
                 : ImportLayerChoice.Only(Enum.GetValues<ImportLayer>(), ParseLevels(Env("LEVELS"), Enum.GetValues<ImportLayer>()));
         }
 
-        // The checklist's own defaults in the source this tag was built from: the boxes a curator who changes
-        // nothing imports, so the layers phase can time them without the window.
         if (parts.Length == 1 && parts[0].Equals("Default", StringComparison.OrdinalIgnoreCase))
         {
             ImportLayer[] defaults = [.. Enum.GetValues<ImportLayer>().Where(ImportLayers.OnByDefault)];
@@ -207,10 +171,6 @@ public sealed class Harness : IExternalApplication
         return ImportLayerChoice.Only(layers, ParseLevels(Env("LEVELS"), layers));
     }
 
-    // MANTLEPLACE_TIMING_LEVELS: 'Default' (each layer at ImportLayers.DefaultLevel of the source this tag was
-    // built from, what the window opens on), 'All=Min' (every layer at one level), or 'Planting=Min,RoadSubdivisions=Med'.
-    // Empty means every layer at MAX, as before levels existed. A level the bundle publishes in a form the step cannot
-    // take is refused by the planner, as the window would never offer it.
     private static Dictionary<ImportLayer, FidelityLevel>? ParseLevels(string list, IEnumerable<ImportLayer> layers)
     {
         string[] parts = list.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -270,38 +230,12 @@ public sealed class Harness : IExternalApplication
         return layer;
     }
 
-    /// <summary>The staged import is between two steps, and the next slice would start step <paramref name="target"/>.</summary>
     private static bool AtBoundary(StagedImport staged, int target)
         => staged.Current is null
            && !staged.IsFinished
            && staged.Steps[target].State == ImportStepState.Waiting
            && staged.Steps.Take(target).All(step => step.State is ImportStepState.Done or ImportStepState.Failed);
 
-    /// <summary>
-    /// Runs the staged import one slice at a time and stops in front of the first step that builds
-    /// <paramref name="layer"/>: every step before it has ended, the named one has not started (its
-    /// "[Kind] started." marker is never written), and no transaction is open.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Steps with <see cref="ActiveImport.Advance"/>, the slice the real import window raises, so each
-    /// slice runs under the importer's failure hook exactly as in a full import.
-    /// </para>
-    /// <para>
-    /// ⛔ It does NOT stop by cancelling through <see cref="ActiveImport.Advance"/>. That call, when the
-    /// staged import reports it is over, runs <c>RevitBundleImporter.Finish()</c>, which is
-    /// <c>EnsureSmoothedSurface()</c>: a committed transaction (terrain smooth shading, 7.3 s on the
-    /// test order) that a full import only performs INSIDE the drape step. A checkpoint saved after it
-    /// would have the drape's first commit already paid, and a drape run on it would not measure the
-    /// drape. So this stops calling <c>ActiveImport.Advance</c> at the boundary. The one thing it does
-    /// afterwards is the staged import's own cancel, <see cref="StagedImport.RequestCancel"/> then
-    /// <see cref="StagedImport.Advance"/> called on the <see cref="StagedImport"/> itself: with no step in
-    /// flight that is pure bookkeeping (the waiting steps become NotRun and it writes the outcome text),
-    /// it calls nothing on the Revit side, and it leaves the import in the state a curator's Cancel
-    /// between two steps would.
-    /// </para>
-    /// </remarks>
-    /// <returns><c>ok</c> when the boundary was reached with every earlier step Done; otherwise the outcome to record.</returns>
     private static string StepUntilBefore(ActiveImport import, ImportLayer layer, Dictionary<string, object?> facts)
     {
         StagedImport staged = import.Staged ?? throw new InvalidOperationException("Begin has not staged the import.");
@@ -353,7 +287,6 @@ public sealed class Harness : IExternalApplication
             return import.Failed ? "import-failed" : "stop-not-reached";
         }
 
-        // Nothing is in flight: pure bookkeeping, no Revit call, no Finish().
         staged.RequestCancel();
         staged.Advance();
 
@@ -502,11 +435,8 @@ public sealed class Harness : IExternalApplication
 
     private static string? Head(string? text) => text is null ? null : text.Length <= 600 ? text : text[..600] + "…";
 
-    // ---- window phase ---------------------------------------------------------------------------
-
     private static void Watch()
     {
-        // Give Revit's UI a moment after ApplicationInitialized before asking it to open a project.
         Thread.Sleep(3000);
         Say("raise open: " + _openEvent!.Raise());
 

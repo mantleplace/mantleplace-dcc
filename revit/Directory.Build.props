@@ -1,37 +1,6 @@
 <Project>
 
-  <!--
-    Shared MSBuild properties for the Mantle Place Revit plugin.
-
-    Two rules worth knowing before adding a project here:
-
-      1. NO NUGET PACKAGES. The pure core and its conformance suite restore offline and have zero
-         third-party references — the same reason the conformance gate uses stdlib unittest
-         ("no dependency install to rot", .github/workflows/ci-manifest-conformance.yml). The host
-         plugin doctrine is dumb, dependency-light consumers (HPS-03).
-
-      2. The Revit API is referenced from the local install, never vendored and never redistributed.
-         RevitApiDir below is overridable so a machine with a different Revit build can point at it:
-             dotnet build -p:RevitApiDir="C:\Program Files\Autodesk\Revit 2028"
-  -->
-
   <PropertyGroup>
-    <!--
-      The Revit plugin's version, and its ONE home. It flows into the add-in assembly, into the
-      import log and the terrain probe report (PluginVersion), and into the release tag and asset
-      name, which are `revit-<this>` and `MantlePlace-Revit-<this>.zip`: string equality, no `v`,
-      no second place to forget. See docs/adr/0001-per-host-release-tracks.md.
-
-      Unset, this is not blank: MSBuild defaults it to 1.0.0, so every build before this line
-      claimed to be a 1.0. Revit's own version series started at 0.1.0 and does not track
-      Unreal's: the hosts release on separate clocks and share a contract, not a number.
-
-      It left 0.x at 1.0.0 because the Autodesk storefront refuses a version that starts with 0, and
-      it never goes back (docs/adr/0018-the-revit-track-goes-to-1-0-0-for-its-storefront.md); from
-      there it follows ordinary semver. The
-      bundle manifest in the release zip carries this same value, and the package script fails when
-      the two differ.
-    -->
     <Version>1.2.0</Version>
   </PropertyGroup>
 
@@ -48,33 +17,9 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <!--
-      The Revit install the add-in shim compiles against. Only the shim reads this.
-
-      The default is the OLDEST supported version, not the newest installed. A plugin compiled
-      against Revit 2025's API loads in 2025, 2026 and 2027; one compiled against 2027's does not
-      load in 2025. Pointing this at a newer install therefore silently narrows what ships, which is
-      exactly the kind of change nobody notices until a curator on 2025 reports a missing ribbon.
-    -->
     <RevitApiDir Condition="'$(RevitApiDir)' == ''">C:\Program Files\Autodesk\Revit 2025</RevitApiDir>
   </PropertyGroup>
 
-  <!--
-    The dirty marker. The SDK already appends the source commit to the informational version as
-    semver build metadata (0.1.0+<sha>), which is what lets a log or the About dialog name the exact
-    source a build came from. It cannot say whether that source had uncommitted changes, and a
-    maintainer iterating locally is dirty most of the time, so two builds naming the same commit
-    are not the same code, and nothing on screen says so. This appends "-dirty" after the sha when
-    anything under revit/ or shared/ is modified, staged or untracked. Scoped to those two because
-    they are what the assemblies are built from: a stray edit under unreal/ is not this build's business.
-
-    Runs after the SDK's own source-control step has set SourceRevisionId and before the assembly
-    attributes are generated, so it edits the value at the one moment it exists and is not yet
-    used. Skipped when there is no sha to append to (no git on PATH, no repository), because a
-    marker with nothing to mark is noise. A hosted runner is always clean, so CI never sees it.
-
-    BuildIdentity in the shared MantlePlace.Core is the one reader of this shape; keep the two together.
-  -->
   <Target Name="MarkDirtySourceRevision"
           AfterTargets="InitializeSourceControlInformation"
           BeforeTargets="GetAssemblyVersion"

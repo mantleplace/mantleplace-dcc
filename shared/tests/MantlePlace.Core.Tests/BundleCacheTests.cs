@@ -4,14 +4,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// ⛔<c>HPS-26</c>'s promote-by-rename path, exercised rather than reviewed.
-/// </summary>
-/// <remarks>
-/// The rule names <c>automation-test</c> as an enforcer alongside <c>agent-review</c>. That second
-/// enforcer only became real when the cache moved out of the Revit shim, which CI cannot build,
-/// into <c>MantlePlace.Client</c>, which it can.
-/// </remarks>
 internal static class BundleCacheTests
 {
     private const string OrderId = "3f285101-0310-425b-b06b-bdb73b025b6a";
@@ -69,8 +61,6 @@ internal static class BundleCacheTests
 
             BundleCacheLayout layout = cache.LayoutFor(OrderId);
 
-            // The rename is what makes the cache crash-safe. A host that streams onto the final
-            // path leaves a truncated bundle that looks cached, and the next run imports it.
             run.False(File.Exists(layout.BundleZipPath), "no bundle.zip was ever created");
             run.False(File.Exists(layout.PartialZipPath), "and the .part was cleaned up");
         });
@@ -121,8 +111,6 @@ internal static class BundleCacheTests
             BundleCacheLayout layout = cache.LayoutFor(OrderId);
             Directory.CreateDirectory(layout.Root);
 
-            // Nothing recorded how many of these bytes are good, so they are dead weight rather
-            // than a resume point. Appending to them would produce a file that hashes to nothing.
             File.WriteAllBytes(layout.PartialZipPath, Encoding.UTF8.GetBytes("garbage from last time"));
 
             string? error = Promote(cache, bytes, bytes.Length, sha).GetAwaiter().GetResult();
@@ -132,9 +120,6 @@ internal static class BundleCacheTests
 
         run.Case("an advertised digest that nobody could compute is valid but UNVERIFIED", () =>
         {
-            // The state every Revit bundle is in today: the ETL publishes no
-            // sha256 for the Revit deliverables. Refusing here would make the plugin unusable;
-            // claiming verification would be a lie.
             BundleCache cache = new(Path.Combine(sandbox, "unverified"));
             string? error = Promote(cache, bytes, bytes.Length, expectedSha: null).GetAwaiter().GetResult();
             run.True(error is null, $"promoted ({error})");
@@ -161,8 +146,6 @@ internal static class BundleCacheTests
 
         run.Case("inspect falls back to the sidecar when no listing is at hand", () =>
         {
-            // The offline case: Revit opened on a plane, no vault call possible, but the sidecar
-            // still knows what the platform said at download time.
             BundleCache cache = new(Path.Combine(sandbox, "offline"));
             Promote(cache, bytes, bytes.Length, sha).GetAwaiter().GetResult();
 
@@ -173,10 +156,6 @@ internal static class BundleCacheTests
 
         run.Case("InspectQuick does NOT hash, and says so honestly", () =>
         {
-            // The listing calls this per row per refresh. Inspect hashes the whole zip with no size
-            // cap, which is right once per import and wrong 275 MB at a time whenever a window
-            // redraws. Tampering with the bytes WITHOUT changing the length is what proves the hash
-            // was skipped: Inspect catches it, InspectQuick cannot and does not claim to.
             BundleCache cache = new(Path.Combine(sandbox, "quick"));
             Promote(cache, bytes, bytes.Length, sha).GetAwaiter().GetResult();
 
@@ -205,10 +184,6 @@ internal static class BundleCacheTests
 
         run.Case("an unverified bundle says WHICH checksum is missing", () =>
         {
-            // The old wording claimed "the platform published no checksum for this bundle", which is
-            // not true as a whole: the manifest inside publishes one per Revit deliverable and
-            // LocalBundleArchive.VerifyPlan checks every one of them before an element exists. What
-            // is absent is a digest for the zip.
             BundleCache cache = new(Path.Combine(sandbox, "nodigest"));
             Promote(cache, bytes, bytes.Length, expectedSha: null).GetAwaiter().GetResult();
 
@@ -231,7 +206,6 @@ internal static class BundleCacheTests
 
         run.Case("a download cached for one host is never served to another", () =>
         {
-            // Revit and AutoCAD share one cache folder, and a host's view holds only that host's files.
             string root = Path.Combine(sandbox, "hosts");
             BundleCache revit = new(root, "revit");
             BundleCache autocad = new(root, "autocad");
@@ -255,7 +229,6 @@ internal static class BundleCacheTests
             run.Equal(current.Host, "revit", "the sidecar records the host");
             run.Equal(current.Level, BundleCache.HighestLevel, "and the level");
 
-            // The sidecar the shipped plugin wrote: no host, no level.
             File.WriteAllText(
                 layout.SidecarPath,
                 CacheSidecars.Serialize(new CacheSidecar
@@ -305,8 +278,6 @@ internal static class BundleCacheTests
 
         run.Case("eviction is explicit and per-order, and there is no other kind", () =>
         {
-            // HPS-44. A host that reclaims disk on the curator's behalf has silently converted an
-            // owned asset into a streamed one.
             BundleCache cache = new(Path.Combine(sandbox, "evict"));
             Promote(cache, bytes, bytes.Length, sha).GetAwaiter().GetResult();
 

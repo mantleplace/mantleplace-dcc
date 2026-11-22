@@ -4,19 +4,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// The attribution step: the "Mantle Place Attribution" drafting view, and the provenance record on
-// Project Information. Both are the manifest's words, copied, and every decision about them is
-// AttributionView.Decide's; this file carries it out.
 internal sealed partial class RevitBundleImporter
 {
-    /// <summary>
-    /// Writes the attribution view and the provenance record, in one transaction.
-    /// </summary>
-    /// <remarks>
-    /// One transaction because each half is how the next import reads the other: the record says
-    /// which note in the view is this order's. A view rewritten under a record that failed to store
-    /// would leave the next import unable to find the note, and it would add a second one.
-    /// </remarks>
     private void WriteAttributionAndProvenance(ImportStep step)
     {
         if (step.Provenance is not { } provenance)
@@ -41,10 +30,6 @@ internal sealed partial class RevitBundleImporter
             + $"build {OrNone(provenance.JobId)} (manifest {OrNone(provenance.ManifestVersion)}).");
     }
 
-    /// <summary>
-    /// What the project's record says, and the record said aloud — which is the evidence that it
-    /// survives a save and a reopen.
-    /// </summary>
     private RecordedAttribution? ReadRecordedAttribution(Schema schema)
     {
         Entity entity = _document.ProjectInformation.GetEntity(schema);

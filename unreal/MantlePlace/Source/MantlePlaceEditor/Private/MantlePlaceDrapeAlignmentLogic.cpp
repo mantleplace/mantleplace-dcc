@@ -6,23 +6,10 @@
 
 namespace
 {
-/** The three shapes the published schema documents, matched by PREFIX exactly as it instructs.
- *  The unverified shape's own text carries an em dash the ETL may re-punctuate at any time, so the
- *  prefix stops at the first word — matching further would make a typographic edit a behaviour
- *  change. */
 const TCHAR* const MatchesPrefix = TEXT("matches heightmap");
 const TCHAR* const UnverifiedPrefix = TEXT("unverified");
 const TCHAR* const DivergesPrefix = TEXT("diverges from heightmap extent");
 
-/**
- * The first number appearing after `Anchor`, or false when either the anchor or a number after it
- * is absent.
- *
- * Anchored rather than positional because the divergent shape is a sentence, not a format string:
- * "imagery covers 62.4% of the heightmap, overshoot 1.03x". Reading "the first number" and "the
- * second number" would silently swap the two the day the ETL rewords the sentence, whereas an
- * anchor that has moved reads as absent and downgrades to the verbatim string.
- */
 bool ReadNumberAfter(const FString& Text, const TCHAR* Anchor, double& OutValue)
 {
 	const int32 AnchorIndex = Text.Find(Anchor, ESearchCase::IgnoreCase, ESearchDir::FromStart);
@@ -73,7 +60,7 @@ bool ReadNumberAfter(const FString& Text, const TCHAR* Anchor, double& OutValue)
 	OutValue = FCString::Atod(*Text.Mid(Start, Index - Start));
 	return true;
 }
-} // namespace
+}
 
 FMantlePlaceDrapeAlignment FMantlePlaceDrapeAlignmentLogic::Classify(const FString& Declared)
 {
@@ -100,8 +87,6 @@ FMantlePlaceDrapeAlignment FMantlePlaceDrapeAlignmentLogic::Classify(const FStri
 	if (Trimmed.StartsWith(DivergesPrefix, ESearchCase::IgnoreCase))
 	{
 		Alignment.Shape = EMantlePlaceDrapeAlignment::Diverges;
-		// Both or neither: a warning that quotes one of the two measurements and invents the other
-		// is worse than one that quotes the manifest's sentence verbatim, which is the fallback.
 		double Covered = 0.0;
 		double Overshoot = 0.0;
 		if (ReadNumberAfter(Trimmed, TEXT("covers"), Covered)
@@ -114,9 +99,6 @@ FMantlePlaceDrapeAlignment FMantlePlaceDrapeAlignmentLogic::Classify(const FStri
 		return Alignment;
 	}
 
-	// A fourth shape from a later minor. Additive is only additive if consumers tolerate it
-	// (spec/compatibility.md), and this descriptor is informational rather than load-bearing:
-	// nothing about the import transform is decided from it.
 	Alignment.Shape = EMantlePlaceDrapeAlignment::Unrecognised;
 	return Alignment;
 }
@@ -128,11 +110,11 @@ bool FMantlePlaceDrapeAlignmentLogic::CheckAgainstExtents(
 {
 	if (Alignment.Shape != EMantlePlaceDrapeAlignment::Matches)
 	{
-		return true; // only a "matches" claim is a claim about these two rectangles
+		return true;
 	}
 	if (!Manifest.Drape.bPresent || !Manifest.Heightmap.bPresent)
 	{
-		return true; // nothing to compare it against
+		return true;
 	}
 
 	const FVector2D AoiSize = Manifest.GetAoiSizeUeCm();
@@ -170,10 +152,6 @@ FString FMantlePlaceDrapeAlignmentLogic::DescribeForLog(const FMantlePlaceDrapeA
 		return FString();
 
 	case EMantlePlaceDrapeAlignment::Diverges:
-		// The one shape a user has to act on. Until this branch existed the string was opaque and a
-		// partially-covering drape imported silently misaligned — the failure looked like nothing
-		// at all. The measured numbers lead, because they are what tells a user whether the gap is
-		// a rounding edge or half the site.
 		return Alignment.bHasMeasured
 			? FString::Printf(
 				TEXT("WARNING: the bundle reports its imagery diverges from the heightmap extent — "
@@ -188,8 +166,6 @@ FString FMantlePlaceDrapeAlignmentLogic::DescribeForLog(const FMantlePlaceDrapeA
 				*Alignment.Declared);
 
 	case EMantlePlaceDrapeAlignment::Unrecognised:
-		// Echoed, not judged. Branching only on the shapes we know shows a user nothing for the
-		// shape we do not, which is the failure this whole unit exists to stop repeating.
 		return FString::Printf(
 			TEXT("Imagery drape alignment (a descriptor this plugin version does not recognise, "
 			     "reported unchanged): \"%s\"."),

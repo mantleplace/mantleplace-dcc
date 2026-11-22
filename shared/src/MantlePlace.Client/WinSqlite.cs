@@ -5,18 +5,6 @@ using System.Text;
 
 namespace MantlePlace.Client;
 
-/// <summary>
-/// The SQLite Windows ships as <c>winsqlite3.dll</c> (System32, Windows 10 1607 and later), reached by
-/// P/Invoke: no NuGet package, no native binary shipped beside the add-in, and nothing for another
-/// add-in's SQLite to collide with inside Revit's process. The few calls a read-only GeoPackage read
-/// needs, and no more.
-/// </summary>
-/// <remarks>
-/// <c>revit/Directory.Build.props</c> forbids a package, and <c>Microsoft.Data.Sqlite</c> would bring three
-/// and a native <c>e_sqlite3.dll</c> another add-in's copy can shadow. The cost of this route is that the
-/// read runs on Windows only, which is where Revit runs; the decoder and everything that places a
-/// feature is in <c>MantlePlace.Core</c> and runs everywhere (<c>revit/docs/vector-carrier.md</c>).
-/// </remarks>
 [SupportedOSPlatform("windows")]
 internal static class WinSqlite
 {
@@ -31,9 +19,6 @@ internal static class WinSqlite
     internal const int Blob = 4;
     internal const int Null = 5;
 
-    /// <summary>Runs every row of <paramref name="sql"/> against a read-only open of <paramref name="path"/>.</summary>
-    /// <param name="onRow">Called once per row with that row's reader, which is valid only inside the call.</param>
-    /// <exception cref="IOException">SQLite could not open the file, or the file is not a database.</exception>
     internal static void Query(string path, string sql, Action<RowReader> onRow)
     {
         ArgumentNullException.ThrowIfNull(onRow);
@@ -98,11 +83,10 @@ internal static class WinSqlite
     private static byte[] Utf8(string value)
     {
         byte[] bytes = Encoding.UTF8.GetBytes(value);
-        Array.Resize(ref bytes, bytes.Length + 1); // NUL-terminated
+        Array.Resize(ref bytes, bytes.Length + 1);
         return bytes;
     }
 
-    /// <summary>The current row of a statement.</summary>
     internal sealed class RowReader
     {
         private readonly IntPtr _statement;

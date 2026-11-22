@@ -2,25 +2,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// What the Account face says, and when it is allowed to say it.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The ribbon used to know nothing about the session: two always-enabled push buttons, with the
-/// truth enforced at click time by a dialog. So the answer to "am I signed in?" was "click Sign in
-/// and find out", which is the failure this pins shut — the face may not claim a state the session
-/// is not in.
-/// </para>
-/// <para>
-/// It lives in the pure core because the decision is a pure one and the shim is never built in CI
-/// (<c>HPS-02</c>, <c>HPS-42</c>). The shim's remaining job is to copy these strings onto a
-/// <c>SplitButton</c>, which is the part no test can reach.
-/// </para>
-/// </remarks>
 internal static class AccountRibbonTests
 {
-    /// <summary>Every state, so a new one cannot be added without deciding what the face says.</summary>
     private static readonly AuthState[] EveryState =
     [
         AuthState.Unauthenticated,
@@ -63,25 +46,17 @@ internal static class AccountRibbonTests
 
         run.Case("restoring a stored grant is the same wait, in the same words", () =>
         {
-            // The reference host draws Authenticating and Refreshing with one label, and a curator
-            // cannot tell a browser round-trip from a token renewal apart anyway. Two labels here
-            // would be two vocabularies for one wait.
             AccountRibbonState face = AccountRibbon.For(AuthState.Refreshing, "curator@example.com", true);
 
             run.Equal(face.FaceText, "Signing In…", "a refresh reads as signing in");
             run.Equal(face.FaceEnabled, false, "the face is disabled while the session moves");
             run.Equal(face.SignOutEnabled, true, "a stored grant can still be dropped");
 
-            // An address is only ever known here because a session already exists, and the wait is
-            // the one moment a curator most wants to know whose. Dropping it was the tooltip
-            // reporting less than the session knew.
             run.Contains(face.FaceToolTip, "curator@example.com", "the wait names whose session it is");
         });
 
         run.Case("a first sign-in has no address to name, and does not pretend otherwise", () =>
         {
-            // Authenticating from signed-out, and the startup restore, both arrive with nothing:
-            // UserEmail is not set until a grant comes back.
             AccountRibbonState face = AccountRibbon.For(AuthState.Authenticating, string.Empty, false);
 
             run.Equal(face.FaceToolTip, "Signing in to Mantle Place…", "no address, no claim");
@@ -110,8 +85,6 @@ internal static class AccountRibbonTests
                 "Not signed in.",
                 "and a refused renewal is not one either");
 
-            // The face's tooltip opens with the same sentence, so About and the ribbon can never
-            // disagree about whether this Revit is signed in.
             AccountRibbonState face = AccountRibbon.For(AuthState.Authenticated, "curator@example.com", true);
             run.Equal(
                 face.SessionSummary,
@@ -135,7 +108,6 @@ internal static class AccountRibbonTests
 
         run.Case("signed in with no address: nothing is invented", () =>
         {
-            // A grant that omits the email is legal — the address is a convenience, not the session.
             AccountRibbonState face = AccountRibbon.For(AuthState.Authenticated, string.Empty, true);
 
             run.Equal(face.FaceText, "Signed In", "the session is still reported");
@@ -145,8 +117,6 @@ internal static class AccountRibbonTests
 
         run.Case("a failed renewal does not leave the face claiming a session", () =>
         {
-            // Failed is where a refresh lands when the platform will not renew. The old ribbon could
-            // not move, so it went on offering Sign out and reporting nothing.
             AccountRibbonState face = AccountRibbon.For(AuthState.Failed, "curator@example.com", true);
 
             run.Equal(face.FaceText, "Sign In", "the face asks for the sign-in that would fix it");
@@ -178,9 +148,6 @@ internal static class AccountRibbonTests
                 AccountRibbon.For(AuthState.Authenticated, "  curator@example.com  ", true);
             run.Equal(padded.IdentityText, "curator@example.com", "a padded address is trimmed");
 
-            // ⛔ RibbonItem.ItemText throws Autodesk.Revit.Exceptions.ArgumentException on a string
-            // containing "%", and an address may legally contain one. A throw during the state
-            // update lands on Revit's dispatcher, which is how an add-in takes the process down.
             AccountRibbonState hostile = AccountRibbon.For(AuthState.Authenticated, "od%d@example.com", true);
             run.Equal(hostile.IdentityVisible, false, "an address Revit cannot draw is not drawn");
             run.Contains(hostile.FaceToolTip, "od%d@example.com", "the tooltip has no such limit and keeps it");

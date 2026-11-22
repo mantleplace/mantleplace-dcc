@@ -1,23 +1,11 @@
 // Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
-// The derived "road_splines" layer of the ODbL Vector/ set (a top-level sibling of `unreal`):
-// Z-draped road centerlines -> one spline actor per road (Wave-2 pipeline layers). The Unreal block's
-// own copy is read first when the manifest publishes one (`hosts.unreal.road_splines`, MPB 1.16.0): the
-// same roads draped on the engine's ground, in the landscape's datum on a US order, where the shared
-// layer's heights are not (HPS-52). Failing that the layer is read from its GeoPackage through the
-// `gpkg` format row of `vector.layers`, and from its GeoJSON row when the bundle has no GeoPackage row
-// (or its GeoPackage cannot be read). Each source is placed only in this host's datum. Like the
-// buildings, this is content, not a terrain representation: it imports whenever the bundle ships the
-// layer, regardless of Mode, and a failure is non-fatal. Each road is an AMantlePlaceRoadSpline whose
-// width, class and name are real properties, so PCG, a Blueprint or a road tool read them by name
-// without re-reading the bundle and without parsing anything.
-
 #include "MantlePlaceArtifactHandler.h"
 
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceImportNaming.h"
 #include "MantlePlaceManifestJson.h"
-#include "MantlePlaceRoadSpline.h" // runtime: AMantlePlaceRoadSpline
+#include "MantlePlaceRoadSpline.h"
 #include "MantlePlaceRoadSplinesGpkg.h"
 #include "MantlePlaceRoadSplinesLogic.h"
 
@@ -27,10 +15,6 @@
 
 namespace
 {
-/**
- * Whether a `gpkg` format row holds the layer's lines. A row naming no family is the whole layer; a
- * layer split by family names one per family, and the road lines are the `line` family's.
- */
 bool IsLineFamilyRow(const TSharedPtr<FJsonObject>& FormatRow)
 {
 	const FString Family = MantlePlaceManifestJson::GetString(FormatRow, TEXT("geometry_family"));
@@ -44,15 +28,9 @@ public:
 	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::Roads; }
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactRoadSplines", "Road splines"); }
 
-	// Both formats the importer takes: the GeoPackage read first, the GeoJSON as the fallback. Read from
-	// the top-level `vector.layers`, before the `unreal`-presence check, so streaming-adjacent data
-	// survives on unmaterialized bundles.
 	bool ParseFields(const FMantlePlaceParseInput& In, FMantlePlaceVaultManifest& M, FString& OutError) const override
 	{
 		using namespace MantlePlaceManifestJson;
-		// This host's own copy (MPB 1.16.0), read from the Unreal block and nowhere else (HPS-33).
-		// Every member is verbatim: whether its datum is this host's is FMantlePlaceRoadSplinesLogic's
-		// call, and a datum that is not refuses the copy by name at import, never the manifest.
 		if (const TSharedPtr<FJsonObject>* EnginePtr = GetObject(In.Unreal, TEXT("road_splines")))
 		{
 			M.RoadSplines.EnginePath = GetString(*EnginePtr, TEXT("path"));
@@ -83,9 +61,6 @@ public:
 					{
 						continue;
 					}
-					// The datum of the layer's heights (MPB 1.8.0), verbatim. Whether it is this host's
-					// is FMantlePlaceRoadSplinesLogic's call: a datum that is not refuses the layer by
-					// name at import, never the manifest.
 					M.RoadSplines.VerticalDatum = GetString(Layer, TEXT("vertical_datum"));
 					const TArray<TSharedPtr<FJsonValue>>* Formats = nullptr;
 					if (Layer->TryGetArrayField(TEXT("formats"), Formats) && Formats != nullptr)
@@ -168,21 +143,6 @@ public:
 		TArray<FMantlePlaceRoadSpline> Splines;
 		int32 LinesSeen = 0;
 		bool bParsed = false;
-		// The heights are placed only in this host's datum, the landscape's. A source stating
-		// another is a named skip, as HPS-53 skips a file in another frame, and is never shifted
-		// (HPS-33): on a US order the shared layer's NAVD88 heights are skipped here whether or not
-		// the manifest also publishes the engine copy, which is the one read instead. The skip comes
-		// after the integrity pre-check, which hashes every declared payload whether or not it is
-		// placed, so a refused file's bytes are still verified and a bad digest still stops the
-		// import; what the skip spares is reading the file for placement.
-		//
-		// The sources are tried in the order HPS-52 gives: the Unreal block's own copy, then the shared
-		// layer. A source that cannot be read (missing from the zip, not a GeoPackage, in another
-		// frame) says why in the log and gives way to the next, so a layer is never lost to the source
-		// that was tried first. The first that reads is the one placed.
-		//
-		// An MPB 3.x bundle has one source, its host-ready `Basemap/Roads.csv` in the local site frame,
-		// whose heights are in that frame's vertical datum: the Landscape's, so there is no datum to ask.
 		if (Manifest.RoadSplines.bSiteCsvPresent)
 		{
 			bParsed = ReadSiteCsv(Ctx, Splines, LinesSeen);
@@ -196,7 +156,6 @@ public:
 				Ctx.Log.Add(FString::Printf(TEXT("Road splines skipped: %s"), *Candidate.Refusal));
 				continue;
 			}
-			// A source that failed part-way leaves nothing behind for the next one to add to.
 			Splines.Reset();
 			LinesSeen = 0;
 			bParsed = Candidate.Source == EMantlePlaceRoadSplinesSource::EngineCopy
@@ -220,31 +179,22 @@ public:
 			{
 				continue;
 			}
-			// The actor made its own spline as its root; the published points go in as the world-space
-			// positions they already are, moved by the level offset when the level holds another import.
 			USplineComponent* SplineComponent = SplineActor->Spline;
-			SplineComponent->ClearSplinePoints(/*bUpdateSpline*/ false);
+			SplineComponent->ClearSplinePoints(false);
 			for (const FVector& Point : Road.PointsUeCm)
 			{
 				SplineComponent->AddSplinePoint(
-					Ctx.Manifest.ToLevelFrame(Point), ESplineCoordinateSpace::World, /*bUpdateSpline*/ false);
+					Ctx.Manifest.ToLevelFrame(Point), ESplineCoordinateSpace::World, false);
 			}
 			SplineComponent->UpdateSpline();
 
-			// What the platform published, as the actor's own properties: no tag carries any of it.
 			SplineActor->EstimatedWidthM = static_cast<float>(Road.WidthMEstimated);
 			SplineActor->RoadClass = Road.RoadClass.IsEmpty() ? NAME_None : FName(*Road.RoadClass);
 			SplineActor->RoadName = Road.Name;
 
-			// Claim is the whole of the wipe registration: it files the actor under this import's tag,
-			// which is what the stale-actor sweep matches whatever the actor's class (an actor of any
-			// type, this one included, is replaced on re-import and never stacked).
 			Ctx.Claim(SplineActor, MantlePlaceImportNaming::RoadSplineLabel(Ctx.Identity, SplineIndex++));
 			Ctx.Result.CreatedActors.Add(SplineActor->GetActorLabel());
 		}
-		// A layer whose roads all failed to place must not read like an AOI with no roads. The
-		// outcome is about the parse (what could be placed); a spawn failure is a different
-		// cause and gets its own line rather than borrowing the projection reason.
 		Ctx.Log.Add(FMantlePlaceRoadSplinesLogic::DescribeOutcome(LinesSeen, Splines.Num()));
 		if (SplineIndex < Splines.Num())
 		{
@@ -254,7 +204,6 @@ public:
 	}
 
 private:
-	/** An MPB 3.x bundle's host-ready road table; false (with the reason logged) when it cannot be read. */
 	static bool ReadSiteCsv(FMantlePlaceImportContext& Ctx, TArray<FMantlePlaceRoadSpline>& OutSplines, int32& OutLinesSeen)
 	{
 		const FMantlePlaceRoadSplinesBlock& Block = Ctx.Manifest.RoadSplines;
@@ -283,10 +232,6 @@ private:
 		return true;
 	}
 
-	/**
-	 * The Unreal block's own copy (`hosts.unreal.road_splines`); false (with the reason logged) when
-	 * it cannot be read, and the shared layer is tried next when it is placeable.
-	 */
 	static bool ReadEngineCopy(FMantlePlaceImportContext& Ctx, TArray<FMantlePlaceRoadSpline>& OutSplines, int32& OutLinesSeen)
 	{
 		const FMantlePlaceRoadSplinesBlock& Block = Ctx.Manifest.RoadSplines;
@@ -295,12 +240,6 @@ private:
 		    TEXT(" Trying the shared layer instead."), OutSplines, OutLinesSeen);
 	}
 
-	/**
-	 * The shared layer: its GeoPackage first. Only that file's absence sends the import to the
-	 * GeoJSON, with one more case: a GeoPackage the bundle declares but this read cannot use
-	 * (missing from the zip, not a GeoPackage, in another frame) says why in the log and gives way
-	 * to the GeoJSON when there is one, so a layer is never lost to the format that was tried first.
-	 */
 	static bool ReadSharedLayer(FMantlePlaceImportContext& Ctx, TArray<FMantlePlaceRoadSpline>& OutSplines, int32& OutLinesSeen)
 	{
 		const FMantlePlaceRoadSplinesBlock& Block = Ctx.Manifest.RoadSplines;
@@ -316,7 +255,6 @@ private:
 		return bParsed;
 	}
 
-	/** The shared layer from its GeoPackage; false (with the reason logged) when it cannot be read. */
 	static bool ReadGpkg(FMantlePlaceImportContext& Ctx, TArray<FMantlePlaceRoadSpline>& OutSplines, int32& OutLinesSeen)
 	{
 		const FMantlePlaceRoadSplinesBlock& Block = Ctx.Manifest.RoadSplines;
@@ -326,10 +264,6 @@ private:
 		    OutLinesSeen);
 	}
 
-	/**
-	 * One GeoPackage of road lines, from whichever source names it. Heights are read as the file
-	 * carries them: whether they may be placed was decided before this is called.
-	 */
 	static bool ReadGpkgFile(
 	    FMantlePlaceImportContext& Ctx,
 	    EMantlePlaceRoadSplinesSource Source,
@@ -364,7 +298,6 @@ private:
 		return true;
 	}
 
-	/** The layer from its GeoJSON; false (with the reason logged) when it cannot be read. */
 	static bool ReadGeoJson(FMantlePlaceImportContext& Ctx, TArray<FMantlePlaceRoadSpline>& OutSplines, int32& OutLinesSeen)
 	{
 		const FMantlePlaceVaultManifest& Manifest = Ctx.Manifest;

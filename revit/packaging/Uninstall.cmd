@@ -1,15 +1,6 @@
 @echo off
 setlocal
 
-rem  Mantle Place for Revit -- one-step uninstaller.
-rem
-rem  The mirror of Install.cmd, and wrapped for the same reason: a .ps1 in a downloaded zip is not
-rem  something a curator can run (Restricted execution policy, Mark-of-the-Web), and
-rem  -ExecutionPolicy Bypass on the command line clears both. A Group Policy execution policy
-rem  overrides it, and for that case the manual steps in README.txt, "UNINSTALL", are the fallback.
-rem
-rem  powershell.exe, not pwsh.exe -- Windows PowerShell 5.1 ships with Windows, PowerShell 7 does not.
-
 echo Uninstalling Mantle Place for Revit...
 echo.
 
@@ -31,7 +22,5 @@ if errorlevel 1 (
 )
 
 echo.
-rem  Without this the window vanishes the instant it finishes and the curator sees nothing at all --
-rem  neither what was removed nor the reason it failed.
 pause
 endlocal

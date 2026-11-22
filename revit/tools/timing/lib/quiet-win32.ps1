@@ -1,4 +1,3 @@
-# Win32 + UIA helpers for the quiet harness driver. Dot-source it.
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.Forms
 if (-not ('Q.W2' -as [type])) {
 Add-Type -Namespace Q -Name W2 -MemberDefinition @'
@@ -65,7 +64,6 @@ function Get-ForegroundOwner {
     "pid $x ($name) '$(Get-WindowTitle $h)'"
 }
 
-# Where a harness window goes: the top-left of the smallest non-primary screen, else far off-screen.
 function Get-ParkingSpot {
     $others = [System.Windows.Forms.Screen]::AllScreens | Where-Object { -not $_.Primary } | Sort-Object { $_.Bounds.Width * $_.Bounds.Height }
     if ($others) { $b = @($others)[0].Bounds; return @{ X = $b.X; Y = $b.Y; Screen = @($others)[0].DeviceName } }
@@ -73,12 +71,10 @@ function Get-ParkingSpot {
 }
 
 $SWP_NOSIZE = 0x0001; $SWP_NOZORDER = 0x0004; $SWP_NOACTIVATE = 0x0010; $HWND_BOTTOM = [IntPtr]1
-# Moves a window to the parking spot and to the bottom of the z-order, never activating it.
 function Move-Parked([IntPtr]$h, $spot) {
     [void][Q.W2]::SetWindowPos($h, $HWND_BOTTOM, $spot.X, $spot.Y, 0, 0, $SWP_NOSIZE -bor $SWP_NOACTIVATE)
 }
 
-# Every UIA descendant of a task dialog, for discovery.
 function Show-Dialog([IntPtr]$h) {
     $el = [Windows.Automation.AutomationElement]::FromHandle($h)
     foreach ($d in $el.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition)) {

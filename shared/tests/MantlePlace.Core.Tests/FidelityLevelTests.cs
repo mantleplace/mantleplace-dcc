@@ -2,16 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Fidelity levels (MPB 1.9.0): each entry's <c>levels</c> block read into its four levels, the level
-/// a curator chooses applied verbatim — the first rows, the features a field keeps, or the file a
-/// pointer names — and what each level is estimated to cost in this Revit.
-/// </summary>
-/// <remarks>
-/// The plugin never computes a subset, re-ranks or filters spatially: every count asserted here is
-/// one the fixture publishes, and the cases that matter most are the ones where a level cannot be
-/// imported as published and is offered as unavailable rather than imported as the whole file.
-/// </remarks>
 internal static class FidelityLevelTests
 {
     private const string OwnSha = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -546,7 +536,6 @@ internal static class FidelityLevelTests
                 run.True(ImportLayers.DefaultLevel(layer) == expected, $"{layer} defaults to {expected}");
             }
 
-            // Road surfaces whose MIN is published as a row cut, which their step cannot take.
             string rowCutRoads = Fixture().Replace(
                 "\"MIN\": { \"cut\": { \"lowest_level_field\": \"lowest_level\" }",
                 "\"MIN\": { \"cut\": { \"rows\": 1 }",
@@ -614,8 +603,6 @@ internal static class FidelityLevelTests
         });
     }
 
-    // ---- fixtures -------------------------------------------------------------------------------
-
     private static readonly SiteFrame FootFrame = new()
     {
         Origin = new GeoOrigin { Epsg = 2231, Easting = 1450131.2, Northing = 13171825.6, LinearUnit = LinearUnit.UsSurveyFoot },
@@ -624,13 +611,6 @@ internal static class FidelityLevelTests
     private static IReadOnlyDictionary<ImportLayer, FidelityLevel> Levels(params (ImportLayer Layer, FidelityLevel Level)[] levels)
         => levels.ToDictionary(entry => entry.Layer, entry => entry.Level);
 
-    /// <summary>
-    /// A State Plane delivery whose road surfaces are cut by a level field, whose trees are a ranked
-    /// row file with a RAW file of their own, whose drape has a MED file of its own, and whose road
-    /// centrelines carry a row cut no centreline step can take.
-    /// </summary>
-    /// <param name="levels">Whether any entry publishes levels.</param>
-    /// <param name="splineLevels">The road centrelines' block's members in place of the fixture's own, for a reader case.</param>
     private static string Fixture(bool levels = true, string? splineLevels = null)
     {
         string roadLevels = levels
@@ -722,7 +702,6 @@ internal static class FidelityLevelTests
         "Landcover/TreePoints.RAW.csv",
     ];
 
-    /// <summary>The road centrelines' levels, read from a fixture whose only levels block is this one.</summary>
     private static FidelityLevels? SplineLevels(string members)
         => Parse(Fixture(levels: false, splineLevels: members)).RoadSplines!.Levels;
 

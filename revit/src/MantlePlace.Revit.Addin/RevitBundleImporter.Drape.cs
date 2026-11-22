@@ -4,47 +4,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// The imagery-drape step: which elements wear the photograph, where it is anchored, and the
-// layered toposolid type that carries it.
 internal sealed partial class RevitBundleImporter
 {
-    /// <summary>
-    /// Drapes the satellite imagery over the terrain as a real-world-scaled diffuse texture —
-    /// Forma's last parity row.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The rectangle is not computed here. <see cref="DrapePlacement"/> arrives with all four edges
-    /// already in frame-local metres and already corroborated against the image's own pixel grid, so
-    /// what is left is Revit's vocabulary: an appearance asset carrying a <c>UnifiedBitmap</c>, a
-    /// material pointing at it, and a toposolid type wearing that material.
-    /// </para>
-    /// <para>
-    /// <b>The type is duplicated, never edited.</b> The project's own toposolid type belongs to the
-    /// project — texturing it in place would repaint every other toposolid in the model with this
-    /// site's aerial photograph. The duplicate is named from the bundle's cache key
-    /// (<see cref="DrapeLayering.ImageryName"/>), so importing the same order twice reuses one type
-    /// rather than growing a new one each time.
-    /// </para>
-    /// <para>
-    /// ⛔ <b>On a terrain this run built, the type is already on it.</b> The planner decides the
-    /// terrain's type before the terrain exists (<see cref="ImportStep.ToposolidType"/>), and the
-    /// terrain step creates the ground on the imagery type with a bare drape material, so what is
-    /// left here is writing the photograph into that material. The retype below is kept for ground
-    /// not on that type: an earlier import's terrain kept by ADR 0004's reuse arm, which may predate
-    /// the change, or this run's terrain when the terrain step could not prepare the type. It is the
-    /// expensive half: 409 s on an 80,372-point toposolid.
-    /// </para>
-    /// <para>
-    /// ⚠️ <b>None of this is reachable by CI</b> (no Revit on a hosted runner).
-    /// <c>AppearanceAssetEditScope</c>, the <c>UnifiedBitmap</c> schema and
-    /// <c>ToposolidType.Duplicate</c> — which the terrain step now calls too — all compile, which
-    /// says nothing about what they do; only a real import does.
-    /// The one behaviour worth naming: whether a duplicated type's compound structure accepts the
-    /// two-layer split for a toposolid as it does for a floor — <see cref="TryWearMaterial"/>
-    /// refuses rather than half-applies if it does not.
-    /// </para>
-    /// </remarks>
     private void ApplyImageryDrape(ImportStep step)
     {
         if (step.Drape is not { } placement)
@@ -61,47 +22,28 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        // Retained, not scratch: the appearance asset stores this PATH and re-reads it every time the
-        // project is opened (ImportStepKinds.LifetimeOf).
         string imagePath = _archive.Extract(step.EntryName, step.Lifetime, step.ExpectedSha256);
         string name = DrapeLayering.ImageryName(_archive.Layout.Key.Stem);
 
-        // Whether the terrain step already built this ground on the imagery type — which decides
-        // whether this step retypes at all, and therefore whether it is slow.
         bool wearsImageryType = _document.GetElement(terrain.GetTypeId()) is ToposolidType worn
             && string.Equals(worn.Name, name, StringComparison.Ordinal);
 
-        // ⛔ BEFORE the material is written, because the offsets depend on the answer. Under smooth
-        // shading Revit measures a real-world texture offset from the element's bounding-box corner;
-        // under flat shading from the project origin (DrapeAnchor). The photograph has to be placed
-        // for the renderer that will draw it, so the setting is decided first and read back.
         bool smoothed = EnsureSmoothedSurface();
         DrapeOffset groundAnchor = AnchorFor(terrain, "the terrain", placement, smoothed);
 
-        // The host retype is the dominant cost, so the work count is 1 rather than the subdivision
-        // count — the drape is slow on a terrain with no subdivisions at all. A terrain already on the
-        // imagery type has no retype coming, and announcing a seven-minute freeze there would teach a
-        // curator to ignore the line.
         if (SlowStepNotice.For(step.Kind, _terrainVertexCount, wearsImageryType ? 0 : 1) is { } notice)
         {
             Announce(notice);
         }
 
-        // Revit 2026 and later: every typed subdivision not already on its material's type is one
-        // ChangeTypeId (revit/CLAUDE.md). Counted before anything is written, like the notice above. A
-        // subdivision this import cut is already on it (TypeForDrapeAtCut), so what is left is an
-        // earlier import's cut, a keyword changed since, or a type Revit refused at the cut.
         (int onInstances, int onTheirTypes, int toRetype) = CountDrapeRoutes(terrain, name, smoothed);
         if (SlowStepNotice.ForSubDivisionRetypes(toRetype, _terrainVertexCount) is { } retypes)
         {
             Announce(retypes);
         }
 
-        // Revit 2025: typeless subdivisions, one Material each, one at a time — the route the drape was
-        // measured over the threshold on in that version.
         Announce(SlowStepNotice.ForDrapeOnInstances(onInstances, _terrainVertexCount));
 
-        // With nothing to retype, the one commit below is still the longest wait in this step.
         if (SlowStepNotice.ForDrapeCommit(onTheirTypes, toRetype, wearsImageryType ? 0 : 1, _terrainVertexCount) is { } commit)
         {
             Announce(commit);
@@ -122,10 +64,6 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        // One material carries one offset, and under smooth shading every subdivision's offset is
-        // its own — so each gets its own material, anchored to its own corner. Under flat shading
-        // the origin is shared and so is the material, save that a renderer keyword needs a name of
-        // its own: one extra material per keyword, anchored as the ground is.
         Dictionary<string, ElementId> sharedByKeyword = new(StringComparer.Ordinal);
         if (!TryWearMaterial(
             terrain,
@@ -150,8 +88,6 @@ internal sealed partial class RevitBundleImporter
 
         if (!CommitAndReport(transaction, swallower))
         {
-            // The swallower already said why. Reporting the work below as done would be a lie:
-            // the rollback took all of it.
             return;
         }
 
@@ -162,14 +98,8 @@ internal sealed partial class RevitBundleImporter
                 ? "the bundle's own imagery extent"
                 : "the DEM's bounds, corroborated against the image's pixel grid");
 
-        // The surfaces the photograph lands on, said in the summary rather than left to a rendered
-        // view. A single-layer type wears its material on every face, so this clause is the whole
-        // answer to "is the aerial photograph smeared down the terrain's sides".
         summary += $"; {layering}";
 
-        // Composed in the pure core, where a test asserts the sentence. It used to be assembled
-        // here from a bare count, and a count was the entire record of the defect that made this
-        // step's subdivisions invisible for two sessions.
         summary += SubDivisionDrape.Clause(
             drapedSubDivisions,
             refusedSubDivisions,
@@ -177,10 +107,6 @@ internal sealed partial class RevitBundleImporter
 
         Say(summary + ".");
 
-        // ⛔ Said out loud, in the summary, not buried in the diagnostics. The last time this went
-        // wrong the plugin reported the placement it INTENDED and the photograph tiled twelve times
-        // across the site; the summary above is still that same statement of intent, and this is the
-        // only line that has read the document back to check it.
         if (misplaced is not null)
         {
             Say($"⚠ The aerial photograph is not pinned where it should be: {misplaced}. The imagery "
@@ -188,20 +114,9 @@ internal sealed partial class RevitBundleImporter
                 + "report it with this log.");
         }
 
-        // The photograph is placed for one renderer, and the curator owns the switch between the
-        // two. Said here, after the drape, so the sentence follows the thing it is about.
         Say(TerrainSmoothing.DrapeNotice(smoothed));
     }
 
-    /// <summary>
-    /// The <c>texture_RealWorldOffset</c> pair for one element, from its bounding box and the
-    /// smooth-shading state — decided in <see cref="DrapeAnchor"/>, read here.
-    /// </summary>
-    /// <remarks>
-    /// An element with no bounding box gets the origin-anchored offset and a trace line saying so;
-    /// under smooth shading that photograph will be misplaced on it, and the log records why rather
-    /// than the plugin guessing a corner.
-    /// </remarks>
     private DrapeOffset AnchorFor(Element element, string label, DrapePlacement placement, bool smoothed)
     {
         BoundingBoxXYZ? box = element.get_BoundingBox(null);
@@ -214,19 +129,12 @@ internal sealed partial class RevitBundleImporter
         double minXm = InternalToMetres(box.Min.X);
         double minYm = InternalToMetres(box.Min.Y);
 
-        // The element's corner is read from the document, where this bundle stands at its offset from
-        // the project origin; the image's corner is in the bundle's own frame. Both go to the same one.
         DrapePlacement inDocument = placement.Shifted(Anchoring.OffsetEastM, Anchoring.OffsetNorthM);
         DrapeOffset anchor = DrapeAnchor.For(inDocument, smoothed, minXm, minYm);
         Trace("  " + DrapeAnchor.Describe(label, inDocument, smoothed, minXm, minYm, anchor));
         return anchor;
     }
 
-    /// <summary>
-    /// A subdivision's own drape material: the ground's image and scale, anchored to the
-    /// subdivision's corner, named by the subdivision's stamp and its renderer keyword so a
-    /// re-import reuses it (<see cref="GroundMaterialNames.PerSubDivision"/>).
-    /// </summary>
     private ElementId SubDivisionMaterialId(Element subdivision, string name, string imagePath, DrapePlacement placement)
     {
         string materialName = SubDivisionMaterialName(subdivision, name, smoothed: true);
@@ -241,16 +149,6 @@ internal sealed partial class RevitBundleImporter
         return id;
     }
 
-    /// <summary>
-    /// Under flat shading, the material a subdivision shares: the ground's own when its layer names no
-    /// material word, and otherwise one per word, made once per step
-    /// (<see cref="GroundMaterialNames.Shared"/>).
-    /// </summary>
-    /// <remarks>
-    /// Anchored to the project origin like the ground, which is what flat shading measures every
-    /// offset from, so the photograph lines up across the subdivision's edge. A keyword material this
-    /// Revit will not make falls back to the ground's: the photograph matters more than the word.
-    /// </remarks>
     private ElementId SharedMaterialId(
         Element subdivision,
         string name,
@@ -280,29 +178,6 @@ internal sealed partial class RevitBundleImporter
         return id == ElementId.InvalidElementId ? groundMaterialId : id;
     }
 
-    /// <summary>
-    /// The subdivisions this drape may touch: the ones this plugin created for THIS bundle.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Found by the stamp written into Comments, not only by the ids remembered from this session.
-    /// That distinction is a bug fix in its own right: <see cref="SiteBoundaryIdentity.NewFeatures"/>
-    /// suppresses boundaries that already exist, so on a RE-import the remembered list is empty — and
-    /// the drape step used to walk it, touch nothing, and still report success. A model left with
-    /// un-draped patches could not be repaired by importing again, which is the one remedy a curator
-    /// would reach for.
-    /// </para>
-    /// <para>
-    /// The remembered ids are still unioned in, for the subdivisions this import could not stamp.
-    /// Those are already reported as "will not be recognised by a re-import"; without the union they
-    /// would silently not be draped either, on the very import that made them.
-    /// </para>
-    /// <para>
-    /// ⛔ A curator's own subdivision carries no stamp, and another order's carries a different stem,
-    /// so neither is ever in this set. It is the same line this plugin draws when it declines to
-    /// edit the project's own toposolid type: touch what this import owns, and nothing else.
-    /// </para>
-    /// </remarks>
     private List<ElementId> DrapeableSubDivisionIds(Toposolid terrain)
     {
         List<ElementId> ids = [];
@@ -331,16 +206,6 @@ internal sealed partial class RevitBundleImporter
         return ids;
     }
 
-    /// <summary>
-    /// Of the typed subdivisions this drape may touch, how many are already on their material's type
-    /// and how many it will retype (<see cref="SubDivisionMaterial.NeedsRetype"/>), counted before
-    /// anything is written.
-    /// </summary>
-    /// <remarks>
-    /// A re-import's subdivisions, and this import's cuts, are already on their types, so the retype
-    /// count is zero there, which is what keeps the drape from announcing a wait it will not have.
-    /// Typeless subdivisions count in neither.
-    /// </remarks>
     private (int OnInstances, int OnTheirTypes, int ToRetype) CountDrapeRoutes(Toposolid terrain, string imageryName, bool smoothed)
     {
         int onInstances = 0;
@@ -379,10 +244,6 @@ internal sealed partial class RevitBundleImporter
         return (onInstances, onTheirTypes, toRetype);
     }
 
-    /// <summary>
-    /// Which way <paramref name="subdivision"/> can wear a material (<see cref="SubDivisionMaterial.Route"/>),
-    /// with the instance parameter and the type the answer was read from.
-    /// </summary>
     private SubDivisionMaterialRoute RouteFor(Element subdivision, out Parameter? material, out ToposolidType? own)
     {
         material = subdivision.get_Parameter(BuiltInParameter.TOPOSOLID_SUBDIVIDE_MATERIAL);
@@ -390,11 +251,6 @@ internal sealed partial class RevitBundleImporter
         return SubDivisionMaterial.Route(material is { IsReadOnly: false }, own is not null);
     }
 
-    /// <summary>
-    /// The name of the drape material <paramref name="subdivision"/> wears: its own under smooth
-    /// shading (<see cref="GroundMaterialNames.PerSubDivision"/>), shared under flat
-    /// (<see cref="GroundMaterialNames.Shared"/>, the ground's own when there is no keyword).
-    /// </summary>
     private string SubDivisionMaterialName(Element subdivision, string imageryName, bool smoothed)
     {
         GroundStamp stamp = NamingStampOf(subdivision);
@@ -404,16 +260,6 @@ internal sealed partial class RevitBundleImporter
             : GroundMaterialNames.Shared(imageryName, keyword);
     }
 
-    /// <summary>
-    /// The stamp <paramref name="subdivision"/>'s drape material is named by, and so the layer whose
-    /// material word it carries (<see cref="SiteBoundaryIdentity.NamingStamp"/>).
-    /// </summary>
-    /// <remarks>
-    /// A subdivision this run cut and could not stamp is named by the stamp it was cut with, so the
-    /// cut and the drape, and a later import, all compute the same name. Read off the element every
-    /// time rather than remembered by the step that cut it, so a water body an earlier import cut
-    /// wears <c>water</c> whether or not this import ran the water step.
-    /// </remarks>
     private GroundStamp NamingStampOf(Element subdivision)
         => SiteBoundaryIdentity.NamingStamp(
             subdivision.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString(),
@@ -421,32 +267,6 @@ internal sealed partial class RevitBundleImporter
             subdivision.Id.Value,
             _archive.Layout.Key.Stem);
 
-    /// <summary>
-    /// Splits the drape type's top layer into a thin imagery layer over the original material — the
-    /// mechanism that keeps the photograph off the vertical faces, since a single-layer structure
-    /// wears its material on every face.
-    /// </summary>
-    /// <returns><c>false</c> when there is no layer to split or the split refuses.</returns>
-    /// <remarks>
-    /// <para>
-    /// ⛔ <b>The re-run guard is the structure, not the caller.</b> This used to run only on the
-    /// import that duplicated the type, on the reasoning that a type found by name must already carry
-    /// its imagery layer. That kept the guarantee it was written for — never a second imagery layer —
-    /// and bought it with an assumption nobody ever checked. A SINGLE-layer
-    /// <c>Mantle Place Site Imagery</c> type, left behind by a build predating the layering or by a
-    /// curator editing the structure, was reused verbatim on every later import: the photograph on
-    /// every vertical face, permanently, with no re-import able to repair it. Asking
-    /// <see cref="DrapeLayering.Decide"/> about layer 0's material costs one read, keeps the same
-    /// guarantee, and cannot go stale.
-    /// </para>
-    /// <para>
-    /// <b>And the write is read back.</b> <c>SetCompoundStructure</c> was the last unverified write in
-    /// this step — the drape's four texture properties are read back, and that read-back is what
-    /// caught the placement being out by a factor of twelve. The stack Revit actually stored is what
-    /// goes in the log, so "the photograph is off the sides" stops being a claim about code and
-    /// becomes a number somebody can check.
-    /// </para>
-    /// </remarks>
     private bool TryLayerImagery(ToposolidType draped, ElementId materialId, out string layering)
     {
         double minimum = CompoundStructure.GetMinimumLayerThickness();
@@ -458,18 +278,9 @@ internal sealed partial class RevitBundleImporter
             return false;
         }
 
-        // Captured before anything overwrites them: the lower layer inherits the original type's
-        // material verbatim, and both new layers keep the original layer's function — a
-        // finish-like assignment for the sliver would be invented semantics on a structure Revit
-        // never renders differently for it, so the simple answer is the honest one.
         ElementId originalMaterialId = structure.GetMaterialId(0);
         MaterialFunctionAssignment function = structure.GetLayerFunction(0);
 
-        // Layer 0's width, not the total: a multi-layer original keeps every layer below untouched,
-        // and the imagery sliver comes out of the top layer alone. For the single-layer case they
-        // are the same number, so this is also the total-preserving arithmetic. The minimum is
-        // a STATIC on CompoundStructure in Revit 2025 — one host-wide floor in internal feet, not a
-        // per-structure question (the compiler corrected the instance-call assumption here).
         DrapeLayerDecision decision = DrapeLayering.Decide(
             originalMaterialId == materialId,
             structure.GetLayerWidth(0),
@@ -477,9 +288,6 @@ internal sealed partial class RevitBundleImporter
 
         if (decision.Verdict == DrapeLayerVerdict.AlreadyLayered)
         {
-            // Write nothing. This is the anti-stacking guarantee, now derived from the structure in
-            // front of us rather than from which import happens to be running — the terrain step
-            // earlier in this run, or an earlier import.
             Trace($"  drape: the photograph is already the top layer of \"{draped.Name}\", so its "
                 + $"structure was left alone ({DescribeLayers(structure, materialId)}).");
             layering = SidesClause(structure);
@@ -504,7 +312,6 @@ internal sealed partial class RevitBundleImporter
         structure.SetLayers(layers);
         draped.SetCompoundStructure(structure);
 
-        // Read back what Revit stored, not what we asked for.
         CompoundStructure written = draped.GetCompoundStructure();
         if (written is null || written.LayerCount == 0)
         {
@@ -523,9 +330,6 @@ internal sealed partial class RevitBundleImporter
 
         if (!DrapeLayering.ImageryIsTopAndOnly(wearsImagery))
         {
-            // Reported, not gated: nobody has watched this API behave, and turning an unobserved
-            // read into a new refusal path is how a working drape gets declined for a reason nobody
-            // can diagnose. The read-back's job is to make the next run's log say so.
             Trace("  drape: ⚠ the imagery material is NOT on layer 0 alone — the photograph may reach "
                 + "a vertical face. Please report this log.");
         }
@@ -534,20 +338,11 @@ internal sealed partial class RevitBundleImporter
         return true;
     }
 
-    /// <summary>
-    /// What a layered imagery type does for the terrain's vertical faces, as a curator reads it.
-    /// </summary>
-    /// <remarks>
-    /// One sentence whether this run split the layer or found it split: the terrain step now does
-    /// the split on a first import, so the drape step's summary would otherwise describe the
-    /// mechanism only on the path that has become rare.
-    /// </remarks>
     private static string SidesClause(CompoundStructure structure)
         => $"the photograph is a {Mm(structure.GetLayerWidth(0))} layer on top of the terrain's "
             + $"own {Mm(structure.GetWidth() - structure.GetLayerWidth(0))}, so its sides keep the "
             + "material they had";
 
-    /// <summary>A compound structure's layers as one log line, with the imagery layer called out.</summary>
     private string DescribeLayers(CompoundStructure structure, ElementId materialId)
     {
         List<DrapeLayerLine> lines = [];
@@ -565,7 +360,6 @@ internal sealed partial class RevitBundleImporter
         return DrapeLayering.Describe(lines);
     }
 
-    /// <summary>An internal-feet thickness as the millimetres a curator judges it in.</summary>
     private static string Mm(double internalFeet)
         => string.Create(
             CultureInfo.InvariantCulture,

@@ -4,24 +4,17 @@ using System.Text.Json;
 
 namespace MantlePlace.Core;
 
-/// <summary>Why a cached bundle is not usable.</summary>
 public enum CacheInvalidReason
 {
-    /// <summary>It is usable.</summary>
     None,
     Missing,
     SizeMismatch,
     Sha256Mismatch,
     ManifestTooOld,
 
-    /// <summary>
-    /// The zip on disk was fetched for another host, at another level, or before the slot recorded
-    /// either. For the host asking it is a miss, not damage.
-    /// </summary>
     NotThisSlot,
 }
 
-/// <summary>What the UI shows for a cache entry.</summary>
 public enum CacheState
 {
     NotCached,
@@ -29,14 +22,6 @@ public enum CacheState
     CachedStale,
 }
 
-/// <summary>The verdict on one cached file.</summary>
-/// <param name="IsValid">Whether it can be imported.</param>
-/// <param name="Reason">Why not, when it cannot.</param>
-/// <param name="IntegrityChecked">
-/// Whether a hash comparison was actually PERFORMED. Valid-and-unchecked is a real, common and
-/// honest state; reporting it as verified is a lie and reporting it as corrupt makes every legacy
-/// bundle un-openable.
-/// </param>
 public readonly record struct CacheVerdict(bool IsValid, CacheInvalidReason Reason, bool IntegrityChecked)
 {
     public CacheState State(bool fileExists) => !fileExists || Reason == CacheInvalidReason.NotThisSlot
@@ -44,30 +29,8 @@ public readonly record struct CacheVerdict(bool IsValid, CacheInvalidReason Reas
         : IsValid ? CacheState.CachedValid : CacheState.CachedStale;
 }
 
-/// <summary>⛔<c>HPS-27</c>: is this cached bundle usable, and was it verified?</summary>
 public static class CacheValidity
 {
-    /// <summary>
-    /// Decides in the fixed precedence: missing → size → hash → manifest floor → valid.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>A null expected hash means <em>unknown</em>, not <em>absent</em>.</b> When no hash was
-    /// advertised, or none could be computed, the integrity check is simply not performed: the entry
-    /// is valid but UNVERIFIED, and the host says which. That is the single row this whole table
-    /// exists for — "unknown" and "corrupt" look identical to a naive implementation and have
-    /// opposite correct responses.
-    /// </para>
-    /// <para>
-    /// Size is checked before the hash because it is the cheapest discriminator, and it holds even
-    /// when the hash legs are unknown: a file that is demonstrably the wrong length is wrong,
-    /// whatever nobody knows about its digest.
-    /// </para>
-    /// </remarks>
-    /// <param name="computedSha256">Empty when nothing was computed.</param>
-    /// <param name="expectedSha256"><c>null</c> when the platform advertised none.</param>
-    /// <param name="expectedSizeBytes"><c>null</c> when the platform advertised none.</param>
-    /// <param name="manifestVersion"><c>null</c> when unknown — never a reason to refuse.</param>
     public static CacheVerdict Decide(
         bool fileExists,
         long onDiskSizeBytes,
@@ -86,18 +49,12 @@ public static class CacheValidity
             return new CacheVerdict(false, CacheInvalidReason.SizeMismatch, IntegrityChecked: false);
         }
 
-        // Both halves must be present for a comparison to mean anything. Either one missing is the
-        // valid-but-unverified path, NOT a mismatch.
         bool comparable = !string.IsNullOrWhiteSpace(computedSha256) && !string.IsNullOrWhiteSpace(expectedSha256);
         if (comparable && !Sha256Digest.Equal(computedSha256, expectedSha256))
         {
             return new CacheVerdict(false, CacheInvalidReason.Sha256Mismatch, IntegrityChecked: true);
         }
 
-        // Across the era break this is not a numeric comparison any more: a sidecar written before
-        // the MPB re-baseline carries an integer-era version, and the whole integer era sorts below
-        // the semver floor. `null` still means UNKNOWN and is never a reason to refuse (HPS-20) — a
-        // legacy sidecar that reported nothing is not treated as reporting something old.
         if (manifestVersion is { } version
             && ManifestVersion.IsBelowFloor(version, ManifestVersions.MinSupportedManifestVersion))
         {
@@ -108,76 +65,34 @@ public static class CacheValidity
     }
 }
 
-/// <summary>
-/// What the plugin remembers about a downloaded bundle, written beside it as <c>cache.json</c>.
-/// </summary>
-/// <remarks>
-/// The sidecar exists because the vault listing that carried the integrity facts is not available
-/// offline, and a curator opening Revit on a plane must still be told whether the bundle on their
-/// disk was verified when it arrived. Every field is what the platform said at download time, not a
-/// re-derivation.
-/// </remarks>
 public sealed class CacheSidecar
 {
-    /// <summary>The RAW order id, before <c>HPS-30</c> sanitisation — the directory name is lossy.</summary>
     public required string OrderId { get; init; }
 
     public string BundleFileName { get; init; } = BundleCacheFileNames.Bundle;
 
     public long SizeBytes { get; init; }
 
-    /// <summary><c>null</c> means the platform advertised no digest, NOT that the file has none.</summary>
     public string? Sha256 { get; init; }
 
-    /// <summary>
-    /// Manifest version recorded for the cached bundle; <c>null</c> when the sidecar reported none.
-    /// </summary>
-    /// <remarks>
-    /// A string spanning both families: a bundle cached before the MPB re-baseline recorded the
-    /// integer era's "19", one cached after records "1.0.0".
-    /// </remarks>
     public string? ManifestVersion { get; init; }
 
     public string DownloadedAtUtc { get; init; } = string.Empty;
 
-    /// <summary>Whether a hash comparison was performed at download time (<c>HPS-27</c>).</summary>
     public bool IntegrityChecked { get; init; }
 
-    /// <summary>Whether the zip is Revit's download view of a complete order rather than the whole archive.</summary>
-    /// <remarks>
-    /// The vault listing's size and digest describe the whole archive, so they never describe a
-    /// view: a cache that compared a view against them would call every view the wrong size and
-    /// download it again on each import. A view is checked against what was recorded when it
-    /// arrived instead, and the files inside it against the manifest's own digests at import.
-    /// </remarks>
     public bool HoldsView { get; init; }
 
-    /// <summary>
-    /// The host the download was fetched for (<c>HostIdentity.Id</c>); <c>null</c> in a sidecar written
-    /// before the slot recorded it.
-    /// </summary>
-    /// <remarks>
-    /// The Revit and AutoCAD plugins share one cache folder, and a host's download view holds only that
-    /// host's files, so a zip fetched for one is never a hit for the other.
-    /// </remarks>
     public string? Host { get; init; }
 
-    /// <summary>
-    /// The level the download was fetched at; <c>null</c> in a sidecar written before the slot recorded it.
-    /// </summary>
     public string? Level { get; init; }
 
-    /// <summary>
-    /// Whether this download is the slot a <paramref name="host"/> asking at <paramref name="level"/>
-    /// reads: the same host and the same level, both recorded. A sidecar that recorded neither is a miss.
-    /// </summary>
     public bool IsSlotOf(string host, string level)
         => Host is not null && Level is not null
             && string.Equals(Host, host, StringComparison.Ordinal)
             && string.Equals(Level, level, StringComparison.Ordinal);
 }
 
-/// <summary>The four names a bundle's cache directory holds. Corpus <c>cache.keySanitisation.fileNames</c>.</summary>
 public static class BundleCacheFileNames
 {
     public const string Bundle = "bundle.zip";
@@ -185,7 +100,6 @@ public static class BundleCacheFileNames
     public const string Sidecar = "cache.json";
 }
 
-/// <summary>Reading and writing <c>cache.json</c>. Pure — the file I/O is the client's.</summary>
 public static class CacheSidecars
 {
     public static string Serialize(CacheSidecar sidecar)
@@ -203,7 +117,6 @@ public static class CacheSidecars
         json.Append("  \"downloadedAtUtc\": ").Append(Quote(sidecar.DownloadedAtUtc)).Append(",\n");
         json.Append("  \"integrityChecked\": ").Append(sidecar.IntegrityChecked ? "true" : "false");
 
-        // Written when recorded; an absent key reads back as null, which the slot treats as a miss.
         if (sidecar.Host is not null)
         {
             json.Append(",\n  \"host\": ").Append(Quote(sidecar.Host));
@@ -214,7 +127,6 @@ public static class CacheSidecars
             json.Append(",\n  \"level\": ").Append(Quote(sidecar.Level));
         }
 
-        // Written only for a view, so a whole-archive sidecar reads exactly as it always has.
         if (sidecar.HoldsView)
         {
             json.Append(",\n  \"view\": true");
@@ -225,10 +137,6 @@ public static class CacheSidecars
         return json.ToString();
     }
 
-    /// <summary>
-    /// Reads a sidecar. <c>null</c> when it is missing, unreadable or names no order — all of which
-    /// mean "nothing is remembered about this file", never "an error happened".
-    /// </summary>
     public static CacheSidecar? TryParse(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
@@ -257,13 +165,6 @@ public static class CacheSidecars
                 BundleFileName = root.Str("bundleFileName") is { Length: > 0 } name ? name : BundleCacheFileNames.Bundle,
                 SizeBytes = (long)(root.OptionalDouble("sizeBytes") ?? 0.0),
                 Sha256 = root.OptionalStr("sha256"),
-                // The sidecar is OUR cache format, not the manifest contract, and sidecars written
-                // by the shipped plugin are on users' disks right now with this field as a JSON
-                // NUMBER. Reading both shapes is not the dual-parsing HPS-31 forbids — that rule
-                // governs the manifest — and the alternative is worse: the version would read as
-                // "unknown", the entry would stay VALID, and a pre-MPB bundle would sit in the
-                // cache looking importable only to be refused at import. Stringifying the old
-                // number lets it sort below the floor and invalidate honestly, re-downloading once.
                 ManifestVersion = root.OptionalStr("manifestVersion")
                     ?? root.OptionalInt("manifestVersion")?.ToString(CultureInfo.InvariantCulture),
                 DownloadedAtUtc = root.Str("downloadedAtUtc"),

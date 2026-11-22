@@ -10,7 +10,6 @@
 AMantlePlaceExtentBox::AMantlePlaceExtentBox(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// A marker for the curator handoff: nothing about it belongs in a cooked build.
 	bIsEditorOnlyActor = true;
 
 	Bounds = CreateDefaultSubobject<UBoxComponent>(TEXT("Bounds"));
@@ -32,8 +31,6 @@ FMantlePlaceExtentBoxState AMantlePlaceExtentBox::GetState() const
 	State.CenterLatitude = CenterLatitude;
 	if (Bounds != nullptr)
 	{
-		// Scaled by the component's world transform, so scaling the actor in the level is what sizes it.
-		// Unreal units are centimetres; the box's extent is a half-size.
 		const FVector Half = Bounds->GetScaledBoxExtent();
 		State.WidthM = 2.0 * Half.X / 100.0;
 		State.DepthM = 2.0 * Half.Y / 100.0;

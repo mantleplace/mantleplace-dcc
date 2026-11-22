@@ -1,4 +1,3 @@
-// UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
 using System.IO;
 using System.Reflection;
 using Autodesk.Revit.DB;
@@ -7,51 +6,12 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// The planting step: one instance per published tree point, of the Planting family its foliage type
-// names, in chunks, each stamped — or, when that family cannot be had, the DirectShape it replaced.
 internal sealed partial class RevitBundleImporter
 {
-    /// <summary>The embedded tree family, as <c>MantlePlace.Revit.Addin.csproj</c> names the resource.</summary>
     private const string TreeFamilyResource = "MantlePlace.Revit.Addin.Families.MantlePlaceTree.rfa";
 
-    /// <summary>The embedded shrub family, as <c>MantlePlace.Revit.Addin.csproj</c> names the resource.</summary>
     private const string ShrubFamilyResource = "MantlePlace.Revit.Addin.Families.MantlePlaceShrub.rfa";
 
-    /// <summary>
-    /// Tree points as instances of the Planting family their published foliage type names —
-    /// <see cref="TreeFamily"/> or <see cref="ShrubFamily"/> — sized per instance from the CSV, created
-    /// in chunks, each stamped with its row.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The tree-points file carries <c>height_m</c> and <c>crown_radius_m</c> per point, and both are
-    /// written to the instance verbatim — the family's height parameter and
-    /// <see cref="TreeFamily.CrownRadiusParameter"/> — so a tree point is a Planting element a curator
-    /// can schedule, filter, resize and hand to a renderer, rather than anonymous geometry. When a
-    /// family cannot be loaded, <see cref="TreeFamilyChoice"/> falls back to the DirectShapes the step
-    /// built before it, at the same size and place, and the log says so. Anything Revit refuses to
-    /// build is counted and reported; one bad row must not cost the curator the other forty-three.
-    /// </para>
-    /// <para>
-    /// <b>Each family decides its own fallback.</b> A shrub family that will not load builds the shrubs
-    /// as DirectShapes and leaves the trees where their own family put them, and the shrub family is
-    /// loaded only when at least one shrub will be created. Rows stay in file order across both, so a
-    /// chunk that fails leaves the same clean prefix of rows behind whichever families it held.
-    /// </para>
-    /// <para>
-    /// ⛔ <b>One transaction per chunk, and a yield after each commit.</b> The whole layer used to be
-    /// one transaction, so the largest bundles' tens of thousands of trees were one uninterruptible
-    /// call. Each yield hands Revit its message loop back (<see cref="StagedImport"/>): the import
-    /// window moves, and a Cancel stops the step at the next boundary with every committed chunk
-    /// kept. Nothing may yield inside a transaction — the commit comes first, in
-    /// <see cref="CreateTreeChunk"/>, which is a separate method so that it cannot.
-    /// </para>
-    /// <para>
-    /// A cancelled chunk's points are kept, so every point carries its stamp
-    /// (<see cref="TreeIdentity"/>) and a re-import of the same build creates only what is missing —
-    /// whichever path, and whichever plugin, built the points already there.
-    /// </para>
-    /// </remarks>
     private IEnumerable<StepProgress> ImportVegetation(ImportStep step)
     {
         if (step.Frame is not { } frame || HeightsRefused(step))
@@ -60,12 +20,6 @@ internal sealed partial class RevitBundleImporter
         }
 
         string csvPath = _archive.Extract(step.EntryName, step.Lifetime, step.ExpectedSha256);
-        // The vocabulary rides on the step because the manifest owns what the CSV's foliage values
-        // mean; the parse maps them, and nothing reads a point's size to decide one. The frame rides
-        // there too: a 3.x file is local offsets with its heights above the site origin's, and the
-        // step carries the origin's height, so the parse applies both as published and stands the
-        // points where the toposolid and the roads are. A 2.x step states neither, and the parse
-        // reads the file as absolute in the delivery CRS.
         TreePointsParse parse = TreePointsReader.Parse(
             File.ReadAllText(csvPath),
             frame,
@@ -80,7 +34,6 @@ internal sealed partial class RevitBundleImporter
             yield break;
         }
 
-        // Said once each, about the file as a whole, before anything is built.
         foreach (string note in parse.Notes)
         {
             Say(note);
@@ -98,13 +51,9 @@ internal sealed partial class RevitBundleImporter
             yield break;
         }
 
-        // A point Revit cannot build is left out before the chunks are cut, so it cannot take a chunk's
-        // transaction down with it; it is unstamped, so a re-import meets it again and says so again.
         List<int> rows = [.. decision.RowsToCreate.Where(row => PlantingFamilies.Fits(points[row]))];
         int unbuildable = decision.RowsToCreate.Count - rows.Count;
 
-        // A family is prepared only if a row will use it, so a bundle with no shrubs never loads the
-        // shrub family, and each decides its own fallback.
         PlantingGeometry geometry = new(
             rows.Any(row => points[row].FoliageType == FoliageType.Tree) ? PrepareGeometry(FoliageType.Tree) : TreeGeometry.None,
             rows.Any(row => points[row].FoliageType == FoliageType.Shrub) ? PrepareGeometry(FoliageType.Shrub) : TreeGeometry.None);
@@ -117,8 +66,6 @@ internal sealed partial class RevitBundleImporter
             TreeChunkResult result = CreateTreeChunk(geometry, points, rows, chunk, stem, step.ExpectedSha256);
             if (!result.Committed)
             {
-                // The swallower already said why, and the rollback took this chunk. The chunks before
-                // it stand, stamped; a re-import of this build picks up from here.
                 Say($"Stopped the tree points after {total.Trees + total.Shrubs:N0} of {rows.Count:N0}: Revit did not accept a chunk.");
                 yield break;
             }
@@ -146,14 +93,12 @@ internal sealed partial class RevitBundleImporter
             UnknownFoliageValues = parse.UnknownFoliageValues,
         }));
 
-        // The level read, and what an earlier import at a higher level placed and this one kept.
         string levelSentence = FidelityCuts.RowCutSentence(step.Level, decision.KeptAboveLevel);
         if (levelSentence.Length > 0)
         {
             Say(levelSentence);
         }
 
-        // Informational: the reused rows are left as they are, and the checklist stays green.
         string mismatches = TreeIdentity.FoliageMismatchNote(
             TreeIdentity.FoliageMismatches(existing, stem, step.ExpectedSha256, points),
             stem,
@@ -164,40 +109,24 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>What one family's rows build with: a family type on a level, or DirectShapes on a category.</summary>
     private readonly record struct TreeGeometry(FamilySymbol? Symbol, Level? Level, ElementId Category)
     {
         internal static TreeGeometry None => new(null, null, ElementId.InvalidElementId);
 
-        /// <summary>Family instances; otherwise DirectShapes on <see cref="Category"/>.</summary>
         internal bool IsFamily => Symbol is not null && Level is not null;
     }
 
-    /// <summary>Each foliage type's geometry, decided separately.</summary>
     private readonly record struct PlantingGeometry(TreeGeometry Tree, TreeGeometry Shrub)
     {
         internal TreeGeometry For(FoliageType foliage) => foliage == FoliageType.Shrub ? Shrub : Tree;
     }
 
-    /// <summary>What one chunk's transaction did, or, summed, what the whole step did.</summary>
     private readonly record struct TreeChunkResult(bool Committed, int Trees, int Shrubs, int Unstamped, int Unsized)
     {
         internal TreeChunkResult Add(TreeChunkResult other) => new(
             true, Trees + other.Trees, Shrubs + other.Shrubs, Unstamped + other.Unstamped, Unsized + other.Unsized);
     }
 
-    /// <summary>
-    /// One foliage type's family and the level to host it — loaded into the project if it is not
-    /// there yet — or the DirectShape fallback, with the reason said.
-    /// </summary>
-    /// <remarks>
-    /// A family already in the project under the name is used as it stands and never reloaded over:
-    /// a curator may have given its type a render substitution or a material, and a reload is how
-    /// that work would be lost. The cost is that a later build's family never replaces an earlier one
-    /// in a project that has it; the curator reloads it by hand, which the README says.
-    /// <see cref="TreeFamilyChoice"/> still checks it carries the parameters
-    /// this step writes, because a family of that name is not proof it is this one.
-    /// </remarks>
     private TreeGeometry PrepareGeometry(FoliageType foliage)
     {
         Family? family = TreeInstances.Find(_document, PlantingFamilies.FamilyName(foliage));
@@ -230,15 +159,6 @@ internal sealed partial class RevitBundleImporter
             ElementId.InvalidElementId);
     }
 
-    /// <summary>
-    /// Loads the family this assembly carries for a foliage type. Returns why not, or <c>null</c> on
-    /// success.
-    /// </summary>
-    /// <remarks>
-    /// The <c>.rfa</c> travels inside the assembly, so an add-in that loaded has its family and no
-    /// installer or package step can drop it. <see cref="FamilyFileStore"/> puts it on disk under the
-    /// family's name for this build; only the load itself is Revit's.
-    /// </remarks>
     private string? LoadFamily(FoliageType foliage, out Family? family)
     {
         family = null;
@@ -281,7 +201,6 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>Creates, stamps and commits one chunk of tree points, of either foliage type.</summary>
     private TreeChunkResult CreateTreeChunk(
         PlantingGeometry geometry,
         IReadOnlyList<SiteTreePoint> points,
@@ -320,8 +239,6 @@ internal sealed partial class RevitBundleImporter
             shrubs += isShrub ? 1 : 0;
             unsized += sized ? 0 : 1;
 
-            // Comments is the point's identity for the NEXT import. A point it could not stamp is kept
-            // — it is real — and cannot be recognised later, which the summary says.
             Parameter? comments = element.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS);
             if (comments is null || comments.IsReadOnly || !comments.Set(TreeIdentity.Stamp(stem, sha256, row + 1)))
             {
@@ -334,9 +251,6 @@ internal sealed partial class RevitBundleImporter
             : new TreeChunkResult(false, 0, 0, 0, 0);
     }
 
-    /// <summary>
-    /// One tree point by whichever path its family is on, or <c>null</c> when Revit refused it.
-    /// </summary>
     private Element? CreateTreePoint(TreeGeometry geometry, SiteTreePoint point, out bool sized)
     {
         sized = true;
@@ -360,10 +274,6 @@ internal sealed partial class RevitBundleImporter
             : null;
     }
 
-    /// <summary>
-    /// Every element that might be a tree point: the Planting family instances, with their family's
-    /// name, and every DirectShape — which has none — for the points a fallback built.
-    /// </summary>
     private List<ExistingTreePoint> ExistingTreePoints()
     {
         using FilteredElementCollector instances = new(_document);
@@ -378,12 +288,6 @@ internal sealed partial class RevitBundleImporter
                     instance.Symbol?.Family?.Name)))];
     }
 
-    /// <summary>
-    /// The Comments of every DirectShape in the project. Whatever is not a tree stamp is ignored by
-    /// <see cref="TreeIdentity"/>, and whatever is not a road stamp by <see cref="RoadIdentity"/>, so
-    /// there is no category filter here to get wrong when a Revit without a Planting or Roads
-    /// DirectShape category files them under Generic Model.
-    /// </summary>
     private List<string?> ExistingDirectShapeComments()
     {
         using FilteredElementCollector collector = new(_document);
@@ -392,16 +296,6 @@ internal sealed partial class RevitBundleImporter
             .Select(element => element.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString())];
     }
 
-    /// <summary>
-    /// The tree fallback: a trunk and a tapered crown, both at the published dimensions, in the
-    /// proportions the family's own formulas use.
-    /// </summary>
-    /// <remarks>
-    /// Two extrusion-family primitives rather than one revolve: a blend between two circles is a
-    /// truncated cone whose behaviour is unambiguous, where a revolved silhouette depends on which
-    /// of the frame's axes Revit reads as the axis of revolution. The crown's top radius is a small
-    /// fraction of its base rather than zero, because a degenerate loop is not a curve loop.
-    /// </remarks>
     private List<GeometryObject>? BuildTreeGeometry(SiteTreePoint tree)
     {
         double height = MetresToInternal(tree.HeightM);
@@ -433,10 +327,6 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>
-    /// The shrub fallback: the family's dome as two stacked blends, at the published dimensions, in
-    /// <see cref="ShrubFamily"/>'s proportions.
-    /// </summary>
     private List<GeometryObject>? BuildShrubGeometry(SiteTreePoint shrub)
     {
         double height = MetresToInternal(shrub.HeightM);
@@ -466,7 +356,6 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>A horizontal circle as two half-arcs — the shape Revit's curve loops want.</summary>
     private static CurveLoop Circle(XYZ centre, double radius) => CurveLoop.Create(
     [
         Arc.Create(centre, radius, 0.0, Math.PI, XYZ.BasisX, XYZ.BasisY),

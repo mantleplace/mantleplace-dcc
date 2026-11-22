@@ -6,16 +6,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// A complete order imports from the vault without a Prepare: the route one materialize start
-/// decides, the download view's request and response, and the view held in the cache and opened.
-/// </summary>
-/// <remarks>
-/// The wire shapes below are the platform's own: the no-op and the <c>503 delivery_state_unknown</c>
-/// of the materialize start, and the host-view response of <c>POST …/download</c>, whose
-/// <c>view</c> block, <c>sizeBytes</c> and <c>manifestSha256</c> are what a complete bundle answers
-/// and a bundle stored as one zip does not.
-/// </remarks>
 internal static class CompleteOrderTests
 {
     private const string OrderId = "3f285101-0310-425b-b06b-bdb73b025b6a";
@@ -54,8 +44,6 @@ internal static class CompleteOrderTests
 
         return run.Report("complete orders");
     }
-
-    // ------------------------------------------------------------------ the start decides the route
 
     private static void RouteCases(TestRun run)
     {
@@ -101,7 +89,6 @@ internal static class CompleteOrderTests
             run.Contains(decision.Message, "Down for maintenance", "the platform's message");
         });
 
-        // Every on-demand outcome: a job started, joined, coalesced, or running unnamed.
         (string Name, int Status, string Body)[] onDemand =
         [
             ("201 started", 201, """{"jobId":"job-1","tokens":["buildings.ifc"]}"""),
@@ -146,8 +133,6 @@ internal static class CompleteOrderTests
         });
     }
 
-    // ------------------------------------------------------------------ the view request
-
     private static void RequestCases(TestRun run)
     {
         run.Case("the download request asks for host revit, MAX at every entry, as the whole-bundle format", () =>
@@ -164,8 +149,6 @@ internal static class CompleteOrderTests
             run.Equal(levels.GetProperty("*").GetString(), "MAX", "every entry at MAX, which holds every cut level");
         });
     }
-
-    // ------------------------------------------------------------------ the view response
 
     private static void ResponseCases(TestRun run)
     {
@@ -201,8 +184,6 @@ internal static class CompleteOrderTests
         });
     }
 
-    // ------------------------------------------------------------------ what to fetch
-
     private static void DecisionCases(TestRun run)
     {
         string[] withTrees = ["landcover.tree_points_csv", "elevation.points_csv"];
@@ -215,8 +196,6 @@ internal static class CompleteOrderTests
 
         run.Case("a view without the tree points the order delivered fetches the whole bundle instead", () =>
         {
-            // Today's platform: the host view holds hosts.revit's files only, and the tree points
-            // live outside that block.
             HostViewLink link = Parse(ViewResponse(false, "elevation.points_csv@MAX", "revit_vectors"));
             run.True(HostViews.Decide(link, withTrees) == ViewFetch.WholeBundleInstead, "the whole bundle");
             run.Equal(HostViews.MissingFrom(link.Parts, withTrees).Count, 1, "one file would go missing");
@@ -248,8 +227,6 @@ internal static class CompleteOrderTests
 
         run.Case("no view block after a 503 delivery_state_unknown: unproven, so the Prepare follows it", () =>
         {
-            // Only a view block proves a complete order when the start proved nothing. An on-demand
-            // order's single zip is not imported on the strength of an unreadable delivery state.
             HostViewLink link = Parse("""{"url":"https://r2.example/z.zip","expiresAt":"","view":null}""");
             run.True(HostViews.Decide(link, null) == ViewFetch.Prepare, "Prepare");
         });
@@ -260,8 +237,6 @@ internal static class CompleteOrderTests
             run.Equal(HostViews.TokenOfPart("revit_vectors"), "revit_vectors", "a tokenless part is its own id");
         });
     }
-
-    // ------------------------------------------------------------------ the view in the cache
 
     private static void CacheCases(TestRun run, string sandbox)
     {
@@ -274,7 +249,6 @@ internal static class CompleteOrderTests
             string? error = PromoteView(cache, bytes, LocalBundleArchive.ManifestSha256(zip)).GetAwaiter().GetResult();
             run.Equal(error, null, "promoted");
 
-            // The listing describes the 441 MB archive, not this view.
             CacheEntry entry = cache.Inspect(OrderId, 441_349_052L, new string('b', 64), ManifestVersions.MinSupportedManifestVersion);
             run.True(entry.State == CacheState.CachedValid, "still importable, not 'the wrong size'");
             run.True(entry.Sidecar?.HoldsView == true, "the sidecar says it is a view");
@@ -302,12 +276,8 @@ internal static class CompleteOrderTests
         });
     }
 
-    // ------------------------------------------------------------------ the view opened
-
     private static void ViewArchiveCases(TestRun run, string sandbox)
     {
-        // Both layouts, because a vault holds both: a bundle keeps the version it was cut at, and 2.0
-        // moves every file this view names (spec/changelog.md, 2.0.0).
         foreach (ViewLayout layout in new[] { ViewLayout.One, ViewLayout.Two })
         {
             run.Case($"{layout.Name}: a view whose manifest names parts the zip does not hold imports with no integrity refusal", () =>
@@ -330,8 +300,6 @@ internal static class CompleteOrderTests
             });
         }
     }
-
-    // ------------------------------------------------------------------ fixtures
 
     private static HostViewLink Parse(string body)
     {
@@ -358,16 +326,11 @@ internal static class CompleteOrderTests
             holdsView: true,
             expectedManifestSha256: manifestSha256);
 
-    /// <summary>
-    /// Where one manifest major puts the files a view names: the terrain points it holds, and the mesh
-    /// and land-cover parts it leaves out.
-    /// </summary>
     private sealed record ViewLayout(string Name, int Major, string Version, string PointsCsv, string[] LeftOut, string Extra)
     {
         internal static readonly ViewLayout One = new(
             "1.x", 1, "1.0.0", "Surface/SurfacePoints.csv", ["Mesh/Terrain.glb", "Mesh/Terrain.MED.glb", "Landcover/LandCover.tif"], string.Empty);
 
-        /// <summary>The 2.0 layout: folders renamed, a level as a qualifier, and the members 2.0 requires.</summary>
         internal static readonly ViewLayout Two = new(
             "2.0", 2, "2.0.0", "Elevation/SurfacePoints.csv", ["Elevation/Terrain.glb", "Elevation/Terrain-Med.glb", "LandCover/LandCover.tif"],
             """
@@ -378,10 +341,6 @@ internal static class CompleteOrderTests
             """);
     }
 
-    /// <summary>
-    /// A view the way the platform cuts one: Revit's terrain points and the whole-bundle manifest,
-    /// whose <c>files</c> block still names the mesh and land-cover parts the view left out.
-    /// </summary>
     private static string WriteViewZip(string zipPath) => WriteViewZip(zipPath, ViewLayout.One);
 
     private static string WriteViewZip(string zipPath, ViewLayout layout)

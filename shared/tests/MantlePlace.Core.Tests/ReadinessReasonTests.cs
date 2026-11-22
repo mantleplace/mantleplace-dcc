@@ -2,11 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// <c>dcc_readiness.&lt;host&gt;.&lt;path&gt;.reason</c> is an OPEN vocabulary until manifest v19
-/// closes it, and <c>HPS-36</c> requires the manifest's own reason to be surfaced rather than
-/// replaced. Surfacing it and printing it verbatim are not the same thing.
-/// </summary>
 internal static class ReadinessReasonTests
 {
     internal static int Run()
@@ -15,7 +10,6 @@ internal static class ReadinessReasonTests
 
         run.Case("the five closed-set tokens each get their own sentence", () =>
         {
-            // NOT_DELIVERED_REASONS, the bounded half of the vocabulary.
             foreach (string token in new[]
                      {
                          "no_features_in_aoi",
@@ -43,7 +37,6 @@ internal static class ReadinessReasonTests
 
         run.Case("a curator choice reads as a choice, not as a failure", () =>
         {
-            // "You didn't order this" and "we couldn't make it" are different sentences.
             string? clause = ReadinessReasons.ClauseFor("deselected_by_packaging_selection");
             run.True(clause is not null, "recognised");
             run.False(clause!.Contains("could not", StringComparison.OrdinalIgnoreCase), "not phrased as a failure");
@@ -51,8 +44,6 @@ internal static class ReadinessReasonTests
 
         run.Case("emit_threw:<stage> is matched on its prefix and the stage never reaches prose", () =>
         {
-            // The defect this guards: a raw internal stage token shown to a human as if it
-            // were an explanation. The prefix is bounded even though the suffix is not.
             string? clause = ReadinessReasons.ClauseFor("emit_threw:mesh_stage_3");
             run.True(clause is not null, "recognised by prefix");
             run.False(clause!.Contains("mesh_stage_3", StringComparison.Ordinal), "the stage token is not in the clause");
@@ -68,9 +59,6 @@ internal static class ReadinessReasonTests
 
         run.Case("a reason that is not token-shaped is reported WITHOUT quoting it", () =>
         {
-            // A sidecar that captured an exception message instead of a token must not dump a
-            // paragraph into a TaskDialog — but the fact that the bundle gave a reason at all is
-            // still worth saying, so the clause survives and only the payload is dropped.
             foreach (string notAToken in new[]
                      {
                          new string('x', 4000),

@@ -1,5 +1,3 @@
-"""The drift report: what the scheduled job files when the published schema is ahead of the pins."""
-
 from __future__ import annotations
 
 import json

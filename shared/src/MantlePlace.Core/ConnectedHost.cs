@@ -2,18 +2,6 @@ using System.Text.Json;
 
 namespace MantlePlace.Core;
 
-/// <summary>
-/// The presence entry this plugin announces on the curator's private channel, one per launch of this plugin
-/// (export protocol 1: the platform export contract, section 2).
-/// </summary>
-/// <param name="Protocol">The wire protocol this plugin speaks.</param>
-/// <param name="Host">The host id; always <c>revit</c> here.</param>
-/// <param name="HostVersion">The Revit version, as Revit states it.</param>
-/// <param name="PluginVersion">This plugin's version.</param>
-/// <param name="Document">The open document's title, or <c>null</c> when none is open.</param>
-/// <param name="Machine">The machine name the curator sees beside the host.</param>
-/// <param name="ReadsMin">The lowest bundle manifest version this plugin reads.</param>
-/// <param name="ReadsMaxMajor">The newest bundle manifest major this plugin reads.</param>
 public readonly record struct ConnectedHost(
     int Protocol,
     string Host,
@@ -24,10 +12,6 @@ public readonly record struct ConnectedHost(
     string ReadsMin,
     int ReadsMaxMajor)
 {
-    /// <summary>
-    /// The presence payload as the channel carries it: camelCase keys, <c>document</c> present and
-    /// <c>null</c> when no document is open, <c>reads</c> a nested object.
-    /// </summary>
     public string ToJson()
     {
         using MemoryStream stream = new();
@@ -59,28 +43,12 @@ public readonly record struct ConnectedHost(
     }
 }
 
-/// <summary>
-/// Builds the presence payload, and owns the connection id (the platform export contract,
-/// section 2).
-/// </summary>
-/// <remarks>
-/// <para>
-/// ⛔ <b>The manifest range is never written here.</b> <c>reads.min</c> is
-/// <see cref="ManifestVersions.MinSupportedManifestVersion"/> and <c>reads.maxMajor</c> is
-/// <see cref="HostIdentity.NewestImportedMajor"/>: the floor and the newest major the host imports,
-/// the same two a sent bundle is held to (<see cref="ExportBundles.CanRead"/>), so the web greys out
-/// exactly the bundles this host would refuse, and a range raised in one place moves in both.
-/// </para>
-/// </remarks>
 public static class ConnectedHosts
 {
-    /// <summary>The wire protocol this plugin speaks.</summary>
     public const int Protocol = 1;
 
-    /// <summary>The host id the platform's contract names for this plugin.</summary>
     public static string HostId => HostIdentity.Id;
 
-    /// <summary>The payload this plugin announces, for the document that is open (or none).</summary>
     public static ConnectedHost Announce(
         string hostVersion,
         string pluginVersion,
@@ -97,24 +65,8 @@ public static class ConnectedHosts
             HostIdentity.NewestImportedMajor);
 }
 
-/// <summary>
-/// A connection id: random, made once when the plugin loads, never written anywhere.
-/// </summary>
-/// <remarks>
-/// <para>
-/// One per launch of this plugin — not per sign-in, and not kept across launches — so an export addressed to
-/// a host that has since closed cannot find this one. It is the presence key and the only thing that
-/// scopes an export to a plugin, so it is treated as visible to every signed-in program of the
-/// curator, never as a secret.
-/// </para>
-/// <para>
-/// A source holds one id for its lifetime; <see cref="ThisLaunch"/> is the process's source. Tests
-/// make their own, which is how "stable within a launch, fresh across launches" is asserted.
-/// </para>
-/// </remarks>
 public sealed class ConnectionIdSource
 {
-    /// <summary>The contract bounds an id to 1 to 200 characters; this one is far inside it.</summary>
     public static string Prefix => HostIdentity.Id + "-";
 
     private static readonly Lazy<ConnectionIdSource> Process = new(() => new ConnectionIdSource());
@@ -124,9 +76,7 @@ public sealed class ConnectionIdSource
         Id = Prefix + Guid.NewGuid().ToString("N");
     }
 
-    /// <summary>The id of this source, the same on every read.</summary>
     public string Id { get; }
 
-    /// <summary>The process's source: its <see cref="Id"/> is this plugin launch's connection id.</summary>
     public static ConnectionIdSource ThisLaunch => Process.Value;
 }

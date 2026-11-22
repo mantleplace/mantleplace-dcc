@@ -19,12 +19,6 @@
 #include "Misc/Guid.h"
 #include "Misc/Paths.h"
 
-// A scripted import at a named level (the entry editor Python and an unattended gate call): the order's own
-// offer decides, a refusal comes before any request and says why, and what is asked for is what the import
-// window's Download asks for. The order is a test double of the vault listing's 3.0 row (the same shape
-// MantlePlace.Vault.Levels.Offer parses): three levels with sizes, no session, so a request is read and
-// answered "not signed in" rather than sent.
-
 namespace
 {
 FMantlePlaceLevelSize Size(const TCHAR* Level, int64 Bytes)
@@ -56,7 +50,6 @@ FMantlePlaceVaultItem TwoOrder(const FString& OrderId)
 	return Item;
 }
 
-/** One level request the vault client was asked to make. */
 struct FRequestedLevel
 {
 	FString OrderId;
@@ -64,7 +57,6 @@ struct FRequestedLevel
 	TArray<FString> Files;
 };
 
-/** An orchestrator with no session, a recorder on its events, and the level requests its client is asked for. */
 struct FScriptedFixture
 {
 	UMantlePlaceVaultImportOrchestrator* Orchestrator = nullptr;
@@ -75,7 +67,7 @@ struct FScriptedFixture
 	{
 		Orchestrator = NewObject<UMantlePlaceVaultImportOrchestrator>(GetTransientPackage());
 		Recorder = NewObject<UMantlePlaceScriptedLevelRecorder>(GetTransientPackage());
-		Orchestrator->Initialize(NewObject<UMantlePlaceAuthSystemBase>(Orchestrator)); // signed out, with nothing stored to renew from
+		Orchestrator->Initialize(NewObject<UMantlePlaceAuthSystemBase>(Orchestrator));
 		Orchestrator->OnImportPhase.AddDynamic(Recorder, &UMantlePlaceScriptedLevelRecorder::HandlePhase);
 		Orchestrator->OnImportFinished.AddDynamic(Recorder, &UMantlePlaceScriptedLevelRecorder::HandleFinished);
 		const TSharedRef<TArray<FRequestedLevel>> Sink = Requests;
@@ -99,7 +91,6 @@ struct FScriptedFixture
 	}
 };
 
-/** Make the order's cache slot hold a download at Level: a file where the bundle goes, and the sidecar that says which level. */
 void KeepLevelInSlot(const FMantlePlaceVaultItem& Item, const FString& Level)
 {
 	UMantlePlaceBundleCache* Cache = NewObject<UMantlePlaceBundleCache>(GetTransientPackage());
@@ -133,15 +124,13 @@ bool FMantlePlaceScriptedLevelRefusalTest::RunTest(const FString& Parameters)
 		TestEqual(FString::Printf(TEXT("%s is offered, so nothing is refused"), Level), FLogic::Refusal(Three, Level), FString());
 	}
 
-	// A level the order does not offer: named, with what it does offer.
-	const FString NotOffered = FLogic::Refusal(ThreeOrder(TEXT("order-3"), /*bOfferMin*/ false), TEXT("Min"));
+	const FString NotOffered = FLogic::Refusal(ThreeOrder(TEXT("order-3"), false), TEXT("Min"));
 	TestTrue(TEXT("A level the order lacks is refused, naming the level"), NotOffered.Contains(TEXT("does not offer the Min level")));
 	TestTrue(TEXT("and saying what it does offer"), NotOffered.Contains(TEXT("Max, Med")));
 	TestFalse(TEXT("A word that is not a level is refused"), FLogic::Refusal(Three, TEXT("Ultra")).IsEmpty());
 	TestFalse(TEXT("A level is case-sensitive, as the window's choice is"), FLogic::Refusal(Three, TEXT("min")).IsEmpty());
 	TestFalse(TEXT("A 2.x token is not a level"), FLogic::Refusal(Three, TEXT("RAW")).IsEmpty());
 
-	// Any level on a 2.x order: it has none, and its request is unchanged.
 	const FString TwoX = FLogic::Refusal(TwoOrder(TEXT("order-2")), TEXT("Med"));
 	TestTrue(TEXT("A 2.x order is refused, saying it is not an MPB 3.0 order"), TwoX.Contains(TEXT("not an MPB 3.0 order")));
 	TestTrue(TEXT("and where to import it"), TwoX.Contains(TEXT("StartVaultImport")));
@@ -149,7 +138,6 @@ bool FMantlePlaceScriptedLevelRefusalTest::RunTest(const FString& Parameters)
 	NoLevelsRead.Levels.Reset();
 	TestFalse(TEXT("A 3.0 row whose levels were not read offers none"), FLogic::Refusal(NoLevelsRead, TEXT("Med")).IsEmpty());
 
-	// An empty level stays StartVaultImport's recommendation.
 	const FString Empty = FLogic::Refusal(Three, FString());
 	TestTrue(TEXT("An empty level is refused, pointing at StartVaultImport"), Empty.Contains(TEXT("StartVaultImport")));
 	TestTrue(TEXT("and at the recommendation it takes"), Empty.Contains(TEXT("recommends")));
@@ -164,7 +152,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceScriptedLevelEntryTest::RunTest(const FString& Parameters)
 {
-	// --- Reachable from editor Python: reflected on the orchestrator, and the result carries the level ------
 	UClass* OrchestratorClass = UMantlePlaceVaultImportOrchestrator::StaticClass();
 	const UFunction* Start = OrchestratorClass->FindFunctionByName(TEXT("StartVaultImportAtLevel"));
 	if (TestNotNull(TEXT("StartVaultImportAtLevel is a reflected function"), Start))
@@ -185,7 +172,6 @@ bool FMantlePlaceScriptedLevelEntryTest::RunTest(const FString& Parameters)
 
 	const FString Unique = FGuid::NewGuid().ToString(EGuidFormats::Digits);
 
-	// --- Refused before any request, in words ---------------------------------------------------------------
 	{
 		FScriptedFixture Fixture;
 		const FMantlePlaceVaultItem Two = TwoOrder(TEXT("mpscriptedtwo") + Unique);
@@ -193,7 +179,7 @@ bool FMantlePlaceScriptedLevelEntryTest::RunTest(const FString& Parameters)
 			Fixture.Orchestrator->StartVaultImportAtLevel(Two, EMantlePlaceImportMode::Landscape, TEXT("unreal"), TEXT("Min")));
 		TestTrue(TEXT("with the reason, as an error phase"), Fixture.SawPhaseMessage(TEXT("Error"), TEXT("not an MPB 3.0 order")));
 
-		const FMantlePlaceVaultItem NoMin = ThreeOrder(TEXT("mpscriptednomin") + Unique, /*bOfferMin*/ false);
+		const FMantlePlaceVaultItem NoMin = ThreeOrder(TEXT("mpscriptednomin") + Unique, false);
 		TestFalse(TEXT("A level the order does not offer is refused"),
 			Fixture.Orchestrator->StartVaultImportAtLevel(NoMin, EMantlePlaceImportMode::Landscape, TEXT("unreal"), TEXT("Min")));
 		TestTrue(TEXT("with the reason"), Fixture.SawPhaseMessage(TEXT("Error"), TEXT("does not offer the Min level")));
@@ -210,7 +196,6 @@ bool FMantlePlaceScriptedLevelEntryTest::RunTest(const FString& Parameters)
 			FMantlePlaceScriptedLevelLogic::Refusal(Two, TEXT("Min")));
 	}
 
-	// --- A level the slot does not hold is requested, naming the level and Unreal's files -------------------
 	{
 		const FMantlePlaceVaultItem Item = ThreeOrder(TEXT("mpscriptedfresh") + Unique);
 		ClearSlot(Item);
@@ -226,7 +211,6 @@ bool FMantlePlaceScriptedLevelEntryTest::RunTest(const FString& Parameters)
 				Request.Files == FMantlePlaceManifestThreeLogic::RequestedFiles());
 		}
 		TestTrue(TEXT("The flow narrates the level it requests"), Fixture.SawPhaseMessage(TEXT("Downloading"), TEXT("Requesting the Min level")));
-		// No session: the request is read and answered "not signed in", through the flow's one failure.
 		TestEqual(TEXT("The import finished once"), Fixture.Recorder->FinishedCount, 1);
 		TestFalse(TEXT("unsuccessfully, as there is no session"), Fixture.Recorder->bFinishedSuccess);
 		TestTrue(TEXT("saying why"), Fixture.Recorder->Result.Message.Contains(TEXT("Not signed in")));
@@ -234,7 +218,6 @@ bool FMantlePlaceScriptedLevelEntryTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("and the orchestrator is free"), Fixture.Orchestrator->IsBusy());
 	}
 
-	// --- The slot holds Min: Min is reused, another level is requested --------------------------------------
 	{
 		const FMantlePlaceVaultItem Item = ThreeOrder(TEXT("mpscriptedkept") + Unique);
 		KeepLevelInSlot(Item, TEXT("Min"));
@@ -262,4 +245,4 @@ bool FMantlePlaceScriptedLevelEntryTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

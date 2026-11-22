@@ -1,4 +1,3 @@
-// UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -8,49 +7,12 @@ using Autodesk.Revit.DB.Visual;
 
 namespace MantlePlace.Revit.Addin;
 
-/// <summary>
-/// Renders the imported terrain under every candidate shading and drape arrangement, so that
-/// "smooth ground AND a correct photograph" is answered by images rather than by argument.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Diagnostic scaffolding in the <see cref="TerrainProbeCommand"/> tradition, gated behind
-/// <see cref="DirectoryVariable"/> so a curator clicking the probe button never runs it. Each
-/// experiment is applied inside a transaction group that is rolled back once the view has been
-/// exported, so nothing survives in the project; the PNGs beside the report are the whole output.
-/// </para>
-/// <para>
-/// The question it existed for, and the answer these experiments produced: Revit 2025's toposolid
-/// smooth shading removes the flat-triangle faceting, and it moves where a real-world-scaled
-/// bitmap's offset is measured from — the project origin under flat shading, the element's
-/// bounding-box corner under smooth. Two of the arrangements below attack the faceting from the
-/// other side — taking the directional light out of the view (<c>SunlightIntensity</c>), or making
-/// the photograph self-illuminating — so that per-face shading has nothing to show while the mapping
-/// is left exactly as it is. Those two are what established that the faceting is mapping rather than
-/// lighting. The rest establish the baseline and try the cheap variations under smoothing.
-/// </para>
-/// <para>
-/// ⛔ <b>An earlier version of this remark said smoothing "breaks the real-world-scaled bitmap into
-/// four quadrants" full stop.</b> It breaks a bitmap anchored to the <em>project origin</em> that
-/// way, which is what the plugin wrote at the time. Since the drape was re-anchored per element it
-/// is the other setting that breaks it, and into a different shape — see
-/// <c>docs/adr/0008-revit-drape-is-anchored-to-the-smooth-shading-origin.md</c>. The sentence
-/// survived here two weeks past the code it described, which is the argument for citing the ADR
-/// rather than restating its conclusion.
-/// </para>
-/// </remarks>
 internal static class DrapeRenderProbe
 {
-    /// <summary>Set to a directory to run this probe and write its renders there.</summary>
     internal const string DirectoryVariable = "MANTLEPLACE_PROBE_RENDER_DIR";
 
     private const int PixelSize = 1800;
 
-    /// <summary>One arrangement of the terrain, named for the PNG it produces.</summary>
-    /// <param name="Smoothed">The document-wide smooth-shading setting for this render, or null to leave it as found.</param>
-    /// <param name="Style">The view's display style for this render.</param>
-    /// <param name="Sunlight">A sunlight/shadow intensity override, or null to leave the view's.</param>
-    /// <param name="Tweak">A change to the material or type, applied inside the transaction.</param>
     private sealed record Experiment(
         string Name,
         string Description,
@@ -59,7 +21,6 @@ internal static class DrapeRenderProbe
         int? Sunlight,
         Action<Scene>? Tweak);
 
-    /// <summary>What every experiment is applied to.</summary>
     private sealed class Scene
     {
         internal required Document Document { get; init; }
@@ -162,7 +123,6 @@ internal static class DrapeRenderProbe
         report.AppendLine();
     }
 
-    /// <summary>The arrangements, in the order they are rendered. Material and type edits come last.</summary>
     private static IEnumerable<Experiment> Experiments()
     {
         yield return new("00-asis-realistic", "as found: nothing changed, Realistic — what the last import actually left", null, DisplayStyle.Realistic, null, null);
@@ -183,7 +143,6 @@ internal static class DrapeRenderProbe
         yield return new("15-off-realistic-bboxoffsets", "control: smoothing off with the same bounding-box-relative offsets", false, DisplayStyle.Realistic, null, BoundingBoxRelativeOffsets);
     }
 
-    /// <summary>Set to a comma-separated list of name prefixes to render only those experiments.</summary>
     internal const string OnlyVariable = "MANTLEPLACE_PROBE_RENDER_ONLY";
 
     private static IEnumerable<Experiment> Selected()
@@ -238,8 +197,6 @@ internal static class DrapeRenderProbe
 
                 experiment.Tweak?.Invoke(scene);
 
-                // Inside the transaction: Regenerate is a modification as far as Revit is concerned,
-                // and outside one it throws "Modification of the document is forbidden".
                 document.Regenerate();
 
                 TransactionStatus status = transaction.Commit();
@@ -304,7 +261,6 @@ internal static class DrapeRenderProbe
             $"      exported {written.Length} file(s) in {clock.Elapsed.TotalSeconds:N1} s: {names}");
     }
 
-    /// <summary>Two 3D views of the terrain alone: straight down, and oblique from the south-west.</summary>
     private static Scene BuildScene(
         Document document,
         Toposolid terrain,
@@ -386,10 +342,6 @@ internal static class DrapeRenderProbe
         };
     }
 
-    /// <summary>
-    /// Hides every model and annotation category except toposolids, so the renders show ground and
-    /// nothing else — the 39,739 tree solids in particular read as white speckle from above.
-    /// </summary>
     private static void HideEverythingButToposolids(Document document, View view)
     {
         foreach (Category category in document.Settings.Categories)
@@ -413,15 +365,10 @@ internal static class DrapeRenderProbe
             }
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException or ArgumentException)
             {
-                // A category that will not hide is one more thing in the picture, not a failure.
             }
         }
     }
 
-    /// <summary>
-    /// The ground toposolid with the highest id — the newest, where a project has been imported into
-    /// more than once and carries a stack of them — and every other toposolid in the project.
-    /// </summary>
     private static Toposolid? NewestGround(Document document, out List<Toposolid> others, StringBuilder report)
     {
         List<Toposolid> all = [.. new FilteredElementCollector(document)
@@ -464,10 +411,6 @@ internal static class DrapeRenderProbe
         });
     }
 
-    /// <summary>
-    /// Makes the drape emit the photograph rather than reflect it: luminance on, and the same bitmap
-    /// (copied, real-world placement included) connected to the self-illumination filter slot.
-    /// </summary>
     private static void SelfIlluminate(Scene scene, double luminance)
     {
         EditDrape(scene, (editable, bitmap) =>
@@ -518,18 +461,10 @@ internal static class DrapeRenderProbe
         scope.Commit(true);
     }
 
-    /// <summary>
-    /// The measured hypothesis: under smooth shading Revit measures a real-world texture offset from
-    /// the element's bounding-box minimum corner rather than from the project origin. So the ground
-    /// gets its offsets shifted by its own corner, and every subdivision gets a duplicate of the
-    /// drape material shifted by ITS corner, since one material cannot carry two offsets.
-    /// </summary>
     private static void BoundingBoxRelativeOffsets(Scene scene)
     {
         Document document = scene.Document;
 
-        // ⛔ Duplicate for the subdivisions BEFORE shifting the ground's own asset: a copy taken
-        // afterwards inherits the ground's already-shifted offsets and lands half an image out.
         List<(Toposolid Subdivision, Material Copy)> copies = [];
         int index = 0;
         foreach (ElementId subdivisionId in scene.Terrain.GetSubDivisionIds())
@@ -568,7 +503,6 @@ internal static class DrapeRenderProbe
         }
     }
 
-    /// <summary>Subtracts the element's bounding-box minimum from the bitmap's real-world offsets.</summary>
     private static void ShiftOffsets(Scene scene, Material material, Element element, string label)
     {
         BoundingBoxXYZ? box = element.get_BoundingBox(null);
@@ -615,10 +549,6 @@ internal static class DrapeRenderProbe
         return $"{propertyName} {wasMetres:0.0} -> {readBack:0.0} m";
     }
 
-    /// <summary>
-    /// The forum's lead: textures on a toposolid's STRUCTURE layer split by face. Moves the drape's
-    /// thin top layer to Finish1 to see whether the smoothed renderer maps it differently.
-    /// </summary>
     private static void FinishLayer(Scene scene)
     {
         CompoundStructure? structure = scene.Type.GetCompoundStructure();

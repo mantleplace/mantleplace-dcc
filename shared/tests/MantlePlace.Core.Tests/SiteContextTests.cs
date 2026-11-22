@@ -2,10 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The context view and the view filter: that the filter's prefix covers every stamp this host
-/// writes, and that a re-import finds both by name rather than making a second of either.
-/// </summary>
 internal static class SiteContextTests
 {
     private const string Stem = "order-7f3a";
@@ -17,8 +13,6 @@ internal static class SiteContextTests
 
         run.Case("the filter's prefix begins every stamp this host writes", () =>
         {
-            // The filter is only as good as this: a stamp kind that does not begin with the prefix
-            // is an element the import made that the filter cannot find.
             List<string> stamps =
             [
                 TerrainIdentity.Stamp(Stem, Build),

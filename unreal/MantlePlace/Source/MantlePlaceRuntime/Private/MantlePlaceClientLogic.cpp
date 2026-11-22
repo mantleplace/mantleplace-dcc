@@ -11,7 +11,6 @@
 
 namespace
 {
-	/** Digits first, then only digits, letters, '.', '-' and '+': a semver, with or without a tail. */
 	bool LooksLikeVersion(const FString& Version)
 	{
 		if (Version.IsEmpty() || !FChar::IsDigit(Version[0]))

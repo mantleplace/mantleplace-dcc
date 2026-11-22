@@ -2,13 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Which Prepares a Revit may re-join after an earlier one closed or crashed while watching them.
-/// </summary>
-/// <remarks>
-/// The record is written as a Prepare starts and struck off as it ends, so what is left is what Revit
-/// ended. Pure: the owner's liveness is a function the cases hand in.
-/// </remarks>
 internal static class InterruptedPreparesTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 23, 12, 0, 0, TimeSpan.Zero);

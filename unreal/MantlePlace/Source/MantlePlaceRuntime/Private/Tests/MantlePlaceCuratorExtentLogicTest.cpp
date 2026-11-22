@@ -6,12 +6,6 @@
 
 #include "MantlePlaceCuratorExtentLogic.h"
 
-// Open in curator opens https://mantle.place/curator#aoi=W,S,E,N&from=unreal on the extent the level
-// already knows. Four sources can supply it, tried in a fixed order: a previous Mantle Place
-// import's provenance, the level's native georeferencing, a Cesium georeference, an Extent box. Each
-// source is a pure function from level state to extent, and the order is Resolve. The engine reads
-// that fill the state are the editor module's, asserted in MantlePlace.CuratorExtent.LevelRead.
-
 namespace
 {
 	using FCuratorLogic = FMantlePlaceCuratorExtentLogic;
@@ -44,13 +38,11 @@ namespace
 		return Result;
 	}
 
-	/** The four corners of a level whose bounds a georeference placed over the given degrees. */
 	TArray<FMantlePlaceGeoPoint> Corners(double West, double South, double East, double North)
 	{
 		return { Point(West, South), Point(East, South), Point(East, North), Point(West, North) };
 	}
 
-	/** A level that holds every source, each over a different place, so the winner is unmistakable. */
 	FMantlePlaceLevelState EveryLevelSource()
 	{
 		FMantlePlaceLevelState Level;
@@ -69,7 +61,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceCuratorExtentSourcesTest::RunTest(const FString& Parameters)
 {
-	// --- Source 1: a previous import's provenance ------------------------------------------------
 	{
 		FMantlePlaceExtent Out;
 		TestTrue(TEXT("one import's extent is read"), FCuratorLogic::FromPriorImports({ Extent(-97.75, 30.25, -97.73, 30.27) }, Out));
@@ -96,7 +87,6 @@ bool FMantlePlaceCuratorExtentSourcesTest::RunTest(const FString& Parameters)
 			FCuratorLogic::FromPriorImports({ Extent(NAN, 30.25, -97.73, 30.27) }, Out));
 	}
 
-	// --- Sources 2 and 3: a georeference converts the level's bounds to degrees ------------------
 	{
 		FMantlePlaceExtent Out;
 		const TArray<FMantlePlaceGeoPoint> Level = Corners(-97.75, 30.25, -97.73, 30.27);
@@ -107,7 +97,6 @@ bool FMantlePlaceCuratorExtentSourcesTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("Cesium south"), Out.South, 30.25);
 		TestEqual(TEXT("Cesium east"), Out.East, -97.73);
 
-		// A georeference can rotate the level against north, so the box is the box of ALL corners.
 		TestTrue(TEXT("a rotated level boxes every corner"),
 			FCuratorLogic::FromNativeGeoreference({ Point(-97.74, 30.25), Point(-97.73, 30.26), Point(-97.74, 30.27), Point(-97.75, 30.26) }, Out));
 		TestEqual(TEXT("rotated west"), Out.West, -97.75);
@@ -126,14 +115,12 @@ bool FMantlePlaceCuratorExtentSourcesTest::RunTest(const FString& Parameters)
 			FCuratorLogic::FromNativeGeoreference({ Point(179.99, 10.0), Point(-179.99, 10.1) }, Out));
 	}
 
-	// --- Source 4: the Extent box ---------------------------------------------------------------
 	{
 		FMantlePlaceExtent Out;
 		TestTrue(TEXT("a located 1 km box reads"), FCuratorLogic::FromExtentBox(Box(-97.7431, 30.2672, 1000.0, 1000.0), Out));
 		TestTrue(TEXT("the extent is valid W,S,E,N degrees"), Out.IsValid());
 		TestEqual(TEXT("centred east-west"), (Out.West + Out.East) * 0.5, -97.7431, 1e-9);
 		TestEqual(TEXT("centred north-south"), (Out.South + Out.North) * 0.5, 30.2672, 1e-9);
-		// A kilometre is about 0.00902 degrees of latitude and 0.01039 of longitude at 30.27 N.
 		TestEqual(TEXT("1 km is about 0.00902 degrees of latitude"), Out.North - Out.South, 0.00902, 0.00005);
 		TestEqual(TEXT("1 km is about 0.01039 degrees of longitude here"), Out.East - Out.West, 0.01039, 0.00005);
 
@@ -173,8 +160,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceCuratorExtentPrecedenceTest::RunTest(const FString& Parameters)
 {
-	// Order: prior import, native georeference, Cesium georeference, Extent box. Take the winner
-	// away and the next one wins, down to nothing.
 	FMantlePlaceLevelState Level = EveryLevelSource();
 
 	FMantlePlaceResolvedExtent Resolved = FCuratorLogic::Resolve(Level);
@@ -201,14 +186,12 @@ bool FMantlePlaceCuratorExtentPrecedenceTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("and with none, there is no source"), Resolved.Source == EMantlePlaceExtentSource::None);
 	TestFalse(TEXT("which is not set"), Resolved.IsSet());
 
-	// A source that is present but unreadable does not stop the next one.
 	Level = EveryLevelSource();
 	Level.ImportExtents = { Extent(0, 0, 0, 0) };
 	Level.NativeGeoreferencedPoints = { Point(NAN, NAN), Point(NAN, NAN) };
 	Resolved = FCuratorLogic::Resolve(Level);
 	TestTrue(TEXT("unreadable sources are skipped, not fatal"), Resolved.Source == EMantlePlaceExtentSource::CesiumGeoreference);
 
-	// An empty level, and a level with only an unlocated box, offer the plain curator.
 	TestTrue(TEXT("an empty level has no source"), FCuratorLogic::Resolve(FMantlePlaceLevelState()).Source == EMantlePlaceExtentSource::None);
 	FMantlePlaceLevelState Unlocated;
 	Unlocated.ExtentBoxes = { Box(0.0, 0.0, 1000.0, 1000.0) };
@@ -234,7 +217,6 @@ bool FMantlePlaceCuratorExtentUrlTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("a trailing slash on the base is dropped"),
 		FCuratorLogic::BuildCuratorUrl(TEXT("https://mantle.place/"), Resolved), FString(TEXT("https://mantle.place/curator#aoi=-97.75,30.25,-97.73,30.27&from=unreal")));
 
-	// The curator keeps 4 decimals; the link rounds OUTWARD so the drawn extent contains the level's.
 	Resolved.Extent = Extent(-97.74311, 30.25001, -97.73001, 30.26001);
 	TestEqual(TEXT("bounds round outward to four decimals"),
 		FCuratorLogic::BuildCuratorUrl(Base, Resolved), FString(TEXT("https://mantle.place/curator#aoi=-97.7432,30.25,-97.73,30.2601&from=unreal")));
@@ -263,4 +245,4 @@ bool FMantlePlaceCuratorExtentUrlTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

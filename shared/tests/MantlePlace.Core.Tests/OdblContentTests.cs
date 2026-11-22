@@ -1,14 +1,5 @@
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The ODbL decisions: which role a file has (and that a missing or unknown one reads as
-/// <c>database</c>), which steps' output is filed in the ODbL container, how a container is named,
-/// and what Prepare for handover does with each piece of content.
-/// </summary>
-/// <remarks>
-/// The planner's choices are all here, headless. Where the importer files an element and how the
-/// handover command removes one needs a Revit document and is checked by a real import.
-/// </remarks>
 internal static class OdblContentTests
 {
     private const string Layout = """

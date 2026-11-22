@@ -55,7 +55,6 @@ void SMantlePlaceImportWindow::Construct(const FArguments& InArgs)
 		[
 			SNew(SVerticalBox)
 
-			// The heading the standard fixes for this window.
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, 0.f, 0.f, S::S3)
 			[
 				SNew(STextBlock)
@@ -63,14 +62,11 @@ void SMantlePlaceImportWindow::Construct(const FArguments& InArgs)
 				.Text(FText::FromString(FMantlePlaceImportSteps::Heading()))
 			]
 
-			// One row per step, in the order they run.
 			+ SVerticalBox::Slot().AutoHeight()
 			[
 				SAssignNew(Rows, SVerticalBox)
 			]
 
-			// The status line: the step in flight, what it is doing and how long it has run, and the run's
-			// own clock after HPS-60's `Elapsed`, which keeps running between steps.
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.f, S::S3, 0.f, 0.f)
 			[
 				SNew(SHorizontalBox)
@@ -90,7 +86,6 @@ void SMantlePlaceImportWindow::Construct(const FArguments& InArgs)
 				]
 			]
 
-			// A 3.0 order's level control (SetLevelChoice); empty for any other run.
 			+ SVerticalBox::Slot().AutoHeight()
 			[
 				SAssignNew(LevelSlot, SBox)
@@ -306,7 +301,6 @@ bool SMantlePlaceImportWindow::IsCloseEnabled() const
 TSharedPtr<FMantlePlaceImportWindowHost> FMantlePlaceImportWindowHost::Open(
 	TSharedRef<FMantlePlaceImportSteps> InSteps, FSimpleDelegate InOnCancel)
 {
-	// No window where nobody is there to see it, or where a modal one would stop a script.
 	if (!FSlateApplication::IsInitialized() || !FSlateApplication::Get().CanDisplayWindows()
 		|| FApp::IsUnattended() || GIsAutomationTesting || IsRunningCommandlet())
 	{
@@ -432,9 +426,7 @@ void FMantlePlaceImportWindowHost::Host(bool bInModal)
 	const TSharedPtr<SWindow> Root = FGlobalTabmanager::Get()->GetRootWindow();
 	if (bModal)
 	{
-		// A slow-task modal: it returns at once rather than running a loop of its own, and Slate takes
-		// input for it alone until it goes. Hidden until shown, as the engine's own progress dialog is.
-		FSlateApplication::Get().AddModalWindow(NewWindow, Root, /*bSlowTaskWindow*/ true);
+		FSlateApplication::Get().AddModalWindow(NewWindow, Root, true);
 		NewWindow->ShowWindow();
 	}
 	else if (Root.IsValid())
@@ -449,8 +441,6 @@ void FMantlePlaceImportWindowHost::Host(bool bInModal)
 
 void FMantlePlaceImportWindowHost::TickSlateBetweenSteps()
 {
-	// The engine's slow-task tick (FeedbackContextEditor): only while this window is the active modal one,
-	// so input reaches it alone, and never from inside a Slate tick already running.
 	FSlateApplication& Slate = FSlateApplication::Get();
 	const TSharedPtr<SWindow> Active = Slate.GetActiveModalWindow();
 	if (!Window.IsValid() || !Active.IsValid() || !(Active == Window || Window->IsDescendantOf(Active)) || Slate.IsTicking())
@@ -467,8 +457,6 @@ void FMantlePlaceImportWindowHost::TickSlateBetweenSteps()
 
 void FMantlePlaceImportWindowHost::HandleWindowCloseRequested(const TSharedRef<SWindow>& InWindow)
 {
-	// The title bar's close button. While the run goes on it is Cancel: a window that vanished while the
-	// import carried on would hide the one control that stops it. Once the run is over it closes.
 	if (Steps.IsValid() && !Steps->IsFinished())
 	{
 		OnCancel.ExecuteIfBound();

@@ -6,19 +6,10 @@
 
 #include "MantlePlaceFeedbackLogic.h"
 
-// HPS-56: every host's Send Feedback opens the web Feedback form at
-//   https://mantle.place/feedback?source=dcc-<host>&v=<plugin version>&hv=<host version>[&order=<order id>][&rating=up|down]
-// and the pure builder is the one place that decides what goes in the link. Each parameter's rule
-// is asserted here: `v` / `hv` are version strings only and a malformed one is LEFT OUT (never sent
-// raw), `order` rides only on a bundle-scoped action and only as a UUID, `rating` rides only on the
-// post-import prompt and only as exactly `up` or `down`, and nothing else is ever emitted. The
-// once-per-bundle memory behind that prompt ("Did this import come in right?") is asserted here too.
-
 namespace
 {
 const TCHAR* const SampleOrderId = TEXT("0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8d");
 
-/** The parameter names in a built link, in order. */
 TArray<FString> ParamNames(const FString& Url)
 {
 	TArray<FString> Names;
@@ -29,7 +20,7 @@ TArray<FString> ParamNames(const FString& Url)
 		return Names;
 	}
 	TArray<FString> Pairs;
-	Query.ParseIntoArray(Pairs, TEXT("&"), /*bCullEmpty*/ true);
+	Query.ParseIntoArray(Pairs, TEXT("&"), true);
 	for (const FString& Pair : Pairs)
 	{
 		FString Name;
@@ -50,26 +41,21 @@ bool FMantlePlaceFeedbackLogicTest::RunTest(const FString& Parameters)
 {
 	const FString Base = TEXT("https://mantle.place");
 
-	// The general action: no order.
 	TestEqual(TEXT("general link"),
 		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1"), TEXT("5.8"), FString()),
 		FString(TEXT("https://mantle.place/feedback?source=dcc-unreal&v=0.7.1&hv=5.8")));
 
-	// The bundle-scoped action: the same link plus &order=<id>.
 	TestEqual(TEXT("bundle-scoped link"),
 		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1"), TEXT("5.8"), SampleOrderId),
 		FString(TEXT("https://mantle.place/feedback?source=dcc-unreal&v=0.7.1&hv=5.8&order=0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8d")));
 
-	// A configured base: trailing slash and whitespace are normalised, a local dev host is honoured.
 	TestEqual(TEXT("trailing slash base"),
 		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(TEXT(" http://localhost:3000/ "), TEXT("0.7.1"), TEXT("5.8"), FString()),
 		FString(TEXT("http://localhost:3000/feedback?source=dcc-unreal&v=0.7.1&hv=5.8")));
 
-	// A base that is not http(s) yields no link at all: the shim opens nothing rather than a bad URL.
 	TestTrue(TEXT("empty base -> no link"), FMantlePlaceFeedbackLogic::BuildFeedbackUrl(FString(), TEXT("0.7.1"), TEXT("5.8"), FString()).IsEmpty());
 	TestTrue(TEXT("non-http base -> no link"), FMantlePlaceFeedbackLogic::BuildFeedbackUrl(TEXT("javascript:alert(1)"), TEXT("0.7.1"), TEXT("5.8"), FString()).IsEmpty());
 
-	// Version rule ^[0-9]+(\.[0-9]+){0,3}$: well-formed values are kept, malformed ones are left out.
 	TestEqual(TEXT("one-part version kept"),
 		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("7"), TEXT("5"), FString()),
 		FString(TEXT("https://mantle.place/feedback?source=dcc-unreal&v=7&hv=5")));
@@ -95,18 +81,17 @@ bool FMantlePlaceFeedbackLogicTest::RunTest(const FString& Parameters)
 		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1&email=a@b.c"), TEXT("5.8#x"), FString()),
 		FString(TEXT("https://mantle.place/feedback?source=dcc-unreal")));
 
-	// order: only when given, and only as a UUID. Anything else is dropped, and the rest stands.
 	TestEqual(TEXT("uppercase UUID accepted"),
 		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1"), TEXT("5.8"), TEXT("0B6C2D5E-9F31-4A7C-8E12-3D4F5A6B7C8D")),
 		FString(TEXT("https://mantle.place/feedback?source=dcc-unreal&v=0.7.1&hv=5.8&order=0B6C2D5E-9F31-4A7C-8E12-3D4F5A6B7C8D")));
 	const TCHAR* const NotUuids[] = {
 		TEXT("not-a-uuid"),
-		TEXT("0b6c2d5e9f314a7c8e123d4f5a6b7c8d"),                 // no hyphens
-		TEXT("0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8"),              // one short
-		TEXT("0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8dd"),            // one long
-		TEXT("0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8g"),             // non-hex
-		TEXT("0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8d&x=1"),         // smuggled parameter
-		TEXT(" 0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8d"),            // leading space
+		TEXT("0b6c2d5e9f314a7c8e123d4f5a6b7c8d"),
+		TEXT("0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8"),
+		TEXT("0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8dd"),
+		TEXT("0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8g"),
+		TEXT("0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8d&x=1"),
+		TEXT(" 0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8d"),
 	};
 	for (const TCHAR* Bad : NotUuids)
 	{
@@ -115,7 +100,6 @@ bool FMantlePlaceFeedbackLogicTest::RunTest(const FString& Parameters)
 			FString(TEXT("https://mantle.place/feedback?source=dcc-unreal&v=0.7.1&hv=5.8")));
 	}
 
-	// No other parameter is ever emitted: across every case the names are a subset of the four.
 	const FString Cases[] = {
 		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1"), TEXT("5.8"), FString()),
 		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1"), TEXT("5.8"), SampleOrderId),
@@ -135,7 +119,6 @@ bool FMantlePlaceFeedbackLogicTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("a bad rating, order and versions leave only the source"), ParamNames(Cases[2]).Num(), 1);
 	TestEqual(TEXT("the rated link carries five parameters"), ParamNames(Cases[3]).Num(), 5);
 
-	// rating: only the post-import prompt sends it, and only as exactly `up` or `down`.
 	TestEqual(TEXT("Yes -> rating=up"),
 		FMantlePlaceFeedbackLogic::BuildFeedbackUrl(Base, TEXT("0.7.1"), TEXT("5.8"), SampleOrderId, TEXT("up")),
 		FString(TEXT("https://mantle.place/feedback?source=dcc-unreal&v=0.7.1&hv=5.8&order=0b6c2d5e-9f31-4a7c-8e12-3d4f5a6b7c8d&rating=up")));
@@ -158,8 +141,6 @@ bool FMantlePlaceFeedbackLogicTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("IsValidRating is case-sensitive"), FMantlePlaceFeedbackLogic::IsValidRating(TEXT("Up")));
 	TestFalse(TEXT("IsValidRating empty"), FMantlePlaceFeedbackLogic::IsValidRating(FString()));
 
-	// The post-import prompt: asked after a finished import of a bundle with an order id that is a
-	// UUID, and never again for that bundle (the memory is the shim's file, the decision is here).
 	TArray<FString> Asked;
 	TestTrue(TEXT("a finished import of a new bundle asks"), FMantlePlaceFeedbackLogic::ShouldAskAboutImport(true, SampleOrderId, Asked));
 	TestFalse(TEXT("a failed import asks nothing"), FMantlePlaceFeedbackLogic::ShouldAskAboutImport(false, SampleOrderId, Asked));
@@ -175,7 +156,6 @@ bool FMantlePlaceFeedbackLogicTest::RunTest(const FString& Parameters)
 	FMantlePlaceFeedbackLogic::RememberAsked(TEXT("not-a-uuid"), Asked);
 	TestEqual(TEXT("an id that is not a UUID is never remembered"), Asked.Num(), 1);
 
-	// The memory is bounded; the oldest bundle is the one forgotten.
 	TArray<FString> Many;
 	const FString Oldest = FGuid::NewGuid().ToString(EGuidFormats::DigitsWithHyphensLower);
 	FMantlePlaceFeedbackLogic::RememberAsked(Oldest, Many);
@@ -186,7 +166,6 @@ bool FMantlePlaceFeedbackLogicTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("the memory stops at its cap"), Many.Num(), FMantlePlaceFeedbackLogic::MaxAskedOrders);
 	TestTrue(TEXT("and the oldest bundle is asked about again"), FMantlePlaceFeedbackLogic::ShouldAskAboutImport(true, Oldest, Many));
 
-	// The predicates the builder is made of.
 	TestTrue(TEXT("IsValidVersion 0.7.1"), FMantlePlaceFeedbackLogic::IsValidVersion(TEXT("0.7.1")));
 	TestFalse(TEXT("IsValidVersion empty"), FMantlePlaceFeedbackLogic::IsValidVersion(FString()));
 	TestFalse(TEXT("IsValidVersion alpha"), FMantlePlaceFeedbackLogic::IsValidVersion(TEXT("5.8a")));
@@ -196,4 +175,4 @@ bool FMantlePlaceFeedbackLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

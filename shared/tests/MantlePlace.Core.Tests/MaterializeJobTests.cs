@@ -2,33 +2,13 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Host-local coverage for the materialize contract: every response shape the platform can send,
-/// and every row of the delivery-state decision table.
-/// </summary>
-/// <remarks>
-/// <para>
-/// These exist because the corpus drove only the two shapes that carry a job id. The platform sends
-/// five, and the three that were unasserted are the ones that broke: a bundle with nothing left to
-/// build reported <i>"the platform accepted the request but named no job to poll"</i> and Revit
-/// could not import anything, because the download only happens on the far side of that parse.
-/// </para>
-/// <para>
-/// The lesson worth keeping is narrower than "add cases". Both hosts inferred an outcome from the
-/// ABSENCE of a field — no <c>jobId</c> means failure — and absence is the one thing a growing
-/// protocol reassigns for free. Every case below keys on a marker that is present.
-/// </para>
-/// </remarks>
 internal static class MaterializeJobTests
 {
-    /// <summary>The eight tokens the Revit scope asks for, as the poll's yardstick.</summary>
     private static IReadOnlyCollection<string> Requested => MaterializeJobs.RevitTokens;
 
     internal static int Run()
     {
         TestRun run = new();
-
-        // ------------------------------------------------------------------ start shapes
 
         run.Case("201 created: a fresh job, with the effective token set", () =>
         {
@@ -45,8 +25,6 @@ internal static class MaterializeJobTests
 
         run.Case("200 coalesced: joined on activeJobId, which is NOT jobId", () =>
         {
-            // The coalesce body names no `jobId` at all. A host reading only `jobId` sees "no id"
-            // here and reports a failure for a request that succeeded and joined a running build.
             string? error = MaterializeJobs.TryParseStart(
                 """{"coalesced":true,"activeJobId":"job-existing","tokens":["mesh.glb"]}""",
                 out MaterializeStart start);
@@ -70,10 +48,6 @@ internal static class MaterializeJobTests
 
         run.Case("⛔409 with a NULL active job id is still a join, never an error", () =>
         {
-            // The platform may report an in-flight run without naming it. This is still followable:
-            // polling is keyed on the ORDER, not the job — the status GET never took a job id. A
-            // host that refuses here tells a curator to retry a build that is already running, which
-            // is the exact failure HPS-24 exists to prevent. Do not "fix" this back into a refusal.
             string? error = MaterializeJobs.TryParseStart(
                 """{"error":"A materialize job is already in flight for this order","code":"active_job","activeJobId":null}""",
                 out MaterializeStart start);
@@ -85,8 +59,6 @@ internal static class MaterializeJobTests
 
         run.Case("200 noop: nothing to build is a SUCCESS carrying no job", () =>
         {
-            // The reported bug, in one line. This body used to produce "the platform accepted the
-            // request but named no job to poll" and dead-ended the only path that downloads.
             string? error = MaterializeJobs.TryParseStart(
                 """{"noop":true,"delivered":["elevation.points_csv","buildings.ifc"]}""",
                 out MaterializeStart start);
@@ -106,8 +78,6 @@ internal static class MaterializeJobTests
 
         run.Case("an unrecognised object still names no job to poll", () =>
         {
-            // The original message keeps its job — but now it means only what it says: a body that
-            // is none of the four known shapes.
             string? error = MaterializeJobs.TryParseStart("""{"ok":true}""", out _);
             run.Contains(error, "named no job to poll", "the unrecognised-shape refusal");
         });
@@ -130,12 +100,8 @@ internal static class MaterializeJobTests
                 "falls back to this host's own list");
         });
 
-        // ------------------------------------------------------------------ status: legacy shape
-
         run.Case("a job-status body still parses exactly as before", () =>
         {
-            // The platform does not send this on the vault endpoint, but the corpus pins it and a
-            // deployment that does must keep working. This is the guard on that branch.
             string? error = MaterializeJobs.TryParseStatus(
                 """{"status":"running","progress":42,"jobId":"job-9"}""",
                 Requested,
@@ -146,8 +112,6 @@ internal static class MaterializeJobTests
             run.Within(status.Fraction, 0.42, 0.0001, "42 is a percentage");
             run.Equal(status.JobId, "job-9", "job id");
         });
-
-        // ------------------------------------------------------------------ status: delivery shape
 
         run.Case("everything requested is delivered: Complete", () =>
         {
@@ -178,10 +142,6 @@ internal static class MaterializeJobTests
 
         run.Case("⛔unreadable delivery state is Unknown, and NEVER Complete", () =>
         {
-            // deliveryStateUnknown means `delivered` is empty for want of an answer, not because the
-            // bundle is empty. With an EMPTY requested set the "nothing outstanding" test would
-            // otherwise pass vacuously and hand over a bundle the platform never confirmed. Unknown
-            // is not terminal, so the poll budget provides the honest ending.
             string body = """{"deliveryStateUnknown":true,"delivered":[],"base":[],"notDelivered":[],"activeJob":null}""";
 
             string? error = MaterializeJobs.TryParseStatus(body, Requested, out MaterializeStatus status);
@@ -195,10 +155,6 @@ internal static class MaterializeJobTests
 
         run.Case("⛔a run that says 'completed' but delivered nothing is a FAILURE", () =>
         {
-            // The worker's soft-fail envelope swallows per-token emit errors, so a run that produced
-            // none of what it was asked for still reports `completed`. Believing it is the silent
-            // loop where a curator regenerates forever; calling it "still working" is the
-            // ten-minute hang. The verdict keys on the TOKENS, not on the word.
             string? error = MaterializeJobs.TryParseStatus(
                 Dto(delivered: [],
                     activeJob: null,
@@ -240,9 +196,6 @@ internal static class MaterializeJobTests
 
         run.Case("⛔partial delivery whose remainder can never be built is Complete", () =>
         {
-            // Waiting for a deliverable the platform will never produce for this area is waiting
-            // forever: the bundle is as complete as it will ever be. Treating these as outstanding
-            // is what makes a finished bundle poll its whole budget and then time out.
             List<string> delivered = [.. Requested];
             delivered.Remove("buildings.ifc");
 
@@ -290,9 +243,6 @@ internal static class MaterializeJobTests
 
         run.Case("⛔nothing delivered, nothing running, nothing failed is Pending — not Complete", () =>
         {
-            // The normal state in the seconds after a start: the job row is not visible yet.
-            // Reporting Complete here sends the caller on to download a bundle without the layers it
-            // just asked for.
             string? error = MaterializeJobs.TryParseStatus(
                 Dto(delivered: [], activeJob: null),
                 Requested,
@@ -318,9 +268,6 @@ internal static class MaterializeJobTests
 
         run.Case("⛔with nothing requested there is no verdict — never a vacuous Complete", () =>
         {
-            // "Nothing is outstanding" is trivially true of an empty requested set. Reporting
-            // Complete off that tautology would hand over a bundle on the strength of having asked
-            // it for nothing. Caught by this suite before it could ship.
             string? error = MaterializeJobs.TryParseStatus(
                 Dto(delivered: [], activeJob: """{"id":"j","tokens":[]}"""),
                 [],
@@ -331,10 +278,6 @@ internal static class MaterializeJobTests
             run.Within(status.Fraction, MaterializeStatus.Indeterminate, 0.0001, "indeterminate, not 0");
         });
 
-        // ---- the presign request ------------------------------------------------------------
-        // The download only happens if the ask is well-formed. The route validates its body against
-        // a schema, so the empty object this host used to send came back 400 "Invalid request" —
-        // and, until the detail read below, with nothing naming the missing field.
         run.Case("presign body names the whole archive", () =>
         {
             run.Equal(
@@ -347,9 +290,6 @@ internal static class MaterializeJobTests
                 "and never the deprecated alias, which returns a MESH when the order carries one");
         });
 
-        // ---- a refusal explains itself ------------------------------------------------------
-        // `Message` stays the HPS-48 precedence read; `Sentence` adds what the platform said about
-        // why. A schema rejection puts the only actionable half in a sibling.
         run.Case("a schema rejection names the field it rejected", () => run.Equal(
             PlatformErrors.FromBody(
                 """{"error":"Invalid request","issues":[{"path":["format"],"message":"Required"}]}""")!
@@ -382,7 +322,6 @@ internal static class MaterializeJobTests
         return run.Report("materialize contract");
     }
 
-    /// <summary>A delivery-state document with only the fields a case cares about.</summary>
     private static string Dto(
         IEnumerable<string> delivered,
         string? activeJob,

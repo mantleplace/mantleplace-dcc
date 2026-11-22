@@ -1,17 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The plugin end to end, in Blender with no window: import a real bundle and check where it landed.
-
-    blender --background --factory-startup --python-exit-code 1 \
-        --python blender/tests/headless/run_headless.py -- <bundle.zip or Metadata/manifest.json>
-
-The pure suite (`blender/tests/test_*.py`) proves every decision; this proves Blender carries them
-out: the operator registers, Blender's USD import takes the composed stage, the Features curves
-come in only when asked for, the textures are packed, the geometry sits at its offsets, and the
-scene states the site origin the manifest publishes. It needs a 2.x bundle that carries
-`Context.usdz`, and no bundle is committed here (root CLAUDE.md, Binaries), so it is run by hand
-and is not a CI job. It prints one line per check and exits nonzero on the first failure.
-"""
 
 import json
 import os
@@ -30,8 +18,6 @@ import mantleplace_blender  # noqa: E402
 from mantleplace_blender.core.bundle import plan_import  # noqa: E402
 from mantleplace_blender.core.source import open_bundle  # noqa: E402
 
-#: How far from the site origin any imported geometry may sit, in metres. Offsets are bounded by
-#: the AOI; a site imported at full projected coordinates would sit hundreds of kilometres away.
 OFFSET_BOUND_M = 50_000.0
 
 
@@ -85,7 +71,6 @@ def main():
     mantleplace_blender.register()
     check("mantleplace_bundle" in dir(bpy.ops.import_scene), "the plugin registers its operator")
 
-    # 1. Context with Features composed over it.
     fresh_scene()
     check(run_import(bundle, True) == {"FINISHED"}, "the import finishes with Features")
     scene = bpy.context.scene
@@ -120,13 +105,11 @@ def main():
     check(images and all(i.packed_file is not None for i in images),
           f"every texture is packed into the .blend ({len(images)} images)")
 
-    # 2. Context alone.
     fresh_scene()
     check(run_import(bundle, False) == {"FINISHED"}, "the import finishes without Features")
     check(len(curve_objects()) == 0, "no Features curves come in when Features is left out")
     check("Terrain" in {o.name for o in bpy.data.objects}, "the Terrain still comes in alone")
 
-    # 3. A higher major is refused before anything is imported.
     fresh_scene()
     with tempfile.TemporaryDirectory() as scratch:
         ahead = os.path.join(scratch, "ahead.zip")
@@ -134,7 +117,7 @@ def main():
             archive.writestr("Metadata/manifest.json", json.dumps({**manifest, "version": "3.0.0"}))
         try:
             refused = run_import(ahead, True) == {"CANCELLED"}
-        except RuntimeError as exc:  # background mode raises an operator's error report
+        except RuntimeError as exc:
             refused = "3.0.0" in str(exc)
         check(refused and not bpy.data.objects, "an MPB 3.0.0 bundle is refused and imports nothing")
 

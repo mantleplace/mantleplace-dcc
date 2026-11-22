@@ -7,24 +7,17 @@
 #include "MantlePlaceSha256.h"
 #include "Tests/MantlePlaceConformanceCorpus.h"
 
-// This is the Editor module's own SHA-256 (see MantlePlaceSha256.h for why it duplicates the
-// Runtime one). It is driven by the SAME corpus vectors as FMantlePlaceBundleCacheLogic::Sha256Hex
-// and FMantlePlaceSha256, which is the point: three implementations inside one host is already one
-// too many, and the corpus is what stops them drifting apart silently (HPS-40, and the deviation
-// HPS-28 records).
-
 namespace
 {
 using namespace MantlePlaceConformanceCorpus;
 
-/** Hex SHA-256 of a string's UTF-8 bytes. */
 FString HexOfUtf8(const FString& Text)
 {
 	const FTCHARToUTF8 Utf8(*Text);
 	const uint8* Bytes = reinterpret_cast<const uint8*>(Utf8.Get());
 	return MantlePlaceSha256::HexDigest(TConstArrayView<uint8>(Bytes, Utf8.Length()));
 }
-} // namespace
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceSha256Test,
@@ -62,11 +55,6 @@ bool FMantlePlaceSha256Test::RunTest(const FString& Parameters)
 				RowString(Row, TEXT("sha256")));
 		}
 
-		// This implementation is one-shot, so it has no streaming path to compare against itself.
-		// What the streamingEquivalence rows still buy us is their INPUT: the 56-byte message whose
-		// two-block padding tail is where a hand-rolled SHA-256 diverges. Hash the concatenation and
-		// check it against that input's KNOWN ANSWER in the vectors table — comparing it to another
-		// call of this same function would pass for any implementation whatsoever.
 		const TArray<TSharedPtr<FJsonObject>> Streaming = Rows(*Case, TEXT("streamingEquivalence"));
 		TestTrue(Case->What(TEXT("has streamingEquivalence rows")), Streaming.Num() > 0);
 		for (const TSharedPtr<FJsonObject>& Row : Streaming)
@@ -104,4 +92,4 @@ bool FMantlePlaceSha256Test::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

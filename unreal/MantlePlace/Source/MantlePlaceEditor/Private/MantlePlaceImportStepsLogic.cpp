@@ -49,7 +49,6 @@ bool FMantlePlaceImportSteps::Begin(FName Id, double Now)
 	FMantlePlaceImportStep& Step = StepList[Index];
 	if (bFinished || Step.State != EMantlePlaceImportStepState::Waiting)
 	{
-		// Skipped, already stopped by an earlier boundary, or already over: its work does not start.
 		return false;
 	}
 	if (bCancelRequested)
@@ -132,7 +131,6 @@ void FMantlePlaceImportSteps::Finish(double Now)
 		}
 		else if (Step.State == EMantlePlaceImportStepState::Waiting)
 		{
-			// Cancelled is a cancel's word only: a run that ended on a failure left the rest Not Run.
 			if (bCancelRequested)
 			{
 				StopAt(Step);
@@ -225,7 +223,6 @@ FString FMantlePlaceImportSteps::StatusLine(double Now) const
 	Line += Elapsed(Now - Step.StartedAt);
 	if (bCancelRequested)
 	{
-		// The running step is not interrupted: it finishes, and only the steps after it do not start.
 		Line += TEXT(". Cancelling when this step ends.");
 	}
 	return Line;

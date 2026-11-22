@@ -2,7 +2,6 @@ using MantlePlace.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 
-/// <summary>The release year the plugin reports to the platform and the feedback form, from AutoCAD's version.</summary>
 internal static class HostReleaseYearTests
 {
     internal static int Run()

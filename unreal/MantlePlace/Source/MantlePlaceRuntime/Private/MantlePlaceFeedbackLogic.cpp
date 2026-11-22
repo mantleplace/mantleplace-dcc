@@ -2,8 +2,8 @@
 
 #include "MantlePlaceFeedbackLogic.h"
 
-#include "MantlePlaceAuthLogic.h"  // IsValidBaseUrl
-#include "MantlePlaceVaultLogic.h" // NormalizeBaseUrl
+#include "MantlePlaceAuthLogic.h"
+#include "MantlePlaceVaultLogic.h"
 
 namespace
 {
@@ -25,7 +25,6 @@ const TCHAR* FMantlePlaceFeedbackLogic::Source()
 
 bool FMantlePlaceFeedbackLogic::IsValidVersion(const FString& Version)
 {
-	// ^[0-9]+(\.[0-9]+){0,3}$ : one to four dot-separated runs of digits, none empty.
 	int32 Groups = 0;
 	int32 DigitsInGroup = 0;
 	for (int32 i = 0; i < Version.Len(); ++i)
@@ -53,7 +52,6 @@ bool FMantlePlaceFeedbackLogic::IsValidVersion(const FString& Version)
 
 bool FMantlePlaceFeedbackLogic::IsValidOrderId(const FString& OrderId)
 {
-	// 8-4-4-4-12 hexadecimal, hyphens at 8, 13, 18 and 23.
 	if (OrderId.Len() != 36)
 	{
 		return false;
@@ -71,7 +69,6 @@ bool FMantlePlaceFeedbackLogic::IsValidOrderId(const FString& OrderId)
 
 bool FMantlePlaceFeedbackLogic::IsValidRating(const FString& Rating)
 {
-	// Exactly the two tokens, case-sensitive: "UP", " up" and "up\n" are not the token.
 	return Rating.Equals(TEXT("up"), ESearchCase::CaseSensitive) || Rating.Equals(TEXT("down"), ESearchCase::CaseSensitive);
 }
 
@@ -82,8 +79,6 @@ FString FMantlePlaceFeedbackLogic::BuildFeedbackUrl(const FString& BaseUrl, cons
 		return FString();
 	}
 
-	// Every value appended below is a fixed word, a validated version (digits and dots), a
-	// validated UUID (hex and hyphens) or one of the two rating tokens, so none needs percent-encoding.
 	FString Url = FMantlePlaceVaultLogic::NormalizeBaseUrl(BaseUrl) + TEXT("/feedback?source=") + Source();
 	if (IsValidVersion(PluginVersion))
 	{
@@ -122,7 +117,7 @@ bool FMantlePlaceFeedbackLogic::ShouldAskAboutImport(bool bImportSucceeded, cons
 
 void FMantlePlaceFeedbackLogic::RememberAsked(const FString& OrderId, TArray<FString>& AskedOrderIds)
 {
-	if (!IsValidOrderId(OrderId) || !ShouldAskAboutImport(/*bImportSucceeded*/ true, OrderId, AskedOrderIds))
+	if (!IsValidOrderId(OrderId) || !ShouldAskAboutImport(true, OrderId, AskedOrderIds))
 	{
 		return;
 	}

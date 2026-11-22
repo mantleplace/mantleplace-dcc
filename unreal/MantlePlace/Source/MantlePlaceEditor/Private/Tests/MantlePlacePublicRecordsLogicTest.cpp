@@ -8,7 +8,6 @@
 
 namespace
 {
-/** A drawing with the given ENTITIES body (group-code/value lines) and the sections a real one carries. */
 FString Drawing(const FString& EntitiesBody)
 {
 	return TEXT("0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1015\n0\nENDSEC\n")
@@ -36,14 +35,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlacePublicRecordsFamiliesTest::RunTest(const FString& Parameters)
 {
-	// The ten families the published layout names, in its order; a family nobody has met comes after.
 	for (const TCHAR* Known : { TEXT("parcels"), TEXT("zoning"), TEXT("flood"), TEXT("wetlands"), TEXT("soils"),
 	                            TEXT("protected"), TEXT("hydrography"), TEXT("habitat"), TEXT("contamination"),
 	                            TEXT("historic") })
 	{
 		TestTrue(FString::Printf(TEXT("%s is a known family"), Known), FMantlePlacePublicRecordsLogic::IsKnownFamily(Known));
 	}
-	// The names an MPB 3.x file table gives three of them read as the family they stand for.
 	for (const TCHAR* Alias : { TEXT("floodplain"), TEXT("conservation"), TEXT("heritage") })
 	{
 		TestTrue(FString::Printf(TEXT("%s is a known family"), Alias), FMantlePlacePublicRecordsLogic::IsKnownFamily(Alias));
@@ -98,7 +95,6 @@ bool FMantlePlacePublicRecordsFrameTest::RunTest(const FString& Parameters)
 		FMantlePlacePublicRecordsLogic::CanPlaceFrame(Projected(TEXT("EPSG:32613"), TEXT("m")), Host, Reason));
 	TestEqual(TEXT("a placed frame has no reason"), Reason, FString());
 
-	// HPS-53: an unstated frame is never assumed to match.
 	TestFalse(TEXT("no frame stated is unplaceable"),
 		FMantlePlacePublicRecordsLogic::CanPlaceFrame(FMantlePlaceRecordFrame(), Host, Reason));
 	TestTrue(TEXT("and the reason says it was not stated"), Reason.Contains(TEXT("states no frame")));
@@ -143,7 +139,6 @@ bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 	int32 Skipped = 0;
 	FString Error;
 
-	// --- LWPOLYLINE, closed by flag 70, with the vertex pairs it repeats ---------------------
 	{
 		const FString Text = Drawing(
 		    TEXT("0\nLWPOLYLINE\n8\nPARCELS\n90\n4\n70\n1\n")
@@ -164,7 +159,6 @@ bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("nothing left out"), Skipped, 0);
 	}
 
-	// --- POLYLINE with VERTEX records until SEQEND; its own 10/20/30 is a dummy elevation ----
 	{
 		const FString Text = Drawing(
 		    TEXT("0\nPOLYLINE\n8\nZONING\n66\n1\n10\n0.0\n20\n0.0\n30\n0.0\n70\n0\n")
@@ -182,7 +176,6 @@ bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- A polyface mesh is not a line; LINE is two points; other entities are counted --------
 	{
 		const FString Text = Drawing(
 		    TEXT("0\nPOLYLINE\n70\n64\n")
@@ -204,7 +197,6 @@ bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the polyface and the text are counted as left out"), Skipped, 2);
 	}
 
-	// --- HATCH: each boundary loop is a closed outline; the header's 10/20/30 and the pattern's seed are not vertices ---
 	{
 		const FString Text = Drawing(
 		    TEXT("0\nHATCH\n8\nFloodZones\n100\nAcDbHatch\n10\n0\n20\n0\n30\n0\n210\n0\n220\n0\n230\n1\n2\nSOLID\n70\n1\n71\n0\n")
@@ -227,7 +219,6 @@ bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("nothing left out"), Skipped, 0);
 	}
 
-	// --- HATCH with an edge path of straight edges; one with an arc edge is left out whole ---
 	{
 		const FString Text = Drawing(
 		    TEXT("0\nHATCH\n10\n0\n20\n0\n30\n0\n2\nSOLID\n70\n1\n71\n0\n91\n1\n")
@@ -251,7 +242,6 @@ bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the arc-edged hatch is counted as left out"), Skipped, 1);
 	}
 
-	// --- POINT: kept at the file's own coordinates, with the marker centred on it ---
 	{
 		const FString Text = Drawing(
 		    TEXT("0\nPOINT\n8\nCONTAMINATION\n100\nAcDbPoint\n10\n619838.25\n20\n3349107.75\n30\n0.0\n1001\nMP\n1000\nREGISTRY_ID=1\n")
@@ -278,7 +268,6 @@ bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- CRLF line ends, and a drawing with no lines in it is a success with none ------------
 	{
 		const FString Text = Drawing(TEXT("0\nTEXT\n10\n5.0\n20\n5.0\n1\nlabel\n")).Replace(TEXT("\n"), TEXT("\r\n"));
 		TestTrue(TEXT("CRLF drawing parses"), FMantlePlacePublicRecordsLogic::ParseDxf(Text, Lines, Points, Skipped, Error));
@@ -286,7 +275,6 @@ bool FMantlePlacePublicRecordsDxfTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the text is counted"), Skipped, 1);
 	}
 
-	// --- Fail closed on what is not an ASCII drawing -----------------------------------------
 	{
 		TestFalse(TEXT("binary DXF is refused"),
 			FMantlePlacePublicRecordsLogic::ParseDxf(TEXT("AutoCAD Binary DXF\r\n"), Lines, Points, Skipped, Error));
@@ -313,7 +301,6 @@ bool FMantlePlacePublicRecordsSiteTest::RunTest(const FString& Parameters)
 {
 	const double OriginEastingM = 441959.5;
 	const double OriginNorthingM = 4014372.5;
-	// A landscape 1000 m (north) by 2000 m (east) in UE cm, centred on the origin.
 	const FVector2D Span(100000.0, 200000.0);
 
 	auto LineAt = [](double Easting, double Northing)
@@ -328,14 +315,10 @@ bool FMantlePlacePublicRecordsSiteTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a vertex inside the span (900 m east of 1000, 400 m north of 500) is kept"),
 		FMantlePlacePublicRecordsLogic::AnyVertexOnSite(OnSite, OriginEastingM, OriginNorthingM, Span));
 
-	// The axes are not interchangeable: 700 m north is off a span that is 500 m each side of the
-	// origin in the north direction, however much room there is east.
 	TArray<FMantlePlaceRecordPolyline> NorthOfIt = { LineAt(OriginEastingM, OriginNorthingM + 700.0) };
 	TestFalse(TEXT("a file wholly beyond the northern half-span is not in this frame"),
 		FMantlePlacePublicRecordsLogic::AnyVertexOnSite(NorthOfIt, OriginEastingM, OriginNorthingM, Span));
 
-	// Foot State Plane against a metre origin: a number that looks like a position and is a thousand
-	// kilometres away.
 	TArray<FMantlePlaceRecordPolyline> StatePlane = { LineAt(2400000.0, 1500000.0) };
 	TestFalse(TEXT("another grid's coordinates fall off the site"),
 		FMantlePlacePublicRecordsLogic::AnyVertexOnSite(StatePlane, OriginEastingM, OriginNorthingM, Span));
@@ -359,12 +342,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlacePublicRecordsWordsTest::RunTest(const FString& Parameters)
 {
-	// The standing notice says what the user must hear whatever the manifest carries.
 	const FString Notice = FMantlePlacePublicRecordsLogic::StandingNotice();
 	TestTrue(TEXT("the notice says not a survey"), Notice.Contains(TEXT("not a survey")));
 	TestTrue(TEXT("and not a legal determination"), Notice.Contains(TEXT("not a legal determination")));
 
-	// A layer's credit: its own, else the source its file entry names with the licence.
 	{
 		FMantlePlaceRecordLayer Layer;
 		Layer.Family = TEXT("wetlands");
@@ -396,7 +377,6 @@ bool FMantlePlacePublicRecordsWordsTest::RunTest(const FString& Parameters)
 			BareLines.Num() == 1 && BareLines[0].Contains(TEXT("no credit line")));
 	}
 
-	// A record the bundle does not deliver: who, why, and where the holder publishes it.
 	{
 		FMantlePlaceRecordPointer Pointer;
 		Pointer.RecordHolder = TEXT("Example County");
@@ -425,7 +405,6 @@ bool FMantlePlacePublicRecordsWordsTest::RunTest(const FString& Parameters)
 			FMantlePlacePublicRecordsLogic::DescribePointer(TEXT("parcels"), Pointer).Contains(TEXT("was down")));
 	}
 
-	// A source that covers the extent and delivered nothing.
 	{
 		FMantlePlaceSkippedSource Source;
 		Source.Layer = TEXT("zoning");
@@ -446,7 +425,6 @@ bool FMantlePlacePublicRecordsWordsTest::RunTest(const FString& Parameters)
 			FMantlePlacePublicRecordsLogic::DescribeSkippedSource(Source).StartsWith(TEXT("A record from Example City")));
 	}
 
-	// All of them together, pointers first and sources after, nothing when there is nothing.
 	{
 		FMantlePlacePublicRecordsBlock Block;
 		TestEqual(TEXT("nothing missing, nothing said"), FMantlePlacePublicRecordsLogic::DescribeNotDelivered(Block).Num(), 0);
@@ -479,7 +457,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlacePublicRecordsPublishedFrameTest::RunTest(const FString& Parameters)
 {
-	// A frame the published manifest states is written into the reader's shape verbatim; CanPlaceFrame judges it.
 	TestEqual(TEXT("an absolute file is a projected one"),
 		FMantlePlacePublicRecordsLogic::FrameTypeOfCoordinateMode(TEXT("absolute")), FString(TEXT("projected")));
 	TestEqual(TEXT("an offset file is a local one"),
@@ -517,7 +494,6 @@ bool FMantlePlacePublicRecordsPublishedFrameTest::RunTest(const FString& Paramet
 			FMantlePlacePublicRecordsLogic::CanPlaceFrame(Frame, TEXT("EPSG:32613"), Refusal));
 	}
 
-	// What a 3.x download does not hold: one line per layer and stated reason, the reason verbatim.
 	{
 		FMantlePlacePublicRecordsBlock Block;
 		Block.NotHeld.Add({ TEXT("zoning"), TEXT("Records/Zoning.dxf"), TEXT("The AOI has no zoning record.") });
@@ -535,4 +511,4 @@ bool FMantlePlacePublicRecordsPublishedFrameTest::RunTest(const FString& Paramet
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

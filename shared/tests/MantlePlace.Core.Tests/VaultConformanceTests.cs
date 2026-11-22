@@ -3,14 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Drives the shared corpus' <c>vault</c> group (<c>HPS-18</c> … <c>HPS-25</c>, <c>HPS-48</c>).
-/// </summary>
-/// <remarks>
-/// Fourteen cases, each driving a DIFFERENT entry point — which is why this group needs the
-/// <see cref="ConformanceCorpus.UndrivenCases"/> check the single-loop <c>manifest</c> suite does
-/// not: a case added upstream would otherwise be loaded and silently ignored.
-/// </remarks>
 internal static class VaultConformanceTests
 {
     internal static int Run()
@@ -158,9 +150,6 @@ internal static class VaultConformanceTests
 
         if (ConformanceCorpus.WantsInt(corpusCase, "warningCount", out int warningCount))
         {
-            // ⛔HPS-21: the odd rows were skipped WITH a warning, and the call still succeeded.
-            // "One row was odd" and "the response was not a vault listing" have opposite correct
-            // responses, and collapsing them tells a paying curator their vault is empty.
             run.Equal(listing.Warnings.Count, warningCount, "warning count");
         }
 
@@ -211,9 +200,6 @@ internal static class VaultConformanceTests
                 run.Within(bundle.AreaKm2 ?? double.NaN, areaKm2, 1e-9, $"{where}.areaKm2");
             }
 
-            // ⛔HPS-20, and the whole reason the legacy row is in this vector: null means UNKNOWN.
-            // A host that coerces it to 0 later compares a real 134 MB download against an expected
-            // size of zero and declares a mismatch on a bundle it never knew the size of.
             run.Equal(bundle.Layers is not null, expected.Bool("layersKnown") ?? false, $"{where}.layersKnown");
             run.Equal(bundle.ManifestVersion is not null, expected.Bool("hasManifestVersion") ?? false, $"{where}.hasManifestVersion");
             run.Equal(bundle.SizeBytes is not null, expected.Bool("hasSizeBytes") ?? false, $"{where}.hasSizeBytes");
@@ -224,8 +210,6 @@ internal static class VaultConformanceTests
                 run.True(bundle.Layers is not null, $"{where}.layers is known");
                 if (bundle.Layers is { } known)
                 {
-                    // elevation is known-and-FALSE. Reading "the layers object is present" as "all
-                    // three true" passes a laxer check and is wrong.
                     run.Equal(known.Imagery, layers.Bool("imagery") ?? false, $"{where}.layers.imagery");
                     run.Equal(known.Basemap, layers.Bool("basemap") ?? false, $"{where}.layers.basemap");
                     run.Equal(known.Elevation, layers.Bool("elevation") ?? false, $"{where}.layers.elevation");
@@ -286,8 +270,6 @@ internal static class VaultConformanceTests
                 BundleDownloadFormat parsed = bundle.DownloadFormats[position];
                 run.Equal(parsed.Format, format.Str("format"), $"{where}.downloadFormats[{position}].format");
 
-                // byteSize 0 means UNRECORDED, not an empty file. A host that hides zero-size
-                // formats hides half the download menu.
                 run.Equal(
                     parsed.ByteSize == (long)(format.Double("byteSize") ?? -1.0),
                     true,
@@ -320,15 +302,9 @@ internal static class VaultConformanceTests
 
         if (ConformanceCorpus.WantsBool(corpusCase, "alreadyRunning", out bool alreadyRunning))
         {
-            // HPS-24: recognised by BODY SHAPE, not by status code. A single-flight response is a
-            // SUCCESS that joins the running job — two curators on one order must not queue two
-            // ETL runs.
             run.Equal(start.AlreadyRunning, alreadyRunning, "already running");
         }
 
-        // ⛔ The outcome, not the presence of an id. The platform's no-op is a success that names no
-        // job at all, and inferring failure from a missing `jobId` is what stopped this host
-        // importing any bundle with nothing left to build.
         if (ConformanceCorpus.WantsString(corpusCase, "outcome", out string outcome))
         {
             run.Equal(start.Outcome.ToString(), outcome, "outcome");
@@ -344,14 +320,6 @@ internal static class VaultConformanceTests
         }
     }
 
-    /// <summary>
-    /// Drives the delivery-state table: the shape this endpoint actually answers polls with.
-    /// </summary>
-    /// <remarks>
-    /// There is no status word to read, so every row asserts a DERIVED state. The `requested` array
-    /// at the top of the file is the yardstick — without it there is nothing to compare `delivered`
-    /// against and no way to know a build has finished.
-    /// </remarks>
     private static void DriveDeliveryVectors(TestRun run, VectorNode root)
     {
         List<string> requested = [];
@@ -454,8 +422,6 @@ internal static class VaultConformanceTests
 
             run.Equal(status.State.ToString(), vector.Str("state")!, $"state for {body}");
 
-            // Absent progress is INDETERMINATE (-1), not 0. A progress bar sitting at 0% and a
-            // spinner say different things to a curator deciding whether to wait.
             run.Within(status.Fraction, vector.Double("fraction") ?? double.NaN, 1e-9, $"fraction for {body}");
 
             if (vector.Str("jobId") is { } jobId)
@@ -465,7 +431,6 @@ internal static class VaultConformanceTests
 
             if (vector.Str("message") is { } message)
             {
-                // A failed job is still a VALID body: it parses, and the reason reaches the curator.
                 run.Equal(status.Message, message, "failure message");
             }
         }
@@ -473,8 +438,6 @@ internal static class VaultConformanceTests
 
     private static void DriveTokenList(TestRun run, VectorNode root)
     {
-        // The vector's token list is the reference host's. Each host substitutes its own; the SHAPE
-        // is the normative part, so that is what gets asserted.
         List<string> referenceTokens = [];
         foreach (VectorNode token in root.Items("tokens"))
         {
@@ -496,7 +459,6 @@ internal static class VaultConformanceTests
 
         run.Equal(root.Obj("bodyForAllScope")!.Str("tokens")!, "all", "the all-scope body IS the keyword");
 
-        // ⛔HPS-23 for THIS host: an explicit array for its own scope, the keyword only for "all".
         string hostBody = MaterializeJobs.BuildRequestBody(MaterializeJobs.HostScope);
         run.Contains(hostBody, "\"tokens\":[", "this host sends an array for its own scope");
         foreach (string token in MaterializeJobs.RevitTokens)
@@ -542,8 +504,6 @@ internal static class VaultConformanceTests
                 StringComparison.OrdinalIgnoreCase),
             "and never with the deprecated alias, whose meaning depends on the order's own data");
 
-        // ⛔HPS-49: the route validates its body, so "{}" is a 400 and not a default. The reference
-        // body is the whole assertion — a host that omits `format` cannot download at all.
         string expectedFormat = root.Obj("body")!.Str("format")!;
         string body = PresignedDownloads.BuildRequestBody();
 
@@ -561,9 +521,6 @@ internal static class VaultConformanceTests
                 wholeBundleVector,
                 $"'{format}' names the whole archive: {wholeBundleVector}");
 
-            // This host asks for the archive and nothing else, so it carries no format allow-list to
-            // assert against — the reference host does. What binds here is the implication: a token
-            // naming the archive must be one the route will presign, or this host cannot download.
             run.True(
                 !wholeBundleVector || presignable,
                 $"'{format}' naming the archive implies the route presigns it");
@@ -591,8 +548,6 @@ internal static class VaultConformanceTests
             }
         }
 
-        // The prose says case-insensitive and never-an-error; both are then asserted rather than
-        // taken on trust.
         run.Contains(root.Str("matching"), "case-insensitive", "the stated matching rule");
         run.Equal(VaultListingReader.ParseStatus("AVAILABLE").ToString(), "Available", "upper-case status word");
         run.Equal(MaterializeJobs.ParseState("PROCESSING").ToString(), "Processing", "upper-case state word");
@@ -627,8 +582,6 @@ internal static class VaultConformanceTests
             run.Equal(error.Value.Code, vector.Str("code")!, $"code from {body}");
         }
 
-        // The vectors cover competing pairs; this walks the whole chain, so an implementation that
-        // happens to get every listed pair right by accident still has to get the order right.
         for (int skip = 0; skip < precedence.Count; skip++)
         {
             Dictionary<string, string> body = [];
@@ -645,10 +598,6 @@ internal static class VaultConformanceTests
         }
     }
 
-    /// <summary>
-    /// Rewrites the reference host's name in a scope to this host's, keeping the capitalisation the
-    /// vector was testing — the case-insensitivity is the normative part, so it must survive.
-    /// </summary>
     private static string SubstituteHost(string scope)
     {
         if (!scope.Equals("unreal", StringComparison.OrdinalIgnoreCase))

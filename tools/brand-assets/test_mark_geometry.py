@@ -1,23 +1,9 @@
-"""Tests for the pure half of the mark renderer.
-
-Stdlib only, and no image library: every function under test takes plain buffers and numbers,
-which is the whole reason the geometry lives apart from the Pillow shim. These run in CI; the
-renderer itself never can, because its input is a private file (see README.md).
-"""
-
 import unittest
 
 import mark_geometry as g
 
 
 class MatteRule(unittest.TestCase):
-    """The monogram is separated from the tile by luminance floor, not by colour matching.
-
-    The canonical mark holds exactly three colours: the tile 0xFF7110 (min channel 16), a black
-    extrude (min channel 0) and a white monogram (min channel 255). A floor above
-    the tile's minimum therefore rejects both the tile and the extrude in one rule.
-    """
-
     def test_white_is_fully_opaque(self):
         self.assertEqual(g.matte_value(255), 255)
 
@@ -49,8 +35,6 @@ class MatteRule(unittest.TestCase):
 
 
 class BoundingBox(unittest.TestCase):
-    """The optical box of the monogram, found on an alpha buffer."""
-
     @staticmethod
     def buffer(width, height, opaque):
         cells = bytearray(width * height)
@@ -83,13 +67,6 @@ class BoundingBox(unittest.TestCase):
 
 
 class Placement(unittest.TestCase):
-    """Scaling the optical box into a tile, centred, with a margin on every side.
-
-    Recentring is not cosmetic. Stripped of its extrude the monogram sits high and left
-    (left margin 18.6% against right 14.2%, top 22.9% against bottom 18.6%), because the
-    extrude was balancing the composition. See ADR 0009.
-    """
-
     def test_a_square_box_fills_the_margin_exactly(self):
         p = g.place(100, 100, size=50, margin=0.10)
         self.assertEqual((p.width, p.height), (40, 40))
@@ -130,8 +107,6 @@ class Placement(unittest.TestCase):
 
 
 class SnapCurve(unittest.TestCase):
-    """Below 32 px the antialiased edge is wider than the stem it softens, so it is hardened."""
-
     def test_the_pivot_is_unmoved(self):
         self.assertEqual(g.snap_value(128), 128)
 
@@ -160,8 +135,6 @@ class SnapCurve(unittest.TestCase):
 
 
 class SizePolicy(unittest.TestCase):
-    """Which treatment each size gets. The evidence is in ADR 0009."""
-
     def test_the_small_sizes_are_snapped(self):
         self.assertTrue(g.uses_snapping(16))
         self.assertTrue(g.uses_snapping(24))

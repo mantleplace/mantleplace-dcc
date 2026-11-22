@@ -9,18 +9,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Scratch.Timing;
 
-// The live verification a layers run does after its import when MANTLEPLACE_TIMING_VERIFY is 1 (-Verify): it MEASURES
-// and writes what it measured to the run folder; verify_report.py judges it. Compiled only from a source that has
-// PrepareForHandover (Build-TimingHarness.ps1 decides), so a harness for an older commit still builds.
-//
-//   placement.csv       the bundle's own surface points (hosts.revit.toposurface_points, which a TIN import never
-//                       reads) against the ground toposolid's own triangulated top at each point's plan position
-//   link-buildings.csv  every element of each linked model that carries an IFC GlobalId: its plan centre and its
-//                       base, in the host's shared coordinates, in metres, and the ground under that centre
-//   verify.json         the frame self-check, what the import stamped by class, each ODbL container by class,
-//                       each link's transform, the site context view's override on each container, and the handover:
-//                       what it planned, what Delete took (filed and not), what is left, and the credit
-//   site-context.png    the site context view, for the eyes-on check of the orange override
 internal static class Verify
 {
     private const double FeetPerMetre = 1.0 / 0.3048;
@@ -41,7 +29,6 @@ internal static class Verify
         record["manifest_version"] = manifest.RootElement.GetProperty("version").GetString();
         record["origin_projected"] = new { east, north, unit = origin.GetProperty("linear_unit").GetString() };
 
-        // Self-check of the frame: the internal origin, in shared coordinates, is the survey point the import set.
         XYZ internalOrigin = toShared.OfPoint(XYZ.Zero);
         record["internal_origin_in_shared_m"] = Metres(internalOrigin);
 
@@ -100,8 +87,6 @@ internal static class Verify
         string path = points.GetProperty("path").GetString()!;
         string frame = points.TryGetProperty("horizontal_frame", out JsonElement f) ? f.GetString() ?? "" : "";
         string units = points.TryGetProperty("units", out JsonElement u) ? u.GetString() ?? "" : "";
-        // A foot delivery's points are read in its own foot: the survey point the import set is the US survey foot's
-        // metres on a ftUS delivery, and a State Plane easting read as international feet lands about a metre off.
         double toMetres = units switch { "m" => 1.0, "ftUS" => 1200.0 / 3937.0, "ft" => 0.3048, _ => 0.0 };
         if (toMetres == 0.0)
         {
@@ -170,8 +155,6 @@ internal static class Verify
             int buildings = 0;
             if (linked is not null)
             {
-                // The site model's buildings come in as Generic Models; its levels, grids and the like carry a
-                // GlobalId too but a box about the origin.
                 foreach (Element element in new FilteredElementCollector(linked).OfCategory(BuiltInCategory.OST_GenericModel).WhereElementIsNotElementType())
                 {
                     string? guid = element.get_Parameter(BuiltInParameter.IFC_GUID)?.AsString();
@@ -273,7 +256,6 @@ internal static class Verify
 
     private static object Handover(Document document, PrepareForHandover.HandoverPlan plan, Action<string> say)
     {
-        // What every id is before anything is deleted, so what Delete took can be named afterwards.
         Dictionary<ElementId, string> before = [];
         foreach (Element element in new FilteredElementCollector(document).WhereElementIsNotElementType())
         {
@@ -286,7 +268,6 @@ internal static class Verify
         }
 
         HashSet<ElementId> filed = [.. plan.Removing.SelectMany(container => container.Live)];
-        // Names now: a removed container is deleted with its content, and a deleted element has no name to read.
         List<string> removals = [.. plan.Removing.Select(container => container.Filter.Name)];
         List<string> kept = [.. plan.Containers.Except(plan.Removing).Select(container => container.Filter.Name)];
         PrepareForHandover.HandoverResult result = PrepareForHandover.Run(document, plan);
@@ -323,11 +304,6 @@ internal static class Verify
         };
     }
 
-    /// <summary>
-    /// The upward-facing triangles of the ground toposolids, in shared feet, and the height of the ground at a
-    /// shared plan point. A ray cast is not used: a ReferenceIntersector over a toposolid returned only its flat
-    /// bottom face, in every attempt, so the ground's top is read from its own triangulated faces instead.
-    /// </summary>
     private sealed class Ground
     {
         private const double CellFt = 40.0;
@@ -407,7 +383,6 @@ internal static class Verify
 
         private static int Cell(double value) => (int)Math.Floor(value / CellFt);
 
-        /// <summary>The highest triangle over the point, interpolated in it, in shared feet; null where there is none.</summary>
         internal double? At(double east, double north)
         {
             if (!_cells.TryGetValue((Cell(east), Cell(north)), out List<int>? candidates))

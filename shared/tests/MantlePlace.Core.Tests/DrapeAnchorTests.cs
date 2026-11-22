@@ -2,15 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The offset the drape writes, for the origin Revit will measure it from.
-/// </summary>
-/// <remarks>
-/// The numbers are the measured site: image south-west corner at (−709.5, −706.5) m, terrain corner
-/// at (−708.5, −704.8) m, one subdivision's corner at (326.6, 223.1) m. Written for the wrong origin
-/// the photograph rolls by half its size, which is the four-quarters-at-a-cross symptom, so these
-/// cases are the difference between a correct drape and a convincing wrong one.
-/// </remarks>
 internal static class DrapeAnchorTests
 {
     private static readonly DrapePlacement Site = new()
@@ -37,8 +28,6 @@ internal static class DrapeAnchorTests
 
         run.Case("smooth shading: the offset is measured from the element's own corner", () =>
         {
-            // ⛔ The measured rule. (−709.5 − −708.5, −706.5 − −704.8) = (−1.0, −1.7): the ground's
-            // corner is one metre inside the image's, so the image starts one metre before it.
             DrapeOffset offset = DrapeAnchor.For(Site, smoothShading: true, -708.5, -704.8);
 
             run.True(Math.Abs(offset.Xm - -1.0) < 1e-9, $"x {offset.Xm}");
@@ -47,8 +36,6 @@ internal static class DrapeAnchorTests
 
         run.Case("a subdivision far from the origin gets a large negative offset", () =>
         {
-            // The subdivision in the north-east of the site. Its corner is 326.6 m east of the
-            // origin, so from that corner the image starts 1,036.1 m to the west.
             DrapeOffset offset = DrapeAnchor.For(Site, smoothShading: true, 326.6, 223.1);
 
             run.True(Math.Abs(offset.Xm - -1036.1) < 1e-9, $"x {offset.Xm}");

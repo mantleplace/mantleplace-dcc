@@ -2,15 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// What the About dialog says about which build is loaded and where it came from.
-/// </summary>
-/// <remarks>
-/// The dialog itself cannot be tested without Revit. Its sentences can, and they are the half that
-/// matters: the reason this exists is a machine running a build a day older than the source tree,
-/// with nothing on screen saying so. Every line here is one that, if it read wrong, would send a
-/// maintainer chasing a bug that is already fixed.
-/// </remarks>
 internal static class InstalledBuildTests
 {
     private const string Sha = "c0e8438ca9b56278590780959cf4e5cbaf394675";
@@ -111,8 +102,6 @@ internal static class InstalledBuildTests
 
         run.Case("a stamp naming a different commit is called out, not trusted", () =>
         {
-            // The files beside the stamp were replaced by hand after the deploy. The stamp is now
-            // a lie about the assembly, and the assembly is the thing that is loaded.
             BuildIdentity build = BuildIdentity.Parse($"0.1.0+{Sha}");
             InstallStamp stamp = InstallStamp.Parse(
                 "{\"schema\":1,\"source\":\"source-tree\",\"version\":\"0.1.0+abc\","
@@ -142,7 +131,6 @@ internal static class InstalledBuildTests
 
         run.Case("the Client reads the stamp beside the plugin, and reads nothing as null", () =>
         {
-            // The one file read behind About, kept in Client so CI builds it (revit/CLAUDE.md).
             string folder = Path.Combine(Path.GetTempPath(), "mantleplace-stamp-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(folder);
             try

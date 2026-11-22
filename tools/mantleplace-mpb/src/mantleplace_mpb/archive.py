@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""Open a bundle as a zip, a folder, or either one wrapped in a single top-level folder.
-
-Nothing is extracted. A zip is read entry by entry, by name, so an entry whose name escapes the
-bundle is reported and never written anywhere. `__MACOSX/` and `.DS_Store` are the debris a macOS
-archiver adds; they are not part of any bundle and are skipped wherever they appear.
-"""
 
 from __future__ import annotations
 
@@ -17,11 +11,8 @@ from typing import IO
 
 from .report import Report
 
-#: Where a 2.x or 1.x bundle holds its manifest (`format-2.md`).
 MANIFEST_PATH = "Metadata/manifest.json"
-#: Where a 3.x bundle holds it, at the root (`format.md` §9.1), and every later major too.
 MANIFEST_PATH_3 = "Manifest.json"
-#: The places a manifest is looked for, the newest first: a zip with neither is not a bundle.
 MANIFEST_PATHS = (MANIFEST_PATH_3, MANIFEST_PATH)
 
 _IGNORED_FOLDERS = frozenset({"__MACOSX"})
@@ -35,7 +26,6 @@ def ignored(name: str) -> bool:
 
 
 def unsafe(name: str) -> bool:
-    """A path that is not a plain relative path inside the bundle (spec: paths are untrusted)."""
     if not name or name.startswith("/") or "\\" in name or _DRIVE.match(name) or "\x00" in name:
         return True
     parts = name[:-1].split("/") if name.endswith("/") else name.split("/")
@@ -43,8 +33,6 @@ def unsafe(name: str) -> bool:
 
 
 class Bundle:
-    """The files of one bundle, by bundle-relative POSIX path."""
-
     def __init__(self, form: str, root: str, files: dict[str, object],
                  archive: zipfile.ZipFile | None, manifest_path: str = MANIFEST_PATH) -> None:
         self.form = form
@@ -60,7 +48,6 @@ class Bundle:
         return sorted(self._files)
 
     def members(self) -> list[tuple[str, zipfile.ZipInfo]]:
-        """`(path, zip entry)` for each file of a zip, sorted by path; none for a folder."""
         if self._archive is None:
             return []
         return [(path, self._files[path]) for path in self.files]  # type: ignore[misc]
@@ -72,12 +59,6 @@ class Bundle:
         return path.rstrip("/") in self.folders
 
     def resolve(self, path: str, fold_case: bool = False) -> str | None:
-        """The entry `path` names, file or folder (a folder without its trailing `/`), or None.
-
-        With `fold_case`, a path that names no entry exactly is matched regardless of case, as a
-        2.0 reader matches a manifest path (format §10.3, rule 6). Where entries collide by case,
-        which one is returned is unspecified; the collision is a finding of its own.
-        """
         bare = path.rstrip("/")
         if path in self._files:
             return path
@@ -119,7 +100,6 @@ class Bundle:
 
 
 def open_bundle(path: Path, report: Report) -> Bundle | None:
-    """The bundle at `path`, or None with the reason recorded in `report`."""
     report.ran.append("archive")
     entries: dict[str, object] = {}
     archive: zipfile.ZipFile | None = None
@@ -179,7 +159,6 @@ def open_bundle(path: Path, report: Report) -> Bundle | None:
 
 
 def _root(entries: dict[str, object]) -> tuple[str, str] | None:
-    """(wrapper prefix, manifest path) for the first manifest found, or None."""
     for manifest_path in MANIFEST_PATHS:
         if manifest_path in entries:
             return "", manifest_path

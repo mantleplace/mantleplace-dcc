@@ -2,22 +2,6 @@ using System.Globalization;
 
 namespace MantlePlace.Core;
 
-/// <summary>
-/// One tree point, placed in the bundle's local frame and dimensioned well enough to be real
-/// geometry.
-/// </summary>
-/// <remarks>
-/// A <em>tree point</em> is any published point of the tree layer, whatever its foliage type — the
-/// layer is named for what it publishes, not for what grows there.
-/// </remarks>
-/// <param name="GroundElevationM">
-/// Height of the ground beneath it, in metres whatever unit the file carried it in: absolute
-/// orthometric for a 2.x file, and for a 3.x file the site origin's height with the file's offset
-/// above it already added, so it is the same height the terrain stands at.
-/// </param>
-/// <param name="HeightM">Total height, ground to apex.</param>
-/// <param name="CrownRadiusM">Crown radius at its widest.</param>
-/// <param name="FoliageType">As the platform classified it; never derived from the dimensions.</param>
 public readonly record struct SiteTreePoint(
     double EastM,
     double NorthM,
@@ -26,79 +10,25 @@ public readonly record struct SiteTreePoint(
     double CrownRadiusM,
     FoliageType FoliageType);
 
-/// <summary>
-/// One read of <c>Landcover/TreePoints.csv</c>: the points, and what the log has to say about how
-/// they were read.
-/// </summary>
-/// <remarks>
-/// A record rather than a handful of <c>out</c> parameters. The counts are not incidental — a
-/// bundle whose foliage column this build could not interpret is a bundle whose planting is all
-/// trees for a reason the curator deserves to be told.
-/// </remarks>
 public sealed record TreePointsParse
 {
-    /// <summary>A user-facing reason the file could not be read, or <c>null</c> on success.</summary>
     public string? Failure { get; init; }
 
-    /// <summary>The points that parsed. Empty when <see cref="Failure"/> is set.</summary>
     public IReadOnlyList<SiteTreePoint> Points { get; init; } = [];
 
-    /// <summary>Cells carrying a value this build does not know, each read as a tree.</summary>
     public int UnknownFoliageValues { get; init; }
 
-    /// <summary>Cells that were empty or absent, each read as a tree.</summary>
     public int EmptyFoliageCells { get; init; }
 
-    /// <summary>
-    /// Rows left out because their <c>ground_z</c> cell was empty: an ordinary DEM gap. A tree with no
-    /// ground elevation belongs nowhere rather than at zero (<c>HPS-20</c>), so it is dropped — and
-    /// counted, so a half-blank column is not reported as a whole layer.
-    /// </summary>
     public int RowsWithoutGround { get; init; }
 
-    /// <summary>
-    /// Rows left out for any other reason: a geometry cell that is missing or not a number, or a
-    /// position the frame cannot place. Unlike <see cref="RowsWithoutGround"/> this is the file
-    /// drifting from its contract. A row that is both counts here only.
-    /// </summary>
     public int UnreadableRows { get; init; }
 
-    /// <summary>
-    /// What the log says once about the file as a whole — never once per row.
-    /// </summary>
     public IReadOnlyList<string> Notes { get; init; } = [];
 
     internal static TreePointsParse Failed(string reason) => new() { Failure = reason };
 }
 
-/// <summary>
-/// Parses <c>Landcover/TreePoints.csv</c> into placed tree points. Pure.
-/// </summary>
-/// <remarks>
-/// <para>
-/// A 2.x file is absolute, in the delivery CRS its manifest entry states — so unlike the toposurface
-/// points it is not already local, and unlike the vector layers it is not geographic.
-/// <see cref="SiteFrame"/> owns both the subtraction and the refusal when that CRS is not the
-/// origin's. A 3.x file is host-ready, so it is already local: its <c>x</c> and <c>y</c> are metres
-/// east and north of the site origin and its <c>ground_z</c> is metres above the origin's height
-/// (<c>spec/format.md</c> §4). The step says which it is, as <paramref name="layer"/>, and the
-/// origin's height as <paramref name="groundBaseM"/>; both are applied as published
-/// (<c>HPS-33</c>), and reading a local file as absolute would subtract the origin twice.
-/// </para>
-/// <para>
-/// Columns are resolved from the HEADER, not by position. The manifest publishes
-/// <c>landcover.tree_points.columns</c>, which makes the order contract rather than convention; a
-/// positional reader would swap height for crown radius the day the ETL reorders them and every
-/// tree would still look like a tree.
-/// </para>
-/// <para>
-/// Five columns are required and make geometry. <c>foliage_type</c> is the sixth, added by MPB
-/// 1.2.0, and it is optional in both directions: a file without it parses, and a row that stops
-/// before it parses. The manifest's <c>foliage_type_vocabulary</c> is the authority on what its
-/// values mean — without one they are uninterpretable, so the column is ignored and the log says so
-/// (<c>spec/format.md</c> §4.4, <see cref="FoliageTypes"/>).
-/// </para>
-/// </remarks>
 public static class TreePointsReader
 {
     private const string EastingColumn = "x";
@@ -110,45 +40,6 @@ public static class TreePointsReader
     private static readonly string[] RequiredColumns =
         [EastingColumn, NorthingColumn, GroundColumn, HeightColumn, CrownColumn];
 
-    /// <summary>
-    /// Parses the whole file.
-    /// </summary>
-    /// <remarks>
-    /// A row that does not parse is DROPPED, where a bad row in the toposurface points file fails
-    /// the read. The difference is what a bad row costs: a hole in the terrain is invisible and
-    /// wrong, one missing tree out of forty-four is neither. The ETL leaves <c>ground_z</c> empty
-    /// where the DEM had no data, and that row is dropped rather than placed at elevation zero —
-    /// unknown is not zero (<c>HPS-20</c>), and zero here is two kilometres below the site. Every
-    /// dropped row is counted, as <see cref="TreePointsParse.RowsWithoutGround"/> or
-    /// <see cref="TreePointsParse.UnreadableRows"/>, so the drop is never silent.
-    /// </remarks>
-    /// <param name="foliageVocabulary">
-    /// <c>landcover.tree_points.foliage_type_vocabulary</c> as published, or <c>null</c> where the
-    /// manifest carried none.
-    /// </param>
-    /// <param name="groundUnit">
-    /// The unit of the <c>ground_z</c> column, as the planner resolved it — feet on a foot delivery
-    /// (<c>spec/format.md</c> §6.6). Required rather than defaulted to metres: a caller that forgot
-    /// it would stand every tree on a foot delivery at 3.28 times its ground height.
-    /// </param>
-    /// <param name="layer">
-    /// The frame the file's <c>x</c> and <c>y</c> are in, as the planner stated it for the step
-    /// (<see cref="ImportStep.Layer"/>), or <c>null</c> where it states none, which is every 2.x file:
-    /// absolute in the origin's CRS, placed by subtracting the origin. A 3.x host-ready file states
-    /// <see cref="LayerCoordinates.LocalOffsets"/>, and its offsets are taken as they are.
-    /// </param>
-    /// <param name="groundBaseM">
-    /// The height <c>ground_z</c> is measured above, in metres
-    /// (<see cref="ImportStep.HeightBaseM"/>): the site origin's height for a 3.x file, added to each
-    /// ground height as published. Zero for a 2.x file, whose heights are absolute.
-    /// </param>
-    /// <param name="rowLimit">
-    /// A fidelity level's row cut: only the first this-many data rows are read, header excluded,
-    /// whether or not each one parses — the cut is of the published file's rows, and the row number
-    /// is the rank. <c>null</c> reads the whole file. Because a dropped row is counted and not
-    /// replaced, the points of a cut are always the first points of the whole file, so a point's
-    /// position — what its stamp records (<see cref="TreeIdentity"/>) — is the same at every level.
-    /// </param>
     public static TreePointsParse Parse(
         string csvText,
         SiteFrame frame,
@@ -245,16 +136,6 @@ public static class TreePointsReader
             };
     }
 
-    /// <summary>
-    /// What the log says once about the manifest and the header disagreeing, or about a vocabulary
-    /// this build has not caught up with.
-    /// </summary>
-    /// <remarks>
-    /// Silence is right for the ordinary older bundle — no vocabulary and no column is the 1.1.0
-    /// shape, and every point being a tree is exactly what the spec says it is. The two
-    /// disagreements are worth one line each: neither is the curator's doing, and a silent drop
-    /// would hide a publisher's mistake behind a plausible-looking import.
-    /// </remarks>
     private static IEnumerable<string> VocabularyNotes(string? vocabulary, bool hasColumn)
     {
         if (vocabulary is null)
@@ -284,7 +165,6 @@ public static class TreePointsReader
         }
     }
 
-    /// <summary>The column index of each required name, or <c>null</c> when one is missing.</summary>
     private static Dictionary<string, int>? ReadHeader(string[] fields)
     {
         Dictionary<string, int> columns = new(StringComparer.OrdinalIgnoreCase);
@@ -304,7 +184,6 @@ public static class TreePointsReader
         return columns;
     }
 
-    /// <summary>How one data row was read — the three outcomes the log distinguishes.</summary>
     private enum RowReading
     {
         Read,
@@ -312,11 +191,6 @@ public static class TreePointsReader
         Unreadable,
     }
 
-    /// <summary>Reads one data row into a point, or says why it could not.</summary>
-    /// <remarks>
-    /// Everything but <c>ground_z</c> is checked first, so a row that is both a DEM gap and
-    /// unreadable is counted as unreadable: the contract drifting is the finding worth reporting.
-    /// </remarks>
     private static RowReading ReadRow(
         string[] fields,
         Dictionary<string, int> columns,
@@ -339,22 +213,16 @@ public static class TreePointsReader
 
         if (!TryNumber(fields, columns, GroundColumn, out double ground))
         {
-            // Present and blank is the DEM gap. A cell the row is too short to reach is not.
             return Cell(fields, columns, GroundColumn) is { } cell && string.IsNullOrWhiteSpace(cell)
                 ? RowReading.NoGround
                 : RowReading.Unreadable;
         }
 
-        // Only ground_z has a unit to read. height_m and crown_radius_m say theirs in their names.
         double groundM = (ground * LinearUnits.MetresPerUnit(groundUnit)) + groundBaseM;
         point = new SiteTreePoint(east, north, groundM, height, crown, FoliageType.Tree);
         return RowReading.Read;
     }
 
-    /// <summary>
-    /// A row's plan position in frame-local metres: by the frame the step states, or, where it states
-    /// none, as absolute coordinates in the origin's own CRS.
-    /// </summary>
     private static bool TryPlace(
         SiteFrame frame,
         LayerFrame? layer,
@@ -377,7 +245,6 @@ public static class TreePointsReader
                 out value);
     }
 
-    /// <summary>The row's cell in that column, or <c>null</c> when the row is too short to have one.</summary>
     private static string? Cell(string[] fields, Dictionary<string, int> columns, string column)
     {
         int index = columns[column];

@@ -3,16 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Published contours (ADR 0013): reading the <c>LWPOLYLINE</c>s of the contours DXF, bringing them
-/// into the site's frame, clipping them at the terrain's crop window, dropping the vertices Revit
-/// could not draw a segment between, and the layer's build-scoped identity.
-/// </summary>
-/// <remarks>
-/// The DXF shape pinned here is the one real bundles carry: <c>LWPOLYLINE</c>s in <c>ENTITIES</c>,
-/// elevation in group 38, absolute projected X/Y in groups 10/20 — and, since the 2026-10-03
-/// complete bundles, <c>TEXT</c> labels between them, which are skipped and counted.
-/// </remarks>
 internal static class PublishedContourTests
 {
     private const string Stem = "order-7f3a";
@@ -82,7 +72,6 @@ internal static class PublishedContourTests
 
         run.Case("a missing group 38 is elevation zero, as the DXF reference defaults it", () =>
         {
-            // A coastal site has a zero contour, and an emitter may leave a default out.
             string dxf = Entities(Polyline(null, closed: false, (0, 0), (1, 0)));
 
             run.Equal(PublishedContourReader.TryParse(new StringReader(dxf), out IReadOnlyList<PublishedContour>? contours), null, "read");
@@ -92,8 +81,6 @@ internal static class PublishedContourTests
 
         run.Case("a paper-space entity is a sheet's, not the drawing's: skipped, never placed or refused", () =>
         {
-            // The platform's site linework DXF carries its plan sheets' VIEWPORTs (and their frames) in
-            // ENTITIES with group 67 = 1. A live Civil 3D 2027 import refused the whole drawing on them.
             string viewport = "0\nVIEWPORT\n5\n10A1\n100\nAcDbEntity\n67\n1\n8\nVIEWPORTS\n10\n24.0\n20\n12.0\n";
             string sheetFrame = Polyline("0", closed: true, (0, 0), (17, 0), (17, 11))
                 .Replace("0\nLWPOLYLINE\n", "0\nLWPOLYLINE\n67\n1\n", StringComparison.Ordinal);
@@ -115,7 +102,6 @@ internal static class PublishedContourTests
 
         run.Case("an LWPOLYLINE outside ENTITIES is not a contour", () =>
         {
-            // ⛔ Geometry in BLOCKS is a definition placed by an INSERT with its own transform.
             StringBuilder dxf = new();
             dxf.Append("0\nSECTION\n2\nBLOCKS\n");
             dxf.Append(Polyline("1", closed: false, (0, 0), (1, 1)));
@@ -140,8 +126,6 @@ internal static class PublishedContourTests
 
         run.Case("TEXT and MTEXT labels are skipped and counted, and every polyline beside them is placed", () =>
         {
-            // The shape both 2026-10-03 reference bundles carry: CONTOUR-LABEL TEXT entities
-            // interleaved with the LWPOLYLINEs, each label with its own 10/20/30 insertion point.
             string dxf = Entities(
                 Polyline("6210.0", closed: false, (0, 0), (1, 1)),
                 Label("TEXT", "6250"),
@@ -195,7 +179,6 @@ internal static class PublishedContourTests
 
         run.Case("an extrusion other than +Z refuses the file", () =>
         {
-            // LWPOLYLINE vertices are in the entity's OCS. Only a +Z extrusion makes them world X/Y.
             string dxf = Entities("0\nLWPOLYLINE\n90\n2\n70\n0\n38\n1\n10\n0\n20\n0\n10\n1\n20\n1\n210\n0\n220\n0\n230\n-1\n");
 
             run.Contains(PublishedContourReader.TryParse(new StringReader(dxf), out _), "extrusion", "refused by name");
@@ -271,7 +254,6 @@ internal static class PublishedContourTests
 
         run.Case("a foot vertical unit converts Z while X/Y keep the horizontal unit", () =>
         {
-            // The local_ft shape: X/Y in one unit, Z in another. Each is taken from the manifest.
             PublishedContour contour = Contour("100", 100, closed: false, (545890.5, 4187220.5), (545900.5, 4187230.5));
 
             ContourPlacement? placed = Place([contour], MetricFrame, MetricAbsolute, LinearUnit.UsSurveyFoot, window: null, out _);
@@ -382,8 +364,6 @@ internal static class PublishedContourTests
 
         run.Case("a closed contour cut once is one piece joined across its start", () =>
         {
-            // Start inside, run out through the east edge and back in: the piece before the
-            // crossing and the piece after it are one run of line on the ground.
             PlacedContour only = PlaceLocal(window, closed: true, (5, 2), (15, 2), (15, 8), (5, 8))!.Contours[0];
 
             run.Equal(only.Pieces.Count, 1, "one piece, not two");
@@ -415,7 +395,6 @@ internal static class PublishedContourTests
 
         run.Case("a run of short steps is measured from the last kept vertex, not the previous one", () =>
         {
-            // Each step is under tolerance, but the fourth vertex is past it from the first.
             PlacedContour only = PlaceLocal(null, Tolerance, closed: false, (0, 0), (0.006, 0), (0.012, 0), (0.018, 0), (0.024, 0))!.Contours[0];
 
             run.Equal(only.Pieces[0].Count, 3, "0, 0.012, 0.024");

@@ -1,25 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    The AutoCAD plugin's headless suite (HPS-42). No AutoCAD, no Civil 3D, no NuGet, no test
-    framework: `dotnet run` over the shared suite's harness, exiting non-zero on the first failing
-    assertion set.
-
-    TWO target frameworks, and running both is the point: the shipped plugin is a .NET 8 build for
-    AutoCAD and Civil 3D 2025 and 2026 and a .NET 10 build for 2027, so the suite runs on both runtimes.
-
-    It COMPILES IN the shared suite's harness and its conformance runners, by source include, and
-    runs the ones for the corpus groups this host claims (verified-against.json, `autocad`), as the
-    AutoCAD plugin (Program.cs sets HostIdentity). The runners read the corpus at run time, find the
-    repository root by climbing out of this project's output folder, and assert against the shared
-    Core, Client and Platform API assemblies this host references, so a green run here is the shared
-    code passing as this host under this host's two runtimes. The shared suite's other cases run once,
-    in the shared suite (ci-revit-tests).
-
-    This host's own cases are in this folder: the manifest's host parameter and the presence-gate
-    decision.
-  -->
-
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFrameworks>net8.0;net10.0</TargetFrameworks>

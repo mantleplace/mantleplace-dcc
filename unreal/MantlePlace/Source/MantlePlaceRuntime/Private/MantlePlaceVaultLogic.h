@@ -5,355 +5,103 @@
 #include "CoreMinimal.h"
 #include "MantlePlaceVaultTypes.h"
 
-// Forward-declared rather than included: only TSharedPtr<FJsonObject> appears in a signature here,
-// and the editor target resolving it transitively is what let the game-target break ship unseen.
 class FJsonObject;
 
-/**
- * Pure (engine-/network-free) logic for the Mantle Place vault API.
- *
- * Everything here is deterministic and headless-testable: URL/body construction and JSON
- * response parsing for the two plugin-facing endpoints - list owned bundles and mint a
- * presigned download URL. The UObject shim (UMantlePlaceVaultClient) owns the impure
- * parts: issuing the authenticated HTTP request and firing Blueprint events. Keep this
- * layer free of HTTP/UObject dependencies so the automation test can exercise it under
- * -nullrhi (mirrors FMantlePlaceAuthLogic).
- */
 struct FMantlePlaceVaultLogic
 {
-	/** Strip whitespace and any trailing '/' from a configured base URL. */
 	static FString NormalizeBaseUrl(const FString& BaseUrl);
 
-	/** GET endpoint: list the curator's owned bundles. */
 	static FString BuildListBundlesUrl(const FString& BaseUrl);
 
-	/** POST endpoint: mint a presigned download URL for one order (orderId path segment, URL-encoded). */
 	static FString BuildDownloadUrl(const FString& BaseUrl, const FString& OrderId);
 
-	/** JSON request body for the download mint: {"format":"<fmt>"} (condensed). */
 	static FString BuildDownloadBody(const FString& Format);
 
-	/**
-	 * Parse the list response: { "bundles": [ ... ] }. Returns true and fills OutItems on
-	 * success. Applies the "null = unknown" rule (per-field bHas* companions). A single
-	 * malformed entry (non-object, or missing the required "id") is SKIPPED rather than
-	 * failing the whole list, so one bad row can't blank the curator's vault; each skip is
-	 * appended to OutWarnings when provided. Fails closed (false, fills OutError) only on
-	 * invalid JSON or a missing/non-array top-level "bundles".
-	 */
 	static bool ParseListResponse(const FString& JsonStr, TArray<FMantlePlaceVaultItem>& OutItems, FString& OutError, TArray<FString>* OutWarnings = nullptr);
-	// A row's 3.0 offer is read by ReadLevelOffer; one it cannot read is a warning, never a skipped row.
 
-	/**
-	 * Parse the download-mint response: { "url", "expiresAt" }. Returns true on success.
-	 * Fail-closed if "url" is missing/empty (falls back to error-body parsing for the message).
-	 */
 	static bool ParseDownloadResponse(const FString& JsonStr, FMantlePlacePresignedDownload& OutDownload, FString& OutError);
 
-	/**
-	 * Parse a platform error body into a message, in the one precedence order every platform
-	 * error-body parser shares (HPS-48): error_description, msg, message, error_code, error.
-	 * Returns false if no message present. OutCode is set to the optional "code" (e.g.
-	 * "refunded"/"revoked") — a separate read, unaffected by the message precedence.
-	 */
 	static bool ParseErrorBody(const FString& JsonStr, FString& OutError, FString& OutCode);
 
-	/**
-	 * True for the platform's refusal of an Extra a free bundle does not hold: HTTP 403 with code
-	 * `extra_locked`. It is the locked row, not a failure: the surface shows MantlePlaceLockedExtrasWords().
-	 */
 	static bool IsExtraLockedRefusal(int32 ResponseCode, const FString& JsonStr);
 
-	/** Map a status string to the enum; unrecognized strings -> Unknown (not a parse error). */
 	static EMantlePlaceVaultBundleStatus ParseStatus(const FString& Status);
 
-	/** True iff the item can be presigned (Status == Available). */
 	static bool IsDownloadable(const FMantlePlaceVaultItem& Item);
 
-	/** True iff Format is one of the six known artifact formats (case-insensitive). */
 	static bool IsKnownFormat(const FString& Format);
 
-	/** The six accepted download formats (mirrored from the producer allow-list). */
 	static const TArray<FString>& KnownFormats();
 
-	/**
-	 * The format token that names the packaged archive rather than one artifact inside it.
-	 *
-	 * The DEPRECATED alias for this is the literal "glb", which this plugin used to send. It is
-	 * genuinely ambiguous: "glb" is also a real artifact format, so the platform looks up a glb
-	 * artifact FIRST and only falls through to the whole zip when the order has none. An order that
-	 * does carry one answers with that mesh -- and the bundle cache then verifies it against the
-	 * listing's sha256, which is the ARCHIVE's digest, so a download that succeeded fails integrity.
-	 * We were never getting the zip on purpose; we were getting it when the data happened to allow.
-	 */
 	static const FString& WholeBundleFormat();
 
-	/** True iff the presign route accepts Format: any artifact format, plus the whole-bundle token. */
 	static bool IsPresignableFormat(const FString& Format);
 
-	//~ ----- "Generate Unreal formats" (on-demand materialize) -----
-
-	/** POST/GET endpoint: request or poll an on-demand materialize for one order (orderId URL-encoded). */
 	static FString BuildMaterializeUrl(const FString& BaseUrl, const FString& OrderId);
 
-	/** True iff Scope is a materialize scope the plugin offers: "unreal" or "all" (case-insensitive). */
 	static bool IsValidMaterializeScope(const FString& Scope);
 
-	/**
-	 * The explicit packaging-format tokens the Unreal importer consumes — the plugin's targeted
-	 * layer set, and the single home for it. Sent to materialize instead of the server-side
-	 * "unreal" keyword so the plugin, not the web tier, owns which layers a UE import needs
-	 * (the keyword expands to only the four core tokens and would silently drop the vector/
-	 * landcover layers this importer now reads).
-	 */
 	static const TArray<FString>& TargetedImportTokens();
 
-	/**
-	 * JSON request body for the materialize POST — the platform's vault contract is
-	 * {"tokens": "unreal"|"all"|Token[]}. Scope "all" passes through as the keyword;
-	 * "unreal" (and empty) sends the explicit TargetedImportTokens() array. Condensed.
-	 */
 	static FString BuildMaterializeBody(const FString& Scope);
 
-	/**
-	 * The same body for an ARBITRARY token list — the re-pick path.
-	 *
-	 * A host that joined a run in flight can only discover what that run left out once it ends, and
-	 * by then the platform has stopped coalescing into it. Asking again for the remainder needs a
-	 * body the scope keywords cannot express: not "unreal" (which re-asks for the five that already
-	 * landed) and not "all" (which dispatches real compute for a catalogue nobody wanted).
-	 */
 	static FString BuildMaterializeBodyForTokens(const TArray<FString>& Tokens);
 
-	/**
-	 * Parse the materialize POST response - all five shapes the platform sends.
-	 *
-	 * STOP: each outcome is keyed on ITS OWN MARKER, never on the absence of `jobId`. That inference
-	 * is what broke this: {"noop":true,..} and {"queued":true,..} are SUCCESSES that name no job, and
-	 * both read as "the platform accepted the request but named no job to poll".
-	 *
-	 *   201 {"jobId",..}                     -> Started
-	 *   200 {"coalesced":true,"activeJobId"} -> Joined  (note: NO `jobId` in this one)
-	 *   200 {"noop":true,"delivered"}        -> NothingToDo
-	 *   202 {"queued":true,"pendingTokens"}  -> Queued
-	 *   409 {"error","code":"active_job",..} -> Joined
-	 *
-	 * A join with no job id is STILL a join: the 409's `activeJobId` may be null, and polling is keyed
-	 * on the ORDER, not the job (the status GET never took a job id), so an unnamed run is fully
-	 * followable. Refusing here tells a curator to retry a build that is already going.
-	 *
-	 * Fails closed (false, fills OutError from the error body) only for a genuine error envelope or a
-	 * body that is none of the five.
-	 */
 	static bool ParseMaterializeStartResponse(const FString& JsonStr, FMantlePlaceMaterializeStart& OutStart, FString& OutError);
 
-	/**
-	 * The four-argument shape, kept so the corpus drivers that assert jobId/alreadyRunning keep
-	 * working unchanged. New callers take the outcome.
-	 */
 	static bool ParseMaterializeStartResponse(const FString& JsonStr, FString& OutJobId, bool& bOutAlreadyRunning, FString& OutError);
 
-	/** True for a `not_delivered` reason that no amount of waiting or retrying will change. */
 	static bool IsPermanentlyAbsentReason(const FString& Reason);
 
-	/**
-	 * The token set to measure delivery against while polling.
-	 *
-	 * The start response echoes the EFFECTIVE set - already deduped against what is delivered and
-	 * against what can never be produced here - so it beats this host's own list, and is the only
-	 * correct answer for the "all" scope whose expansion lives on the server. Falls back to
-	 * TargetedImportTokens() when the body named none.
-	 */
 	static TArray<FString> RequestedForPolling(const FMantlePlaceMaterializeStart& Start);
 
-	/** Map a materialize status string to the enum; unrecognized strings -> Unknown (not a parse error). */
 	static EMantlePlaceMaterializeState ParseMaterializeState(const FString& State);
 
-	/**
-	 * Parse a materialize status body. TWO shapes.
-	 *
-	 * A body carrying {"status"|"state":..} is a job-status document and is read as one:
-	 * {"progress"|"fraction"?:.., "message"?:.., "jobId"?:..}, a value > 1 treated as a percent and
-	 * normalized to [0,1].
-	 *
-	 * Otherwise the platform answers this endpoint with a DELIVERY-STATE document -
-	 * {"delivered":[..],"notDelivered":[{token,reason}],"activeJob":{..}|null,"lastAttempt":..} -
-	 * which carries no status word ANYWHERE, so completion is derived from `delivered` against
-	 * `Requested`. That derivation is the more truthful reading either way: a run reports `completed`
-	 * even when every token's emit failed, because per-token errors are swallowed by a soft-fail
-	 * envelope. Delivery is proof of production; a job status is not.
-	 *
-	 * A raw error envelope with neither shape fails closed (false, fills OutError).
-	 */
 	static bool ParseMaterializeStatus(const FString& JsonStr, const TArray<FString>& Requested, FMantlePlaceMaterializeStatus& OutStatus, FString& OutError);
 
-	/** The job-status shape only - no requested set, so nothing to derive delivery against. */
 	static bool ParseMaterializeStatus(const FString& JsonStr, FMantlePlaceMaterializeStatus& OutStatus, FString& OutError);
 
-	/**
-	 * Derive a state from the platform's delivery-state document.
-	 *
-	 * The row order IS the design, and three rows are traps:
-	 *
-	 *  - STOP: unreadable delivery state is checked first. `deliveryStateUnknown` means `delivered`
-	 *    is empty for want of an answer, not because the bundle is empty. Falling through with an
-	 *    empty requested set would compute "nothing outstanding" and report Complete - handing over a
-	 *    bundle the platform never confirmed. Unknown is not terminal, so polling continues.
-	 *  - STOP: nothing outstanding beats a running job. If everything asked for is on hand, an
-	 *    in-flight job is building someone else's pick, and waiting stalls a possible download.
-	 *  - STOP: a terminal attempt that left tokens outstanding is a failure whatever it called
-	 *    itself. The verdict keys on the TOKENS; `outcome` only picks the sentence. Reading
-	 *    `completed` as success is the silent loop where a curator regenerates forever.
-	 *
-	 * The last row is Pending, never Complete: that is the normal state in the seconds after a start,
-	 * before the job row is visible. `activeJob.steps` is deliberately NOT read for progress - it is
-	 * an unvalidated jsonb ladder the platform owns.
-	 */
 	static void DeriveMaterializeDelivery(const TSharedPtr<FJsonObject>& Root, const TArray<FString>& Requested, FMantlePlaceMaterializeStatus& OutStatus);
 
-	//~ ----- A complete order imports without a Prepare (the download view) -----
-
-	/**
-	 * True for the one start answer that is neither a success nor a refusal: `503` carrying the code
-	 * `delivery_state_unknown`.
-	 *
-	 * STOP: it is "try the download", not an error. The platform could not read what the bundle has,
-	 * which it reports on complete orders too; refusing there would tell a curator to retry an order
-	 * that is ready. Read by its CODE, since the status alone is any outage (HPS-24 reads shapes; this
-	 * is the one code it names, and only to send the import to the download).
-	 */
 	static bool IsDeliveryStateUnknown(int32 HttpStatus, const FString& Body);
 
-	/** The code the platform sends beside that 503. */
 	static const FString& DeliveryStateUnknownCode();
 
-	/**
-	 * Which way an Import press goes, read from the one materialize start it made.
-	 *
-	 * A complete order has nothing left to build and answers the no-op; a 503 delivery_state_unknown
-	 * is the same "go to the download"; anything else (a fresh job, a joined run, a parked pick) is an
-	 * on-demand order the existing Prepare follows. This is the interim answer: when the listing
-	 * carries the order's delivery model, it is read instead and the round trip goes.
-	 */
 	static EMantlePlaceImportRoute DecideImportRoute(const FMantlePlaceMaterializeStart& Start);
 
-	/** The host key the platform's view request names: the `hosts.unreal` block's key. */
 	static const FString& ViewHostKey();
 
-	/**
-	 * The level asked of every entry of the host block (`"*"` is "every entry not named").
-	 *
-	 * The platform takes ONE level per entry, so "every level" is not a value it accepts. MAX is the one
-	 * that holds them all: the tree points' MED and MIN are row cuts of the MAX file in a 2.0 bundle, and
-	 * the project's chosen tree level is applied when the file is read, so the cache keeps serving a
-	 * re-import at a different level without a second download.
-	 */
 	static const FString& ViewEveryEntryLevel();
 
-	/** JSON request body for Unreal's view (POST .../download): {"format":"bundle","view":{"host":"unreal","levels":{"*":"MAX"}}}. Condensed. */
 	static FString BuildViewDownloadBody();
 
-	/**
-	 * What to fetch from the response the platform gave to the view request.
-	 *
-	 * @param bDeliveryKnown  true after a no-op start (it proved there is nothing to build), false after
-	 *                        a 503 delivery_state_unknown (it proved nothing).
-	 *
-	 * STOP: with the delivery state unknown, only a `view` block proves the order complete. A whole
-	 * archive after a no-op is importable; after the 503 it may be an on-demand order's unbuilt bundle,
-	 * which is the Prepare's to build. A view cut before the bundle completed lacks parts and is never
-	 * imported.
-	 *
-	 * Unreal also reads files only the bundle's `layout` points at (the flood family's GeoPackage,
-	 * `layout.flood_zones`, and the Cesium terrain tileset, `layout.cesium_terrain`). A view holds only
-	 * the `unreal` block's files, so a complete view that lacks a token of ReadOutsideHostBlock() the
-	 * order has is not enough: the whole bundle is fetched instead (EMantlePlaceViewFetch::WholeBundleInstead),
-	 * as Revit's does for its tree points.
-	 *
-	 * @param Delivered  What the order delivered, from the no-op; meaningful only when bDeliveryKnown.
-	 *                   With the delivery state unknown, every outside token is required of the view.
-	 */
 	static EMantlePlaceViewFetch DecideViewFetch(
 		const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown, const TArray<FString>& Delivered);
 
-	//~ ----- An MPB 3.0 order: one level, and the files this host reads -----
-
-	/** The three levels a 3.0 download offers, most to least, as the listing, request and manifest spell them. */
 	static const TArray<FString>& OfferedLevels();
 
-	/** True iff Level is one of OfferedLevels(), spelled exactly (`Max`, `Med`, `Min`). */
 	static bool IsOfferedLevel(const FString& Level);
 
-	/**
-	 * Read a listing row's 3.0 offer (`mpb3`) into Item: the recommendation and Max, Med and Min with
-	 * their sizes and counts. A 2.x row has none and is left as it is (returns true, no warning). A row
-	 * whose offer does not state a size for each of the three levels is left as a 2.x row and OutWarning
-	 * says why, so a malformed offer never blanks the vault. A recommendation that is absent or not one
-	 * of the three is left empty: nothing is preselected (HPS-59), rather than a guess.
-	 */
 	static void ReadLevelOffer(const TSharedPtr<FJsonObject>& Row, FMantlePlaceVaultItem& Item, FString& OutWarning);
 
-	/**
-	 * JSON request body for one Extra's download (POST .../download): the whole-bundle format and the Extra's
-	 * id, never a level or a file list. Condensed: {"format":"bundle","mpb3":{"version":"3.0","extra":"TerrainTiles"}}.
-	 */
 	static FString BuildExtraDownloadBody(const FString& ExtraId);
 
-	/**
-	 * JSON request body for a 3.0 download (POST .../download): the whole-bundle format, one level and the
-	 * promised files this host reads, by path from the bundle root. Never a view: a 3.0 bundle has no file
-	 * list per host, so the plugin names its own. Condensed:
-	 * {"format":"bundle","mpb3":{"version":"3.0","level":"Med","files":[...]}}.
-	 */
 	static FString BuildLevelDownloadBody(const FString& Level, const TArray<FString>& Files);
 
-	/**
-	 * Parse the answer to a 3.0 download request. The link is read as ParseDownloadResponse reads it, and
-	 * the download is marked as this level's: held against the length and manifest digest the platform
-	 * stated for it, like a view, since the listing's size and digest describe the Max download of every file.
-	 */
 	static bool ParseLevelDownloadResponse(const FString& JsonStr, const FString& Level, FMantlePlacePresignedDownload& OutDownload, FString& OutError);
 
-	/**
-	 * The files a refused 3.0 level request is asked again for. A promised file the bundle does not hold
-	 * (a layer the site lacks) is refused by name: HTTP 404, code `file_not_in_bundle`, the names in
-	 * `files`. An absent file is not an error, so the request goes again naming only the rest. True with
-	 * the rest (in the order asked) and the absent names; false for any other refusal, one naming no file
-	 * or a file not asked for, or one that would leave nothing to ask for.
-	 */
 	static bool FilesLeftAfterNotInBundle(int32 ResponseCode, const FString& JsonStr, const TArray<FString>& Asked,
 		TArray<FString>& OutRemaining, TArray<FString>& OutAbsent);
 
-	/** The tokens whose files Unreal reads from outside `hosts.unreal` (named by `layout`, not by the host block). */
 	static const TArray<FString>& ReadOutsideHostBlock();
 
-	/** The outside-the-block tokens the order has and the view's parts lack. Parts are `<token>@<level>`. */
 	static TArray<FString> MissingFromView(
 		const TArray<FString>& Parts, bool bDeliveryKnown, const TArray<FString>& Delivered);
 
-	//~ ----- Tier detection (drives the vault list surface) -----
-
-	/**
-	 * True iff the bundle lacks a UE-importable terrain mesh (no "glb" in its advertised formats) yet
-	 * has some formats - i.e. a BASE bundle that needs "Generate Unreal formats". An item with no known
-	 * formats (legacy/unknown) returns false, so the surface never nags about a bundle it can't classify.
-	 */
 	static bool IsIncompleteBundle(const FMantlePlaceVaultItem& Item);
 
-	/** Short tier label for the list row: "Base" (needs materialize), "Unreal" (importable), or "Unknown". */
 	static FString DeriveTierLabel(const FMantlePlaceVaultItem& Item);
 
-	//~ ----- Post-download verdict (the vault path's self-heal) -----
-
-	/**
-	 * True iff a downloaded bundle whose manifest was read but found incomplete should be completed
-	 * in the cloud (materialize -> re-list -> re-download) instead of being handed to the importer,
-	 * which would fail closed on its manifest gate. The listing's completeness signal has been
-	 * wrong before (a whole-bundle alias advertised as `glb` read as a terrain mesh); this verdict
-	 * makes the downloaded bytes, not the listing, the authority. One recovery per run: with
-	 * bAlreadyRecovered the zip goes to the importer, whose gate reports the manifest's own
-	 * readiness guidance instead of looping.
-	 */
 	static bool ShouldRecoverMissingUnrealPayload(
 		bool bManifestReadable, bool bManifestValid, const FString& OrderId, bool bAlreadyRecovered);
 };

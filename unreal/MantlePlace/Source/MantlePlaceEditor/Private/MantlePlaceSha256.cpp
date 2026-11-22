@@ -4,11 +4,6 @@
 
 namespace
 {
-	// --- Self-contained SHA-256 (FIPS 180-4). ---
-	// Kept local so this Editor utility needs no platform/engine crypto: FPlatformMisc::GetSHA256Signature
-	// asserts "No SHA256 Platform implementation" on Windows in UE 5.8. Duplicate of the proven
-	// implementation in MantlePlaceRuntime/MantlePlaceAuthLogic.cpp (verified there against the RFC 7636
-	// Appendix B vector); the NIST vectors in MantlePlaceSha256Test verify this copy end-to-end.
 	struct FSha256Context
 	{
 		uint32 State[8];
@@ -87,7 +82,7 @@ namespace
 		{
 			const uint64 TotalBits = BitCount + static_cast<uint64>(BlockLen) * 8;
 
-			Block[BlockLen++] = 0x80; // append the '1' bit
+			Block[BlockLen++] = 0x80;
 			if (BlockLen > 56)
 			{
 				while (BlockLen < 64) { Block[BlockLen++] = 0; }
@@ -96,7 +91,7 @@ namespace
 			}
 			while (BlockLen < 56) { Block[BlockLen++] = 0; }
 
-			for (int32 i = 7; i >= 0; --i) // 64-bit big-endian length
+			for (int32 i = 7; i >= 0; --i)
 			{
 				Block[BlockLen++] = static_cast<uint8>((TotalBits >> (i * 8)) & 0xFF);
 			}

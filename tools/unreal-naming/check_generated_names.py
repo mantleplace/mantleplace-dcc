@@ -47,11 +47,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# The tree this gate governs.
 SCAN_ROOT = Path("unreal/MantlePlace/Source")
 SCAN_SUFFIXES = (".cpp", ".h")
 
-# The one file allowed to build these strings, and the tests that assert what it produces.
 NAMING_MODULE = ("MantlePlaceImportNaming.cpp", "MantlePlaceImportNaming.h")
 TEST_DIR_PART = "Tests"
 
@@ -86,9 +84,6 @@ RULES: list[tuple[str, re.Pattern[str], str]] = [
     ),
     (
         "outliner-folder",
-        # Matched at the CALL, not by the folder's spelling: "MantlePlace/..." is also a legitimate
-        # on-disk cache subdirectory, and a rule that could not tell the two apart would be a rule
-        # that gets switched off.
         re.compile(r"SetFolderPath\([^)]*TEXT\("),
         "an outliner folder built from a literal - use MantlePlaceImportNaming::OutlinerFolder()",
     ),

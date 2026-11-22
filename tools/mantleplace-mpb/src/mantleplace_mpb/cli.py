@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""`mpb validate <zip or folder>` and `mpb corpus <corpus dir>`.
-
-Exit 0: conformant. Exit 1: not conformant (each reason is in the report). Exit 2: could not
-check: the input is unreadable, or the schema it declares could not be fetched or trusted.
-"""
 
 from __future__ import annotations
 

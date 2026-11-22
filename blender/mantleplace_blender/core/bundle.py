@@ -1,24 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""What to import from a 2.x bundle's manifest, and where it goes. Pure: no Blender, no I/O.
-
-The plugin imports two files. `Site/Context.usdz` is the whole site as one model, and
-`Site/Features.usdz` is the vector data of the same site, which composes onto it as a sublayer
-(spec/format.md §10.1). Both store their coordinates as offsets from the site origin, so the one
-placement value the plugin applies is that origin, read from `location.site_origin` (§6.8).
-
-Three rules from the spec decide everything here, and each guards a failure that looks like success:
-
-- **Files are found by pointer** (§3): `layout.context_usdz` and `layout.features_usdz`, never a path
-  built from a folder name. A 2.0 bundle written before its producer wrote those two keys still lists
-  both files by archive path, and each 2.0 fixed name is the constant of its `layout` key (§10.3), so
-  the fixed name is used only when the manifest itself lists that path, and the import says so.
-- **The origin is applied verbatim, never derived** (§6.8). The projected point is added as written;
-  where there is none, placing the site would take a reprojection, which this plugin never does.
-- **A frame it cannot read is a file it cannot place** (§6.8, `HPS-53`): an unknown value, another
-  CRS than the origin's, or axes that are not east, north, up leave the site unplaced and say why.
-  A refusal is a named note; the geometry still comes in, at the site origin.
-"""
 
 from __future__ import annotations
 
@@ -26,35 +7,28 @@ import json
 import re
 from dataclasses import dataclass, field
 
-#: The major version this plugin reads. A 1.x bundle has no Context file; 3.x is refused unread.
 SUPPORTED_MAJOR = 2
 
 CONTEXT_KEY = "context_usdz"
 FEATURES_KEY = "features_usdz"
-#: The 2.0 fixed name of each layout key (§10.3), tried only where the manifest lists that path.
 FIXED_NAMES = {CONTEXT_KEY: "Site/Context.usdz", FEATURES_KEY: "Site/Features.usdz"}
 
-#: The scene custom property that holds a site origin whole; the first bundle's is the anchor.
 ANCHOR_KEY = "mantleplace_site_origin"
 
-#: A site origin's projected unit, as the schema names it, as a factor to metres.
 ORIGIN_UNITS = {"m": 1.0, "ft": 0.3048, "usft": 1200 / 3937}
 _AXIS_ORDERS = frozenset({"east-north", "north-east"})
 _COORDINATE_MODES = frozenset({"absolute", "offset"})
 _DIRECTIONS = frozenset({"east", "west", "north", "south", "up", "down"})
-#: Blender's own axes. A file in any other mapping would need a turn this plugin does not make.
 _BLENDER_AXES = {"x": "east", "y": "north", "z": "up"}
 _SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
 
 
 class BundleRefused(Exception):
-    """The bundle, or a file it must have, cannot be imported. The message is for the curator."""
+    pass
 
 
 @dataclass(frozen=True)
 class Georeference:
-    """The site origin, as the manifest states it, for a Context file in that origin's frame."""
-
     crs: dict
     x: float
     y: float
@@ -75,20 +49,15 @@ class Georeference:
 
 @dataclass(frozen=True)
 class Plan:
-    """What one import brings in, and every reason it brings in less."""
-
     version: str
     context_path: str
     features_path: str | None
     georeference: Georeference | None
-    #: Archive path to its lowercase-hex sha256, or None where the manifest states none.
     digests: dict = field(default_factory=dict)
-    #: One sentence per thing left out or not placed, naming it and why.
     notes: tuple = ()
 
 
 def read_major(manifest: dict) -> int:
-    """The bundle's major version, or `BundleRefused` for one this plugin does not read (§11)."""
     version = manifest.get("version") if isinstance(manifest, dict) else None
     if not isinstance(version, str):
         era = "an integer version from before MPB semver" if isinstance(version, int) else "no readable version"
@@ -113,8 +82,7 @@ def read_major(manifest: dict) -> int:
 
 
 def plan_import(manifest: dict, include_features: bool = True) -> Plan:
-    """Decide which files to import and whether the site origin can be applied to them."""
-    read_major(manifest)  # §11: a higher major is refused before any pointer is read.
+    read_major(manifest)
     notes: list[str] = []
     layout = _object(manifest.get("layout"))
     listed = set(_object(manifest.get("file_entries"))) | set(_object(manifest.get("files")))
@@ -163,15 +131,6 @@ def plan_import(manifest: dict, include_features: bool = True) -> Plan:
 
 
 def scene_properties(georeference: Georeference) -> dict:
-    """The custom properties the plugin writes on the scene for one applied site origin.
-
-    `mantleplace_site_origin` is the origin whole, as the manifest states it. `SRID`, `crs x`,
-    `crs y`, `latitude` and `longitude` are the scene-origin keys that Blender's GIS add-ons read,
-    so a later GIS import into the same scene lands on the site. Those keys put the scene origin
-    in the CRS's own unit, and Blender's scene is in metres, so they are written only for a metre
-    origin with a CRS code; a foot origin keeps its record and gets no scene keys, rather than a
-    scaled copy of numbers the manifest did not publish.
-    """
     g = georeference
     properties: dict = {
         ANCHOR_KEY: {
@@ -195,13 +154,6 @@ def scene_properties(georeference: Georeference) -> dict:
 
 
 def wrapper_stage(context_file: str, features_file: str | None) -> str:
-    """A USD root layer that sublayers Features over Context, for Blender's own USD import.
-
-    Blender's importer opens one file; the Features file composes onto the Context file as a
-    sublayer (§10.1), and the stronger layer comes first in `subLayers`. The stage metadata
-    repeats what the Context file states (`/Site`, Z up, metres), so the root layer does not
-    change how either file reads.
-    """
     layers = [features_file, context_file] if features_file else [context_file]
     listed = ",\n".join(f"        {_asset(path)}" for path in layers)
     return ("#usda 1.0\n"
@@ -225,11 +177,10 @@ def _object(value: object) -> dict:
 
 
 def _locate(layout: dict, key: str, listed: set, notes: list) -> str | None:
-    """The archive path for one layout key, or None where the bundle carries no such file."""
     if key in layout:
         value = layout[key]
         if value is None:
-            return None  # §6.1: an explicit null is honest absence.
+            return None
         if not isinstance(value, str) or not value:
             raise BundleRefused(f"layout.{key} is not a path.")
         return _safe(value, key)
@@ -242,7 +193,6 @@ def _locate(layout: dict, key: str, listed: set, notes: list) -> str | None:
 
 
 def _safe(path: str, key: str) -> str:
-    """§3: archive paths are untrusted input; refuse one that leaves the bundle."""
     parts = path.replace("\\", "/").split("/")
     if (path.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", path) or ".." in parts
             or "" in parts):
@@ -314,7 +264,6 @@ def _number(value: object) -> bool:
 
 
 def _crs_key(crs: object) -> object:
-    """A CRS compared as written: a code case-insensitively, PROJJSON by value, WKT2 by its words."""
     if not isinstance(crs, dict):
         return None
     if isinstance(crs.get("code"), str):

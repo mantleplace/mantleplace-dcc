@@ -18,7 +18,5 @@ AMantlePlaceFoliageVolume::AMantlePlaceFoliageVolume(const FObjectInitializer& O
 	RootComponent = Bounds;
 
 	Pcg = CreateDefaultSubobject<UPCGComponent>(TEXT("Pcg"));
-	// Generated in the editor, at import, and saved with the level: never regenerated at load or at
-	// runtime, where the rasters' source data does not exist.
 	Pcg->GenerationTrigger = EPCGComponentGenerationTrigger::GenerateOnDemand;
 }

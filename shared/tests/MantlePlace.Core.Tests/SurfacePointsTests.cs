@@ -1,6 +1,5 @@
 namespace MantlePlace.Core.Tests;
 
-/// <summary>The points-file reader and the unit table it feeds.</summary>
 internal static class SurfacePointsTests
 {
     internal static int Run()
@@ -30,10 +29,6 @@ internal static class SurfacePointsTests
 
         run.Case("fewer than three points is a read failure, not a caller's problem", () =>
         {
-            // Toposolid.Create throws ArgumentException below three points. That threshold used to
-            // live in the Revit shim, where the headless suite could not reach it and where it fired
-            // AFTER the planner had already reported CanImport. It is a property of the file, so it
-            // belongs to the reader (HPS-02).
             string? one = SurfacePointsReader.TryParse("1,2,3\n", out IReadOnlyList<SurfacePoint> onePoint);
             run.True(one is not null, "one point rejected");
             run.Contains(one, "at least 3", "says how many are needed");

@@ -19,28 +19,20 @@
 
 namespace
 {
-// Deliberately non-power-of-two, and not a multiple of 4 in either axis — the shape every real
-// coverage raster has (a043aaeb's weight rasters are 143x142). This is what triggers the engine's
-// automatic non-pow2 handling, which re-types TC_Default to an 8-bit BGRA8 EditorIcon. A 256x256
-// fixture would pass while leaving that whole trap unexercised.
 constexpr int32 TestWidth = 143;
 constexpr int32 TestHeight = 142;
 
-/** A 16-bit ramp whose low byte is non-zero nearly everywhere — 8-bit quantisation is visible. */
 TArray<uint16> MakeSamples()
 {
 	TArray<uint16> Samples;
 	Samples.SetNumUninitialized(TestWidth * TestHeight);
 	for (int32 Index = 0; Index < Samples.Num(); ++Index)
 	{
-		// Strides by 517 (coprime with 256) so successive samples differ in the low byte, and the
-		// values sweep most of the uint16 range rather than clustering in one octave.
 		Samples[Index] = static_cast<uint16>((Index * 517) % 65536);
 	}
 	return Samples;
 }
 
-/** Write those samples out as a real 16-bit grayscale PNG — the encoding the ETL publishes. */
 bool WriteGray16Png(const FString& File, const TArray<uint16>& Samples)
 {
 	IImageWrapperModule& Module = FModuleManager::LoadModuleChecked<IImageWrapperModule>(TEXT("ImageWrapper"));
@@ -57,7 +49,6 @@ bool WriteGray16Png(const FString& File, const TArray<uint16>& Samples)
 	return FFileHelper::SaveArrayToFile(Compressed, *File);
 }
 
-/** `slope` as the contract ships it: a 16-bit ramp in degrees. */
 FMantlePlaceLandscapeLayer MakeSlopeLayer(const FString& InZipPath)
 {
 	FMantlePlaceUeReadyRaster Raster;
@@ -79,17 +70,8 @@ FMantlePlaceLandscapeLayer MakeSlopeLayer(const FString& InZipPath)
 	Layer.UeReady = { Raster };
 	return Layer;
 }
-} // namespace
+}
 
-/**
- * Exercises the impure shim end to end against a real PNG on disk, with no vault bundle involved.
- *
- * The pure-core suite proves which settings we ASK for. This proves the engine actually honours
- * them — that a 16-bit grayscale PNG survives UAssetImportTask as TSF_G16 rather than being
- * quantised, and that settings applied post-import stick. Both are engine behaviours read out of
- * UE 5.8 source rather than documented contracts, so they are exactly the assumptions that want a
- * test rather than a comment.
- */
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMantlePlaceCoverageRasterImportTest,
     "MantlePlace.Import.CoverageRasterImport",
@@ -97,8 +79,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceCoverageRasterImportTest::RunTest(const FString& Parameters)
 {
-	// An 8-hex directory so the output matches unreal/.gitignore's import-output rule even if the
-	// cleanup below is skipped by an early failure.
 	const FString DestPackagePath = TEXT("/Game/MantlePlace/0badf00d");
 	const FString TempDir = FPaths::ProjectSavedDir() / TEXT("MantlePlace") / TEXT("CoverageRasterTest");
 	const FString PngFile = TempDir / TEXT("Slope.png");
@@ -118,11 +98,8 @@ bool FMantlePlaceCoverageRasterImportTest::RunTest(const FString& Parameters)
 	TestNotNull(*FString::Printf(TEXT("the raster imported (%s)"), *Error), Texture);
 	if (Texture != nullptr)
 	{
-		// The assumption the whole design rests on: 16-bit in, 16-bit landed.
 		TestEqual(TEXT("a 16-bit grayscale PNG lands as TSF_G16"), Texture->Source.GetFormat(), TSF_G16);
 
-		// And the settings we applied after the import actually stuck — pre-configuring the factory
-		// would silently not have, and the non-pow2 rules would have left this 8-bit and sRGB.
 		TestEqual(TEXT("TC_Grayscale (-> PF_G16)"), Texture->CompressionSettings.GetValue(), TC_Grayscale);
 		TestFalse(TEXT("not sRGB"), Texture->SRGB != 0);
 		TestEqual(TEXT("no mips"), Texture->MipGenSettings.GetValue(), TMGS_NoMipmaps);
@@ -131,7 +108,6 @@ bool FMantlePlaceCoverageRasterImportTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("width survives"), static_cast<int32>(Texture->Source.GetSizeX()), TestWidth);
 		TestEqual(TEXT("height survives"), static_cast<int32>(Texture->Source.GetSizeY()), TestHeight);
 
-		// The meaning travelled with it.
 		const UMantlePlaceCoverageRasterData* Data = Cast<UMantlePlaceCoverageRasterData>(
 			Texture->GetAssetUserDataOfClass(UMantlePlaceCoverageRasterData::StaticClass()));
 		TestNotNull(TEXT("the coverage-raster payload is attached"), Data);
@@ -147,8 +123,6 @@ bool FMantlePlaceCoverageRasterImportTest::RunTest(const FString& Parameters)
 			TestFalse(TEXT("provenance records the declared digest"), Data->Sha256.IsEmpty());
 		}
 
-		// Every sample, bit for bit. A lossy or quantising path fails here even if it somehow got
-		// the source format right.
 		TArray64<uint8> Mip;
 		if (Texture->Source.GetMipData(Mip, 0) && Mip.Num() == Samples.Num() * 2)
 		{
@@ -176,9 +150,6 @@ bool FMantlePlaceCoverageRasterImportTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// A raster whose declared encoding cannot be honoured is refused rather than imported at the
-	// wrong precision. An 8-bit PNG declared as 16-bit is the real-world shape of this (a tRNS
-	// chunk forcing an RGBA decode), and it must NOT produce an asset.
 	{
 		FMantlePlaceLandscapeLayer Mismatched = MakeSlopeLayer(TEXT("Elevation/Aspect.png"));
 		Mismatched.Name = TEXT("aspect");
@@ -213,9 +184,9 @@ bool FMantlePlaceCoverageRasterImportTest::RunTest(const FString& Parameters)
 			AssetSubsystem->DeleteDirectory(DestPackagePath);
 		}
 	}
-	IFileManager::Get().DeleteDirectory(*TempDir, /*RequireExists*/ false, /*Tree*/ true);
+	IFileManager::Get().DeleteDirectory(*TempDir, false, true);
 
 	return true;
 }
 
-#endif // WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
+#endif

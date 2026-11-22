@@ -1,17 +1,3 @@
-# Runs the Civil 3D probe once in a host of its own and prints its result.md.
-#
-#   powershell -NoProfile -File ./Invoke-Civil3dProbe.ps1 -Year 2027 -Mode civil3d -WorkRoot <dir outside the repo>
-#
-# -Mode civil3d starts the host with the Civil 3D launcher's switches (/ld AecBase.dbx, the C3D
-# profile, /product C3D); -Mode as-autocad with the "as AutoCAD" launcher's (/product ACAD), over the
-# same install. -Shell console (the default) runs accoreconsole.exe, headless; -Shell gui runs acad.exe
-# minimised. Either way a script NETLOADs the probe and runs MANTLEPLACEC3DPROBE.
-#
-# One host of a kind at a time: it refuses while another of its shell runs. AutoCAD loads an
-# unsigned assembly only from a trusted folder, and the console answers the secure-load prompt "do not
-# load" without saying so ("Unable to load ... assembly"). So the script appends the run's addin folder
-# to TRUSTEDPATHS for the NETLOAD alone and puts the profile's own value back on the next line, before
-# the probe runs. Only the host this script started is stopped.
 param(
     [Parameter(Mandatory)][ValidateSet('2025', '2026', '2027')][string]$Year,
     [Parameter(Mandatory)][ValidateSet('civil3d', 'as-autocad')][string]$Mode,
@@ -32,7 +18,6 @@ if ($running) { throw "$name is running (pid $($running.Id -join ', ')); one at 
 $exe = Join-Path $AcadDir "$name.exe"
 if (-not (Test-Path $exe)) { throw "no $exe" }
 
-# The framework the install's own managed tools run on is the one its API assemblies need.
 $tfms = @(Get-ChildItem $AcadDir -Filter *.runtimeconfig.json | ForEach-Object {
         try { (Get-Content $_.FullName -Raw | ConvertFrom-Json).runtimeOptions.tfm } catch { }
     } | Where-Object { $_ -match '^net\d+\.\d+$' } | Sort-Object { [version]($_ -replace '^net', '') } -Unique)
@@ -49,7 +34,6 @@ foreach ($project in 'Probe\Civil3dProbe.csproj', 'Civil\Civil3dPart.csproj') {
     if ($LASTEXITCODE -ne 0) { throw "$project did not build" }
 }
 
-# A synthetic DEM, never real data: a 40 by 40 grid of 30 m cells in UTM zone 10 north, NAD83 metres.
 $cells = 40
 $rows = New-Object System.Collections.Generic.List[string]
 $rows.Add("ncols $cells"); $rows.Add("nrows $cells"); $rows.Add('xllcorner 550000'); $rows.Add('yllcorner 4180000')
@@ -62,8 +46,6 @@ $asc = Join-Path $runDir 'grid.asc'
 $dems = @($asc)
 $translate = Get-Command gdal_translate -ErrorAction SilentlyContinue
 if ($translate) {
-    # Another installation's proj.db on PROJ_LIB (PostGIS ships one) breaks GDAL's EPSG lookup: point
-    # PROJ at GDAL's own projlib for this one call.
     $projlib = Join-Path (Split-Path $translate.Source) 'projlib'
     $saved = $env:PROJ_LIB, $env:PROJ_DATA
     if (Test-Path $projlib) { $env:PROJ_LIB = $projlib; $env:PROJ_DATA = $projlib }
@@ -73,9 +55,6 @@ if ($translate) {
     $env:PROJ_LIB, $env:PROJ_DATA = $saved
 }
 
-# Synthetic LandXML surfaces, shaped as the platform writes them (northing easting elevation, a
-# <Units> element, and a <CoordinateSystem> naming the EPSG code): a 3 by 3 grid in California zone
-# III in US feet, with and without that element, and one in UTM zone 10 north in metres.
 function Write-LandXml([string]$Path, [string]$UnitElement, [string]$Unit, [string]$Epsg, [double]$East, [double]$North, [double]$Step) {
     $lines = New-Object System.Collections.Generic.List[string]
     $lines.Add('<?xml version="1.0" encoding="UTF-8"?>')
@@ -118,7 +97,6 @@ $env:MANTLEPLACE_C3D_PROBE_DEMS = $dems -join ';'
 $env:MANTLEPLACE_C3D_PROBE_LANDXMLS = $landXmls -join ';'
 $env:MANTLEPLACE_C3D_PROBE_FORCE = $(if ($Force) { '1' } else { '' })
 
-# The launchers' own switches, as the Start menu shortcuts carry them.
 $launch = if ($Mode -eq 'civil3d') {
     @($(if ($Shell -eq 'console') { '/loadmodule' } else { '/ld' }), "`"$(Join-Path $AcadDir 'AecBase.dbx')`"", '/p', '"<<C3D_Metric>>"', '/product', 'C3D')
 }

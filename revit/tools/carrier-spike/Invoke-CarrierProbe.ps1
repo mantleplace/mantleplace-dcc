@@ -1,12 +1,3 @@
-# Runs the carrier probe once in a real Revit of its own, quietly, and prints its result.md.
-#
-#   pwsh ./Invoke-CarrierProbe.ps1 -Year 2027 -Mode gpkg -Bundle <extracted bundle> -Carriers <make_carriers.py out> -WorkRoot <dir>
-#
-# One Revit at a time: it refuses while any Revit runs. It writes a temporary manifest to
-# %APPDATA%\Autodesk\Revit\Addins\<year>\MantlePlace.CarrierProbe.addin, removed as soon as the probe
-# reports started.txt and again when the run ends; launches Revit minimised through WMI with the
-# probe's variables; answers only the unsigned add-in prompt (Load Once), as the timing harness does,
-# from whose lib/ it borrows the Win32 helpers; and stops only the Revit it launched.
 param(
     [Parameter(Mandatory)][ValidateSet('2025', '2026', '2027')][string]$Year,
     [Parameter(Mandatory)][ValidateSet('geojson', 'gpkg', 'dxf', 'ifc')][string]$Mode,

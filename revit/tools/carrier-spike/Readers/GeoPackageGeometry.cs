@@ -2,16 +2,6 @@ using System.Buffers.Binary;
 
 namespace MantlePlace.Revit.CarrierSpike;
 
-/// <summary>
-/// Decodes a GeoPackage geometry blob (OGC 12-128r19 §2.1.3: the <c>GP</c> header, then WKB) into
-/// the lines and rings this host draws. Pure.
-/// </summary>
-/// <remarks>
-/// It takes ISO WKB (type + 1000 for Z, + 2000 for M, + 3000 for ZM) and the EWKB high-bit flags
-/// alike, since GDAL writes the first and some writers the second. Points and collections yield no
-/// part: they are not linework. A blob this decoder cannot follow yields no part and the row is
-/// passed over, as SiteVectorReader passes over one malformed feature.
-/// </remarks>
 public static class GeoPackageGeometry
 {
     public static IReadOnlyList<CarrierPart> Decode(byte[] blob)
@@ -25,7 +15,7 @@ public static class GeoPackageGeometry
         byte flags = blob[3];
         if ((flags & 0b0001_0000) != 0)
         {
-            return parts; // the empty-geometry flag
+            return parts;
         }
 
         int envelopeDoubles = ((flags >> 1) & 0b111) switch
@@ -49,13 +39,12 @@ public static class GeoPackageGeometry
         }
         catch (ArgumentOutOfRangeException)
         {
-            parts.Clear(); // truncated WKB
+            parts.Clear();
         }
 
         return parts;
     }
 
-    /// <summary>Decodes a blob that is one of a layer's rows, numbering its polygons after those already read.</summary>
     public static IReadOnlyList<CarrierPart> Decode(byte[] blob, ref int polygonsSoFar)
     {
         IReadOnlyList<CarrierPart> parts = Decode(blob);
@@ -91,11 +80,11 @@ public static class GeoPackageGeometry
         int dims = 2 + (hasZ ? 1 : 0) + (hasM ? 1 : 0);
         switch (type)
         {
-            case 2: // LineString
+            case 2:
                 parts.Add(new CarrierPart(ReadPositions(wkb, ref offset, little, dims, hasZ), Closed: false, IsHole: false, Polygon: 0));
                 break;
 
-            case 3: // Polygon
+            case 3:
                 polygons++;
                 uint rings = ReadUInt32(wkb, ref offset, little);
                 for (uint ring = 0; ring < rings; ring++)
@@ -105,9 +94,9 @@ public static class GeoPackageGeometry
 
                 break;
 
-            case 5: // MultiLineString
-            case 6: // MultiPolygon
-            case 7: // GeometryCollection
+            case 5:
+            case 6:
+            case 7:
                 uint members = ReadUInt32(wkb, ref offset, little);
                 for (uint member = 0; member < members; member++)
                 {
@@ -116,11 +105,11 @@ public static class GeoPackageGeometry
 
                 break;
 
-            case 1: // Point: not linework, but its bytes are skipped so a collection can go on.
+            case 1:
                 offset += dims * 8;
                 break;
 
-            case 4: // MultiPoint
+            case 4:
                 uint points = ReadUInt32(wkb, ref offset, little);
                 for (uint point = 0; point < points; point++)
                 {

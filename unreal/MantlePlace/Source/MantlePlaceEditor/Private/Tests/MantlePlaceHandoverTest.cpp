@@ -25,18 +25,6 @@
 #include "WorldPartition/DataLayer/DataLayerAsset.h"
 #include "WorldPartition/DataLayer/DataLayerInstance.h"
 
-// ODbL content in a labelled container, and Prepare for handover, driven through the import
-// context's own Claim (the one call every imported actor goes through) and the command's own entry
-// point, in a throwaway world, with no bundle.
-//
-//  - MantlePlace.Import.Odbl.Handover: an actor imported from `database` files (a missing role
-//    included) is tagged and filed under the order's ODbL outliner folder; a Produced Work is not.
-//    The command removes the ODbL actors, keeps the Produced Work that stands in for a removed
-//    landscape, leaves other actors alone, adds one credit actor per order that owes one, and a
-//    second run changes nothing.
-//  - MantlePlace.Import.Odbl.DataLayer: in a World Partition level the same actors also join the one
-//    shared ODbL Data Layer, beside their family's.
-
 namespace MantlePlaceHandoverTest
 {
 FMantlePlaceFileLicensing Entry(EMantlePlaceOdblRole Role, const TCHAR* SourceLicense = nullptr)
@@ -53,13 +41,11 @@ FMantlePlaceFileLicensing Entry(EMantlePlaceOdblRole Role, const TCHAR* SourceLi
 	return Result;
 }
 
-/** A manifest that states roles the way a 1.14.0 bundle does, and the credit it words. */
 void StateRoles(FMantlePlaceVaultManifest& Manifest)
 {
 	Manifest.FileLicensing.Add(TEXT("Elevation/Heightmap.png"), Entry(EMantlePlaceOdblRole::Database, TEXT("ODbL-1.0")));
 	Manifest.FileLicensing.Add(TEXT("Mesh/Terrain.glb"), Entry(EMantlePlaceOdblRole::ProducedWork));
 	Manifest.FileLicensing.Add(TEXT("Mesh/Buildings.glb"), Entry(EMantlePlaceOdblRole::ProducedWork, TEXT("ODbL-1.0")));
-	// Vector/RoadSplines.gpkg is deliberately not listed: a missing role reads as database.
 	FMantlePlaceAttributionSource Osm;
 	Osm.ProviderId = TEXT("openstreetmap");
 	Osm.AttributionText = TEXT("(c) OpenStreetMap contributors");
@@ -67,7 +53,6 @@ void StateRoles(FMantlePlaceVaultManifest& Manifest)
 	Manifest.Attribution.Add(Osm);
 }
 
-/** Claim one stand-in actor as a handler of this family, made from these files, would. */
 AStaticMeshActor* ClaimActor(
 	UWorld* World, FMantlePlaceImportContext& Context, const TCHAR* Label, EMantlePlaceLayerFamily Family,
 	const TArray<FString>& Paths, const TCHAR* Group = nullptr)
@@ -106,7 +91,7 @@ bool FMantlePlaceHandoverTest::RunTest(const FString& Parameters)
 		AddInfo(TEXT("No editor: Prepare for handover needs an editor world. Skipped."));
 		return true;
 	}
-	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, false,
 		FName(TEXT("MantlePlaceHandoverTestWorld")));
 	if (!TestNotNull(TEXT("a throwaway world to spawn into"), World))
 	{
@@ -125,16 +110,13 @@ bool FMantlePlaceHandoverTest::RunTest(const FString& Parameters)
 	FMantlePlaceImportContext OrderB(World, Manifest, nullptr, Selection, Timeline, Result, Log);
 	OrderB.Identity = TEXT("bbbbbbbb-2222");
 
-	// Order A: a database landscape and a produced-work mesh of the same ground, a database road layer
-	// with no stated role, produced-work buildings from an ODbL source. Order B: one road layer.
 	AStaticMeshActor* Landscape = ClaimActor(World, OrderA, TEXT("MP_TestLandscape"), Family::Terrain,
 		{ TEXT("Elevation/Heightmap.png") }, TEXT("terrain"));
 	AStaticMeshActor* Mesh = ClaimActor(World, OrderA, TEXT("MP_TestMesh"), Family::Terrain,
 		{ TEXT("Mesh/Terrain.glb") }, TEXT("terrain"));
 	AStaticMeshActor* Road = ClaimActor(World, OrderA, TEXT("MP_TestRoad"), Family::Roads,
 		{ TEXT("Vector/RoadSplines.gpkg") });
-	// The mesh overlays a Landscape this import built (Both mode), so the import left it without collision.
-	MantlePlaceMeshImporter::ApplyCollision(Mesh, MantlePlaceTerrainCollisionLogic::ForTerrainMesh(/*bLandscapeBuilt*/ true));
+	MantlePlaceMeshImporter::ApplyCollision(Mesh, MantlePlaceTerrainCollisionLogic::ForTerrainMesh(true));
 	TestEqual(TEXT("fixture: the terrain mesh over the landscape does not collide"),
 		Mesh->GetStaticMeshComponent()->GetCollisionEnabled(), ECollisionEnabled::Type(ECollisionEnabled::NoCollision));
 	AStaticMeshActor* Buildings = ClaimActor(World, OrderA, TEXT("MP_TestBuildings"), Family::Buildings,
@@ -149,7 +131,6 @@ bool FMantlePlaceHandoverTest::RunTest(const FString& Parameters)
 	const FName OdblFolderA(*MantlePlaceImportNaming::OdblFolder(OrderA.Identity));
 	const FName FolderA(*MantlePlaceImportNaming::OutlinerFolder(OrderA.Identity));
 
-	// --- Everything imported from database files lands in the labelled folder --------------------------
 	TestTrue(TEXT("a database landscape is tagged ODbL"), Landscape->Tags.Contains(OdblTag));
 	TestEqual(TEXT("and filed under the order's ODbL folder"), Landscape->GetFolderPath(), OdblFolderA);
 	TestTrue(TEXT("a file with no stated role reads as database: tagged"), Road->Tags.Contains(OdblTag));
@@ -169,7 +150,6 @@ bool FMantlePlaceHandoverTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("the terrain mesh, from no ODbL source, owes none"),
 		Mesh->Tags.ContainsByPredicate([](const FName& Tag) { return Tag.ToString().StartsWith(MantlePlaceImportNaming::CreditLineTagPrefix()); }));
 
-	// --- Prepare for handover ------------------------------------------------------------------------
 	const FMantlePlaceHandoverReport Report = MantlePlaceHandover::Prepare(World);
 	TestEqual(TEXT("three ODbL actors removed: the landscape and both roads"), Report.Removed.Num(), 3);
 	TestEqual(TEXT("one of them swapped for the Produced Work mesh"), Report.Swapped.Num(), 1);
@@ -186,7 +166,6 @@ bool FMantlePlaceHandoverTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("so is the road"), IsValid(Road));
 	TestFalse(TEXT("so is the other order's"), IsValid(OtherRoad));
 
-	// --- The credit -----------------------------------------------------------------------------------
 	TestEqual(TEXT("a credit actor for each order that owes one"), Report.CreditActors.Num(), 2);
 	int32 CreditActors = 0;
 	for (TActorIterator<ATextRenderActor> It(World); It; ++It)
@@ -199,7 +178,6 @@ bool FMantlePlaceHandoverTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("two credit actors in the level"), CreditActors, 2);
 
-	// --- A second run changes nothing ---------------------------------------------------------------------
 	const FMantlePlaceHandoverReport Again = MantlePlaceHandover::Prepare(World);
 	TestEqual(TEXT("a second run removes nothing"), Again.Removed.Num(), 0);
 	CreditActors = 0;
@@ -209,8 +187,7 @@ bool FMantlePlaceHandoverTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("and does not duplicate the credit"), CreditActors, 2);
 
-	// --- A level with no import ----------------------------------------------------------------------------
-	UWorld* Empty = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
+	UWorld* Empty = UWorld::CreateWorld(EWorldType::Editor, false,
 		FName(TEXT("MantlePlaceHandoverEmptyWorld")));
 	if (TestNotNull(TEXT("a second throwaway world"), Empty))
 	{
@@ -218,11 +195,11 @@ bool FMantlePlaceHandoverTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("nothing removed from a level with no import"), None.Removed.Num(), 0);
 		TestEqual(TEXT("and no credit made up"), None.CreditActors.Num(), 0);
 		TestFalse(TEXT("it says so"), None.Notes.IsEmpty());
-		Empty->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		Empty->DestroyWorld(false);
 	}
 	TestFalse(TEXT("no level at all says so"), MantlePlaceHandover::Prepare(nullptr).Notes.IsEmpty());
 
-	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	World->DestroyWorld(false);
 	return true;
 }
 
@@ -231,9 +208,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	"MantlePlace.Import.Odbl.HandoverCollision",
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter)
 
-// Prepare for handover turns collision back on for the terrain mesh the import left without it, and
-// for nothing else: not a mesh of the same ground whose collision a person set by hand, whether or not
-// the import had turned it off first.
 bool FMantlePlaceHandoverCollisionTest::RunTest(const FString& Parameters)
 {
 	using namespace MantlePlaceHandoverTest;
@@ -244,7 +218,7 @@ bool FMantlePlaceHandoverCollisionTest::RunTest(const FString& Parameters)
 		AddInfo(TEXT("No editor: Prepare for handover needs an editor world. Skipped."));
 		return true;
 	}
-	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, false,
 		FName(TEXT("MantlePlaceHandoverCollisionTestWorld")));
 	if (!TestNotNull(TEXT("a throwaway world to spawn into"), World))
 	{
@@ -269,16 +243,13 @@ bool FMantlePlaceHandoverCollisionTest::RunTest(const FString& Parameters)
 	};
 
 	ClaimActor(World, Order, TEXT("MP_TestLandscape"), Family::Terrain, { TEXT("Elevation/Heightmap.png") }, TEXT("terrain"));
-	// The overlay the import turned off (Both mode).
 	AStaticMeshActor* Overlay = ClaimActor(World, Order, TEXT("MP_TestMesh"), Family::Terrain,
 		{ TEXT("Mesh/Terrain.glb") }, TEXT("terrain"));
 	MantlePlaceMeshImporter::ApplyCollision(Overlay, EMantlePlaceMeshCollision::None);
-	// An overlay the import turned off, whose collision a person has set since.
 	AStaticMeshActor* Retuned = ClaimActor(World, Order, TEXT("MP_TestMeshRetuned"), Family::Terrain,
 		{ TEXT("Mesh/Terrain.glb") }, TEXT("terrain"));
 	MantlePlaceMeshImporter::ApplyCollision(Retuned, EMantlePlaceMeshCollision::None);
 	Retuned->GetStaticMeshComponent()->SetCollisionProfileName(HandSetProfile);
-	// A mesh of the same ground the import left colliding, turned off by hand.
 	AStaticMeshActor* HandOff = ClaimActor(World, Order, TEXT("MP_TestMeshHandOff"), Family::Terrain,
 		{ TEXT("Mesh/Terrain.glb") }, TEXT("terrain"));
 	HandOff->GetStaticMeshComponent()->SetCollisionProfileName(UCollisionProfile::NoCollision_ProfileName);
@@ -293,7 +264,7 @@ bool FMantlePlaceHandoverCollisionTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("collision a person set on an overlay since the import is left as set"), Profile(Retuned), HandSetProfile);
 	TestEqual(TEXT("a mesh a person turned off by hand stays off"), Profile(HandOff), UCollisionProfile::NoCollision_ProfileName);
 
-	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	World->DestroyWorld(false);
 	return true;
 }
 
@@ -314,15 +285,14 @@ bool FMantlePlaceOdblDataLayerTest::RunTest(const FString& Parameters)
 	}
 	UWorld::InitializationValues IVS;
 	IVS.CreateWorldPartition(true).EnableWorldPartitionStreaming(true);
-	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
-		FName(TEXT("MantlePlaceOdblDataLayerTestWorld")), /*InWorldPackage*/ nullptr, /*bAddToRoot*/ true,
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, false,
+		FName(TEXT("MantlePlaceOdblDataLayerTestWorld")), nullptr, true,
 		ERHIFeatureLevel::Num, &IVS);
 	if (!TestNotNull(TEXT("a throwaway partitioned world"), World))
 	{
 		return false;
 	}
 
-	// Under /Temp, so the shared layer assets this makes are never offered for saving.
 	const FString ContentRoot = TEXT("/Temp/MantlePlaceOdblLayerTest");
 	FMantlePlaceVaultManifest Manifest;
 	StateRoles(Manifest);
@@ -364,8 +334,8 @@ bool FMantlePlaceOdblDataLayerTest::RunTest(const FString& Parameters)
 		Asset->GetPackage()->SetDirtyFlag(false);
 		Asset->ClearFlags(RF_Public | RF_Standalone);
 	}
-	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	World->DestroyWorld(false);
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

@@ -10,14 +10,12 @@ public class MantlePlaceRuntime : ModuleRules
 		
 		PublicIncludePaths.AddRange(
 			new string[] {
-				// ... add public include paths required here ...
 			}
 			);
 				
 		
 		PrivateIncludePaths.AddRange(
 			new string[] {
-				// ... add other private include paths required here ...
 			}
 			);
 			
@@ -26,9 +24,9 @@ public class MantlePlaceRuntime : ModuleRules
 			new string[]
 			{
 				"Core",
-				"CoreUObject", // USTRUCT row types in public headers (MantlePlaceLandcoverTypes.h)
-				"Engine",      // FTableRowBase in MantlePlaceLandcoverTypes.h (tree-points DataTable rows)
-				"PCG",         // UPCGSettings + UPCGComponent: the foliage scatter node and its volume (public headers)
+				"CoreUObject",
+				"Engine",
+				"PCG",
 			}
 			);
 
@@ -38,17 +36,14 @@ public class MantlePlaceRuntime : ModuleRules
 			{
 				"Slate",
 				"SlateCore",
-				"HTTP",        // Mantle Place platform API (Supabase GoTrue) over HTTP
-				"Json",        // request body construction + auth response parsing
-				"HTTPServer",  // loopback (127.0.0.1) OAuth redirect callback server (RFC 8252)
-				"Sockets",     // probes an OS-assigned callback port: FHttpListener asserts on port 0
-				"Projects",    // IPluginManager: the conformance-corpus reader anchors its walk on the plugin dir
-				// ... add private dependencies that you statically link with here ...
+				"HTTP",
+				"Json",
+				"HTTPServer",
+				"Sockets",
+				"Projects",
 			}
 			);
 
-		// Windows crypto: DPAPI (Crypt32) encrypts the token store; CNG (Bcrypt) provides the
-		// BCryptGenRandom CSPRNG for the PKCE code_verifier + state.
 		if (Target.Platform == UnrealTargetPlatform.Win64)
 		{
 			PublicSystemLibraries.Add("Crypt32.lib");
@@ -59,7 +54,6 @@ public class MantlePlaceRuntime : ModuleRules
 		DynamicallyLoadedModuleNames.AddRange(
 			new string[]
 			{
-				// ... add any modules that your module loads dynamically here ...
 			}
 			);
 	}

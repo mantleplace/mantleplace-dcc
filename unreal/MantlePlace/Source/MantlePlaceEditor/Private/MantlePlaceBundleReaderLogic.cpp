@@ -2,7 +2,7 @@
 
 #include "MantlePlaceBundleReaderLogic.h"
 
-#include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion, FMantlePlaceManifestVersion
+#include "MantlePlaceVaultTypes.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -11,15 +11,12 @@
 
 namespace
 {
-/** The names the served 3.0.0 manifest schema gives the catalog and the statements beside it; a 2.x
- *  manifest keeps its catalog in `file_entries`. */
 const TCHAR* const CatalogKey3 = TEXT("catalog");
 const TCHAR* const CatalogKey2 = TEXT("file_entries");
 const TCHAR* const LevelKey = TEXT("level");
 const TCHAR* const NotHeldKey = TEXT("not_held");
 const TCHAR* const CountKey = TEXT("count");
 
-/** The ordinal order a reader in any language sorts paths in: by code unit, case included. */
 template <typename RowType>
 void SortByPath(TArray<RowType>& Rows)
 {
@@ -29,7 +26,6 @@ void SortByPath(TArray<RowType>& Rows)
 	});
 }
 
-/** The last path segment's extension, lowercased; empty when the file name has no dot. */
 FString ExtensionOf(const FString& Path)
 {
 	int32 Slash = INDEX_NONE;
@@ -39,8 +35,6 @@ FString ExtensionOf(const FString& Path)
 	return Name.FindLastChar(TEXT('.'), Dot) ? Name.Mid(Dot + 1).ToLower() : FString();
 }
 
-/** A count the catalog states: the `value` of the entry's `count` object, a JSON number that is a whole
- *  number, not negative. Nothing else is a count. */
 bool ReadCount(const TSharedPtr<FJsonObject>& Entry, int64& OutCount)
 {
 	const TSharedPtr<FJsonValue> Counted = Entry.IsValid() ? Entry->TryGetField(CountKey) : nullptr;
@@ -63,7 +57,6 @@ bool ReadCount(const TSharedPtr<FJsonObject>& Entry, int64& OutCount)
 	return true;
 }
 
-/** A member that is a string, and only a string: the engine's TryGetStringField also turns a number into one. */
 bool ReadString(const TSharedPtr<FJsonObject>& Object, const TCHAR* Key, FString& Out)
 {
 	const TSharedPtr<FJsonValue> Value = Object.IsValid() ? Object->TryGetField(Key) : nullptr;
@@ -82,7 +75,6 @@ const TSharedPtr<FJsonObject>* ReadObject(const TSharedPtr<FJsonObject>& Object,
 	return Value.IsValid() && Value->Type == EJson::Object && Value->TryGetObject(Out) ? Out : nullptr;
 }
 
-// The frames' reading, as ManifestFramesReader.cs reads them: a unit is known by its factor to metres.
 constexpr double FactorTolerance = 1e-9;
 constexpr double InternationalFootToMetres = 0.3048;
 constexpr double UsSurveyFootToMetres = 1200.0 / 3937.0;
@@ -92,7 +84,6 @@ bool NearFactor(double Stated, double Known)
 	return FMath::Abs(Stated - Known) <= Known * FactorTolerance;
 }
 
-/** A stated value as a message names it: a string in quotes, a number as written. */
 FString Raw(const TSharedPtr<FJsonValue>& Value)
 {
 	if (!Value.IsValid() || Value->Type == EJson::Null)
@@ -108,7 +99,6 @@ FString Raw(const TSharedPtr<FJsonValue>& Value)
 	}
 }
 
-/** What a member states, for a refusal: a string as it is, any other present value serialized, `(absent)` when missing. */
 FString StatedOrAbsent(const TSharedPtr<FJsonObject>& Object, const TCHAR* Key)
 {
 	FString Text;
@@ -139,7 +129,6 @@ const TSharedPtr<FJsonObject>* FramesMember(
 	return Object;
 }
 
-/** A stated number; false, with the refusal, when absent or not a finite number. */
 bool FramesNumber(const TSharedPtr<FJsonObject>& Parent, const TCHAR* Name, const FString& Where, FString& Error)
 {
 	const TSharedPtr<FJsonValue> Value = Parent->TryGetField(Name);
@@ -156,7 +145,6 @@ bool FramesNumber(const TSharedPtr<FJsonObject>& Parent, const TCHAR* Name, cons
 	return true;
 }
 
-/** A linear unit: a name, and a factor that is the metre, the international foot or the US survey foot. */
 bool FramesUnit(const TSharedPtr<FJsonObject>& Parent, const TCHAR* Name, const FString& Where, bool bMustBeMetre,
 	FString& Error)
 {
@@ -199,7 +187,6 @@ bool FramesUnit(const TSharedPtr<FJsonObject>& Parent, const TCHAR* Name, const 
 	return true;
 }
 
-/** An authority code as the served schema words it: `EPSG:32618`. */
 bool IsAuthorityCode(const FString& Code)
 {
 	int32 Colon = INDEX_NONE;
@@ -224,7 +211,6 @@ bool IsAuthorityCode(const FString& Code)
 	return true;
 }
 
-/** A CRS as the manifest names it: whole, as a code, a PROJJSON object or a WKT2 string. */
 bool FramesCrs(const TSharedPtr<FJsonObject>& Parent, const TCHAR* Name, const FString& Where, FString& Error)
 {
 	const FString At = Where + TEXT(".") + Name;
@@ -266,7 +252,6 @@ bool FramesCrs(const TSharedPtr<FJsonObject>& Parent, const TCHAR* Name, const F
 		TEXT("Manifest.json's %s names no code, PROJJSON object or WKT2 string, so it names no CRS."), *At));
 }
 
-/** `geoid_model` is a name or null; absent is stated as null, so every read has the same shape. */
 bool FramesGeoid(const TSharedPtr<FJsonObject>& Frame, const FString& Where, FString& Error)
 {
 	const TSharedPtr<FJsonValue> Value = Frame->TryGetField(TEXT("geoid_model"));
@@ -279,7 +264,7 @@ bool FramesGeoid(const TSharedPtr<FJsonObject>& Frame, const FString& Where, FSt
 		? true
 		: RefuseFrames(Error, FString::Printf(TEXT("Manifest.json's %s.geoid_model is not a name or null."), *Where));
 }
-} // namespace
+}
 
 bool FMantlePlaceBundleReaderLogic::ReadFrames(
 	const TSharedPtr<FJsonObject>& Manifest, TSharedPtr<FJsonObject>& OutFrames, FString& OutError)
@@ -299,13 +284,12 @@ bool FMantlePlaceBundleReaderLogic::ReadFrames(
 		return false;
 	}
 
-	// The georeferenced frame.
 	const FString Order = TEXT("frames.georeferenced");
 	if (!FramesCrs(*Georeferenced, TEXT("horizontal_crs"), Order, OutError)
 		|| !FramesCrs(*Georeferenced, TEXT("vertical_crs"), Order, OutError)
 		|| !FramesGeoid(*Georeferenced, Order, OutError)
-		|| !FramesUnit(*Georeferenced, TEXT("horizontal_unit"), Order, /*bMustBeMetre=*/false, OutError)
-		|| !FramesUnit(*Georeferenced, TEXT("vertical_unit"), Order, /*bMustBeMetre=*/false, OutError))
+		|| !FramesUnit(*Georeferenced, TEXT("horizontal_unit"), Order, false, OutError)
+		|| !FramesUnit(*Georeferenced, TEXT("vertical_unit"), Order, false, OutError))
 	{
 		return false;
 	}
@@ -320,7 +304,6 @@ bool FMantlePlaceBundleReaderLogic::ReadFrames(
 		return false;
 	}
 
-	// The local site frame.
 	const FString Site = TEXT("frames.local");
 	const FString OriginAt = Site + TEXT(".origin");
 	const FString ProjectedAt = OriginAt + TEXT(".projected");
@@ -340,9 +323,9 @@ bool FMantlePlaceBundleReaderLogic::ReadFrames(
 	if (!FramesCrs(*Projected, TEXT("crs"), ProjectedAt, OutError)
 		|| !FramesNumber(*Projected, TEXT("x"), ProjectedAt, OutError)
 		|| !FramesNumber(*Projected, TEXT("y"), ProjectedAt, OutError)
-		|| !FramesUnit(*Projected, TEXT("unit"), ProjectedAt, /*bMustBeMetre=*/false, OutError)
+		|| !FramesUnit(*Projected, TEXT("unit"), ProjectedAt, false, OutError)
 		|| !FramesCrs(*Local, TEXT("vertical_crs"), Site, OutError)
-		|| !FramesUnit(*Local, TEXT("unit"), Site, /*bMustBeMetre=*/false, OutError))
+		|| !FramesUnit(*Local, TEXT("unit"), Site, false, OutError))
 	{
 		return false;
 	}
@@ -366,8 +349,7 @@ bool FMantlePlaceBundleReaderLogic::ReadFrames(
 				*Site, Axis.Name, *Stated, Axis.Direction));
 		}
 	}
-	// The local frame is in metres on every order: any other unit is refused, never converted.
-	if (!FramesUnit(*Local, TEXT("unit"), Site, /*bMustBeMetre=*/true, OutError)
+	if (!FramesUnit(*Local, TEXT("unit"), Site, true, OutError)
 		|| !FramesGeoid(*Local, Site, OutError)
 		|| !FramesNumber(*Local, TEXT("grid_rotation_deg"), Site, OutError))
 	{
@@ -385,7 +367,7 @@ bool FMantlePlaceBundleReaderLogic::IsReadableEntry(const FString& EntryName)
 		return false;
 	}
 	TArray<FString> Parts;
-	EntryName.ParseIntoArray(Parts, TEXT("/"), /*InCullEmpty=*/false);
+	EntryName.ParseIntoArray(Parts, TEXT("/"), false);
 	for (const FString& Part : Parts)
 	{
 		if (Part.IsEmpty() || Part == TEXT(".") || Part == TEXT(".."))
@@ -393,8 +375,6 @@ bool FMantlePlaceBundleReaderLogic::IsReadableEntry(const FString& EntryName)
 			return false;
 		}
 	}
-	// Archive tools' own metadata, which is not the bundle's: a macOS zip's resource-fork folder and
-	// Finder's folder settings.
 	return Parts[0] != TEXT("__MACOSX") && Parts.Last() != TEXT(".DS_Store");
 }
 
@@ -404,7 +384,6 @@ bool FMantlePlaceBundleReaderLogic::FindManifest(
 	OutRoot.Reset();
 	OutManifestPath.Reset();
 
-	// FString's hash and equality ignore case, so the manifest's name is matched regardless of case.
 	TSet<FString> Entries;
 	TSet<FString> Tops;
 	bool bAllInFolders = true;
@@ -456,12 +435,9 @@ FMantlePlaceBundleRead FMantlePlaceBundleReaderLogic::Read(const TArray<FString>
 		return Out;
 	}
 
-	// Every entry under the bundle's root, by its path from the root, at the archive's own spelling.
-	// The map's keys ignore case, which is how a catalog name finds its entry.
 	TMap<FString, FString> Held;
 	for (const FString& Name : EntryNames)
 	{
-		// FString::StartsWith is false for an empty prefix, so a bundle at the top is said in so many words.
 		if (IsReadableEntry(Name) && (Out.Root.IsEmpty() || Name.StartsWith(Out.Root)))
 		{
 			Held.Add(Name.Mid(Out.Root.Len()), Name);
@@ -478,8 +454,6 @@ FMantlePlaceBundleRead FMantlePlaceBundleReaderLogic::Read(const TArray<FString>
 		return Out;
 	}
 
-	// The version, and nothing else, before the gate (format.md §14). A STRING, parsed as semver: an
-	// integer from the pre-history is not a version this reader speaks (HPS-31).
 	ReadString(Manifest, TEXT("version"), Out.Version);
 	const FMantlePlaceManifestVersion Parsed = FMantlePlaceManifestVersion::Parse(Out.Version);
 	if (!Parsed.bValid || Parsed < FMantlePlaceManifestVersion::Parse(MantlePlaceMinSupportedManifestVersion))
@@ -496,8 +470,6 @@ FMantlePlaceBundleRead FMantlePlaceBundleReaderLogic::Read(const TArray<FString>
 		return Out;
 	}
 
-	// Each layout keeps its manifest in one place (compatibility.md §1); one that is elsewhere is not a
-	// bundle of either.
 	const bool bThree = Parsed.Major >= 3;
 	if (bThree != (Out.ManifestPath == ManifestPath3()))
 	{
@@ -508,8 +480,6 @@ FMantlePlaceBundleRead FMantlePlaceBundleReaderLogic::Read(const TArray<FString>
 		return Out;
 	}
 
-	// A 3.x manifest's two frames, stated once. A unit, datum, axis order or frame this reader does not
-	// understand refuses the manifest, naming the value (format.md §4); nothing is converted or derived.
 	if (bThree)
 	{
 		FString FramesError;
@@ -522,14 +492,11 @@ FMantlePlaceBundleRead FMantlePlaceBundleReaderLogic::Read(const TArray<FString>
 		}
 	}
 
-	// The download's level, as the manifest states it once. 2.x states none.
 	if (bThree)
 	{
 		ReadString(Manifest, LevelKey, Out.Level);
 	}
 
-	// The one catalog. A per-host block is never consulted: this reads the catalog and nothing under
-	// `hosts`, in either major.
 	const TCHAR* const CatalogKey = bThree ? CatalogKey3 : CatalogKey2;
 	const TSharedPtr<FJsonObject>* Catalog = ReadObject(Manifest, CatalogKey);
 	if (Catalog == nullptr)
@@ -575,9 +542,6 @@ FMantlePlaceBundleRead FMantlePlaceBundleReaderLogic::Read(const TArray<FString>
 		Out.Files.Add(MoveTemp(File));
 	}
 
-	// The promised files this download does not hold, each with the reason the manifest states,
-	// verbatim: a reader shows it and never matches on it (format.md §9.6).
-	// The list is `{path, reason}` rows. A row with no path is no statement about a file.
 	const TSharedPtr<FJsonValue> NotHeldValue = bThree ? Manifest->TryGetField(NotHeldKey) : nullptr;
 	if (NotHeldValue.IsValid() && NotHeldValue->Type == EJson::Array)
 	{
@@ -588,7 +552,7 @@ FMantlePlaceBundleRead FMantlePlaceBundleReaderLogic::Read(const TArray<FString>
 			if (!Row.IsValid() || Row->Type != EJson::Object || !Row->TryGetObject(Statement)
 				|| !ReadString(*Statement, TEXT("path"), Path) || Named.Contains(Path))
 			{
-				continue; // the catalog's word on a file it names stands
+				continue;
 			}
 			FString Reason;
 			ReadString(*Statement, TEXT("reason"), Reason);

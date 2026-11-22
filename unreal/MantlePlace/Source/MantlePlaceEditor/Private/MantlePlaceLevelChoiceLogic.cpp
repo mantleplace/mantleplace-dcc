@@ -7,7 +7,6 @@
 
 namespace
 {
-/** A count with its thousands grouped by commas, whatever the machine's locale: `2,000,000`. */
 FString GroupedCount(int64 Value)
 {
 	const bool bNegative = Value < 0;

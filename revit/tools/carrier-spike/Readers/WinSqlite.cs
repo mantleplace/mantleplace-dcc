@@ -4,12 +4,6 @@ using System.Text;
 
 namespace MantlePlace.Revit.CarrierSpike;
 
-/// <summary>
-/// The SQLite Windows ships as <c>winsqlite3.dll</c> (System32, Windows 10 1607 and later), reached
-/// by P/Invoke: no NuGet package, no native binary shipped beside the add-in, nothing for another
-/// add-in's SQLite to collide with in Revit's process. The handful of calls a read-only GeoPackage
-/// read needs, plus the one a test fixture needs to write one.
-/// </summary>
 public static class WinSqlite
 {
     private const string Library = "winsqlite3.dll";
@@ -27,8 +21,6 @@ public static class WinSqlite
     public const int Blob = 4;
     public const int Null = 5;
 
-    /// <summary>Runs every row of <paramref name="sql"/> against a read-only open of <paramref name="path"/>.</summary>
-    /// <param name="onRow">Called once per row with that row's reader.</param>
     public static void Query(string path, string sql, Action<RowReader> onRow)
     {
         ArgumentNullException.ThrowIfNull(onRow);
@@ -67,7 +59,6 @@ public static class WinSqlite
         }
     }
 
-    /// <summary>Creates <paramref name="path"/> if need be and runs a script of statements in it.</summary>
     public static void ExecuteScript(string path, string sql)
     {
         IntPtr db = Open(path, OpenReadWrite | OpenCreate);
@@ -85,7 +76,6 @@ public static class WinSqlite
         }
     }
 
-    /// <summary>The version string of the SQLite the OS loaded, for the probe's record.</summary>
     public static string Version => Marshal.PtrToStringUTF8(NativeMethods.sqlite3_libversion()) ?? string.Empty;
 
     private static IntPtr Open(string path, int flags)
@@ -114,11 +104,10 @@ public static class WinSqlite
     private static byte[] Utf8(string value)
     {
         byte[] bytes = Encoding.UTF8.GetBytes(value);
-        Array.Resize(ref bytes, bytes.Length + 1); // NUL-terminated
+        Array.Resize(ref bytes, bytes.Length + 1);
         return bytes;
     }
 
-    /// <summary>The current row of a statement.</summary>
     public sealed class RowReader
     {
         private readonly IntPtr _statement;

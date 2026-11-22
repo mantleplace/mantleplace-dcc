@@ -1,14 +1,4 @@
 # Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
-"""The QA helper reads a bundle's manifest regardless of the case of its entry name.
-
-`mantleplace_cesium_stream.py` runs inside the editor, where `import unreal` exists. These tests
-stub that module so the pure part (finding the manifest member and reading the origin) runs under
-plain Python, the way the repository's other gate tests do.
-
-The rule is MPB 2.0's (spec/format.md 10.3 rule 6): a reader matches a manifest path to an archive
-entry regardless of case. The engine's zip reader already does (recorded in unreal/CLAUDE.md); Python's
-`zipfile` does not, which is what the helper used to depend on.
-"""
 
 import importlib.util
 import json
@@ -26,7 +16,6 @@ HELPER = (
 
 
 def load_helper():
-    """Import the helper by path with `unreal` stubbed; the stub is removed again afterwards."""
     had = "unreal" in sys.modules
     previous = sys.modules.get("unreal")
     sys.modules["unreal"] = types.ModuleType("unreal")
@@ -100,8 +89,6 @@ class ManifestMemberCase(unittest.TestCase):
 
 
 class StreamOriginCase(unittest.TestCase):
-    """An MPB 3.x bundle reports its origin from the C++ stream; a 2.x one reports none."""
-
     def setUp(self):
         self.helper = load_helper()
 

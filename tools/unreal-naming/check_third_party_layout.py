@@ -32,13 +32,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# The tree this gate governs, and the only folder inside it that may hold a licence text.
 PLUGIN_ROOT = Path("unreal/MantlePlace")
 THIRD_PARTY = Path("Source/ThirdParty")
 
 NAME_RE = re.compile(r"^(?:OFL|LICENSE|COPYING|NOTICE)", re.IGNORECASE)
 
-# Suffixes whose text is read for a licence phrase. Anything else (source, images, fonts) is not.
 TEXT_SUFFIXES = ("", ".txt", ".md", ".license")
 MAX_READ_BYTES = 1_000_000
 
