@@ -245,6 +245,86 @@ internal static class AuthClientTests
             run.Equal(none, string.Empty, "carries no message");
         });
 
+        run.Case("a config that sends the sign-in page and the code exchange to two servers is named before any browser opens", () =>
+        {
+            string split = Path.Combine(sandbox, "split.json");
+            File.WriteAllText(
+                split,
+                """
+                {
+                  "tokenEndpointUrl": "https://localhost:3000/api/v1/auth/native/token",
+                  "refreshEndpointUrl": "https://localhost:3000/api/v1/auth/native/refresh",
+                  "apiBaseUrl": "https://localhost:3000"
+                }
+                """);
+
+            MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load(split);
+            run.Equal(endpoints.OverridesFrom, split, "the endpoints remember the file that moved them");
+            run.Equal(MantlePlaceEndpoints.Load(Path.Combine(sandbox, "absent.json")).OverridesFrom, string.Empty, "and the defaults name no file");
+
+            string? sentence = endpoints.SplitSignIn();
+            run.True(sentence is not null, "a split is found");
+            run.Contains(sentence ?? string.Empty, "https://mantle.place", "it names the server the sign-in page is on");
+            run.Contains(sentence ?? string.Empty, "https://localhost:3000", "and the one the code is exchanged on");
+            run.Contains(sentence ?? string.Empty, split, "and the file that set them");
+
+            using LoopbackRedirectListener? squatter = LoopbackRedirectListener.StartEphemeral("/callback");
+            string splitAndBlocked = Path.Combine(sandbox, "split-blocked.json");
+            File.WriteAllText(
+                splitAndBlocked,
+                $$"""
+                {
+                  "tokenEndpointUrl": "https://localhost:3000/api/v1/auth/native/token",
+                  "loopbackPorts": [{{squatter!.Port}}]
+                }
+                """);
+            using AuthSession session = new(MantlePlaceEndpoints.Load(splitAndBlocked), new NullSecretStore());
+            AuthOutcome outcome = session.SignInAsync().GetAwaiter().GetResult();
+            run.False(outcome.Succeeded, "the sign-in fails");
+            run.Contains(outcome.Message, "two servers", "on the split, before it binds a port or opens a browser");
+        });
+
+        run.Case("a config that keeps every sign-in route on one server is not a split", () =>
+        {
+            string dev = Path.Combine(sandbox, "one-server.json");
+            File.WriteAllText(
+                dev,
+                """
+                {
+                  "webLoginUrl": "https://localhost:3000/auth/native?host=revit",
+                  "tokenEndpointUrl": "https://localhost:3000/api/v1/auth/native/token",
+                  "refreshEndpointUrl": "https://localhost:3000/api/v1/auth/native/refresh"
+                }
+                """);
+
+            run.True(MantlePlaceEndpoints.Load(dev).SplitSignIn() is null, "a whole dev stack");
+            run.True(MantlePlaceEndpoints.Load(Path.Combine(sandbox, "absent.json")).SplitSignIn() is null, "the defaults");
+        });
+
+        run.Case("a server that does not answer is named by its own host, with the file that chose it", () =>
+        {
+            string dev = Path.Combine(sandbox, "dev-down.json");
+            File.WriteAllText(
+                dev,
+                """
+                {
+                  "webLoginUrl": "https://localhost:3000/auth/native",
+                  "tokenEndpointUrl": "https://localhost:3000/api/v1/auth/native/token",
+                  "refreshEndpointUrl": "https://localhost:3000/api/v1/auth/native/refresh"
+                }
+                """);
+
+            AuthOutcome down = Renew(MantlePlaceEndpoints.Load(dev));
+            run.False(down.Succeeded, "the refresh fails");
+            run.Contains(down.Message, "Could not reach localhost:3000", "naming the server it tried");
+            run.False(down.Message.Contains("mantle.place:", StringComparison.Ordinal), "not mantle.place, which it never tried");
+            run.Contains(down.Message, dev, "and the file that sent it there");
+
+            AuthOutcome prod = Renew(MantlePlaceEndpoints.Load(Path.Combine(sandbox, "absent.json")));
+            run.Contains(prod.Message, "Could not reach mantle.place", "the default still says mantle.place");
+            run.False(prod.Message.Contains("config.json", StringComparison.Ordinal), "and points at no file");
+        });
+
         run.Case("the browser page escapes in the order that does not double-escape", () =>
         {
             run.Equal(BrowserPages.HtmlEscape("<a & b>"), "&lt;a &amp; b&gt;", "escaped once, correctly");
@@ -343,6 +423,37 @@ internal static class AuthClientTests
         catch (UnauthorizedAccessException)
         {
         }
+    }
+
+    private static AuthOutcome Renew(MantlePlaceEndpoints endpoints)
+    {
+        MemoryStore store = new();
+        store.Save("refresh-token", "r-1");
+        using AuthSession session = new(endpoints, store, new Unanswered());
+        return session.RestoreAsync().GetAwaiter().GetResult();
+    }
+
+    private sealed class Unanswered : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => throw new HttpRequestException("No connection could be made because the target machine actively refused it.");
+    }
+
+    private sealed class MemoryStore : ISecretStore
+    {
+        private readonly Dictionary<string, string> _secrets = [];
+
+        public bool IsPersistent => true;
+
+        public bool Save(string key, string secret)
+        {
+            _secrets[key] = secret;
+            return true;
+        }
+
+        public bool TryLoad(string key, out string secret) => _secrets.TryGetValue(key, out secret!);
+
+        public void Clear(string key) => _secrets.Remove(key);
     }
 
     private static int FreeEphemeralPort()

@@ -171,7 +171,7 @@ public sealed class ExportsClient : IExportRoutes
             }
             catch (HttpRequestException ex)
             {
-                return (ExportCall<string>.Of(ExportCallOutcome.RetryLater, $"Could not reach mantle.place: {ex.Message}"), string.Empty);
+                return (ExportCall<string>.Of(ExportCallOutcome.RetryLater, _endpoints.Unreachable(Base(), ex.Message)), string.Empty);
             }
             catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
             {

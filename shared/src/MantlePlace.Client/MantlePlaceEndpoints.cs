@@ -23,6 +23,37 @@ public sealed class MantlePlaceEndpoints
 
     public int SignInTimeoutSeconds { get; init; } = 300;
 
+    public string OverridesFrom { get; init; } = string.Empty;
+
+    public string? SplitSignIn()
+    {
+        string? login = OriginOrNull(WebLoginUrl);
+        string? other = new[] { TokenEndpointUrl, RefreshEndpointUrl }
+            .Select(OriginOrNull)
+            .FirstOrDefault(origin => origin is not null && login is not null
+                && !string.Equals(origin, login, StringComparison.OrdinalIgnoreCase));
+        if (login is null || other is null)
+        {
+            return null;
+        }
+
+        string file = OverridesFrom.Length > 0 ? OverridesFrom : ConfigPath;
+        return $"Sign-in is split across two servers: the sign-in page is on {login}, but the code it hands back "
+            + $"would be redeemed on {other}, which cannot accept a code another server signed. Both are set in {file}. "
+            + "Point webLoginUrl, tokenEndpointUrl and refreshEndpointUrl at one server, or delete that file to sign in to mantle.place.";
+    }
+
+    public string Unreachable(string url, string reason)
+    {
+        string host = Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) ? uri.Authority : url;
+        string sentence = $"Could not reach {host}: {reason}";
+        bool isDefault = Uri.TryCreate(new MantlePlaceEndpoints().ApiBaseUrl, UriKind.Absolute, out Uri? platform)
+            && string.Equals(host, platform.Authority, StringComparison.OrdinalIgnoreCase);
+        return isDefault || OverridesFrom.Length == 0
+            ? sentence
+            : $"{sentence} {host} is set in {OverridesFrom}: start that server, or delete the file to use mantle.place.";
+    }
+
     public static string ConfigPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "MantlePlace",
@@ -58,6 +89,7 @@ public sealed class MantlePlaceEndpoints
                 LoopbackPorts = OverridePorts(root, defaults.LoopbackPorts),
                 CallbackPath = Override(root, "callbackPath", defaults.CallbackPath),
                 SignInTimeoutSeconds = OverrideInt(root, "signInTimeoutSeconds", defaults.SignInTimeoutSeconds),
+                OverridesFrom = configPath,
             };
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
@@ -65,6 +97,9 @@ public sealed class MantlePlaceEndpoints
             return defaults;
         }
     }
+
+    private static string? OriginOrNull(string url)
+        => Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) ? uri.GetLeftPart(UriPartial.Authority) : null;
 
     private static string Override(JsonElement root, string key, string fallback)
         => root.TryGetProperty(key, out JsonElement value)

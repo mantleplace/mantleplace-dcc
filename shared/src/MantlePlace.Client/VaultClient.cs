@@ -466,7 +466,7 @@ public sealed class VaultClient
         }
         catch (HttpRequestException ex)
         {
-            return (0, string.Empty, $"Could not reach mantle.place: {ex.Message}");
+            return (0, string.Empty, _endpoints.Unreachable(Base(), ex.Message));
         }
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
