@@ -78,7 +78,10 @@ internal sealed partial class RevitBundleImporter
             handled += batch.Count;
 
             int firstMade = tally.Made.Count;
+            long cutStarted = Stopwatch.GetTimestamp();
             CutBatch(terrain, [.. batch.Select(index => members[index])], tally);
+            TimeSpan cutTime = Stopwatch.GetElapsedTime(cutStarted);
+            TimeSpan typedBefore = typingTime;
 
             for (int index = firstMade; index < tally.Made.Count; index++)
             {
@@ -114,6 +117,11 @@ internal sealed partial class RevitBundleImporter
 
                 typingTime += Stopwatch.GetElapsedTime(before);
             }
+
+            using Process revit = Process.GetCurrentProcess();
+            Trace($"  cut: batch {handled - batch.Count + 1:N0}-{handled:N0} of {members.Length:N0}, {batch.Count:N0} {words.Noun} feature(s): "
+                + $"cut in {cutTime.TotalSeconds:N1} s, typed in {(typingTime - typedBefore).TotalSeconds:N1} s; "
+                + $"Revit holds {revit.PrivateMemorySize64 / (1024.0 * 1024 * 1024):N1} GB.");
         }
 
         Count(members.Length, members.Length);

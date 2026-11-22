@@ -62,6 +62,33 @@ internal static class GroundCutBatchesTests
                 "one answer for one layer");
         });
 
+        run.Case("a batch carries a bounded number of vertices, so one heavy batch cannot hold the import for an hour", () =>
+        {
+            List<GroundCut> heavy = [.. Enumerable.Range(0, 12).Select(index => Ring(index * 200.0, 0, 300))];
+
+            IReadOnlyList<IReadOnlyList<int>> batches = GroundCutBatches.Of(heavy);
+
+            run.True(
+                batches.All(batch => batch.Sum(index => VertexCount(heavy[index])) <= GroundCutBatches.MostVertices),
+                "no batch carries more than the vertex budget");
+            run.Equal(batches.Count, 4, "twelve roads of 300 vertices go three to a batch");
+        });
+
+        run.Case("a road over the vertex budget is cut on its own, and its holes count toward it", () =>
+        {
+            GroundCut huge = Ring(0, 0, GroundCutBatches.MostVertices + 1);
+            GroundCut holed = new()
+            {
+                Outer = Ring(500, 0, 10).Outer,
+                Holes = [Ring(500, 0, GroundCutBatches.MostVertices).Outer],
+            };
+            GroundCut small = Square(1_000, 0, 10);
+
+            IReadOnlyList<IReadOnlyList<int>> batches = GroundCutBatches.Of([huge, holed, small]);
+
+            run.Equal(Describe(batches), "0|1|2", "each road over the budget is its own cut, and the small one is left its own");
+        });
+
         run.Case("nothing to cut is no batch", () =>
         {
             run.Equal(GroundCutBatches.Of([]).Count, 0, "no cuts, no batches");
@@ -72,6 +99,23 @@ internal static class GroundCutBatchesTests
 
     private static string Describe(IReadOnlyList<IReadOnlyList<int>> batches)
         => string.Join("|", batches.Select(batch => string.Join(",", batch)));
+
+    private static int VertexCount(GroundCut cut) => cut.Outer.Vertices.Count + cut.Holes.Sum(hole => hole.Vertices.Count);
+
+    private static GroundCut Ring(double east, double north, int vertices) => new()
+    {
+        Outer = new SiteFeature
+        {
+            Vertices =
+            [
+                .. Enumerable.Range(0, vertices).Select(step => new SiteVertex(
+                    east + (50.0 * Math.Cos(2 * Math.PI * step / vertices)),
+                    north + (50.0 * Math.Sin(2 * Math.PI * step / vertices)),
+                    null)),
+            ],
+            IsClosed = true,
+        },
+    };
 
     private static GroundCut Square(double east, double north, double size) => new()
     {
