@@ -2,12 +2,36 @@ using System.Text.RegularExpressions;
 
 namespace MantlePlace.Core.Tests;
 
+/// <summary>
+/// The one set of windows both .NET hosts open (<c>shared/src/MantlePlace.Wpf</c>): that each exists
+/// once, in the shared home and in neither host's tree, and that what they say, and in which order,
+/// is the standard's words for each host (<c>HPS-51</c>).
+/// </summary>
+/// <remarks>
+/// <para>
+/// The windows are WPF and CI never builds them, so what a test can hold is moved out of them: the
+/// labels and their order are decided here, in the pure core, and the window lays out what it is
+/// handed. The rest is read off the source, as <see cref="ShimWindowTests"/> reads the shims.
+/// </para>
+/// <para>
+/// The two hosts carried near-copies of these windows that had already drifted: AutoCAD's vault window
+/// sent a signed-out curator to the Add-ins tab after the plugin's panel had moved to a tab of its own
+/// (<c>HPS-57</c>). One source is what stops the next drift, and a third .NET host takes it as it is.
+/// </para>
+/// </remarks>
 internal static class SharedWindowsTests
 {
+    /// <summary>The folder the shared windows live in, from the repository root.</summary>
     internal const string SharedWindowsFolder = "shared/src/MantlePlace.Wpf";
 
+    /// <summary>The host trees, which must hold no copy.</summary>
     private static readonly string[] HostTrees = ["revit/src", "autocad/src"];
 
+    /// <summary>
+    /// The shared set: the four windows, the notice, the chrome and styles they share, and the import
+    /// window's thread, its host's side, and the two Windows readers it stacks and places itself by.
+    /// The import window itself is a partial class, so it is held by its own case.
+    /// </summary>
     private static readonly string[] SharedTypes =
     [
         "SignInWindow",
@@ -23,8 +47,10 @@ internal static class SharedWindowsTests
         "HostWindowGeometry",
     ];
 
+    /// <summary>Names the import window's code had in the Revit shim, which no host tree may declare again.</summary>
     private static readonly string[] RetiredHostTypes = ["ImportWindowHost", "RevitWindowGeometry"];
 
+    /// <summary>The two .NET hosts, by the id each shell hands <see cref="HostIdentity"/>.</summary>
     private static readonly string[] HostIds = ["revit", "autocad"];
 
     internal static int Run()
@@ -134,6 +160,7 @@ internal static class SharedWindowsTests
                 return;
             }
 
+            // The casing is the host's (HPS-51 exempts it), so the comparison is not.
             foreach (string word in new[]
             {
                 WindowLabels.SignInHeading,
@@ -228,11 +255,15 @@ internal static class SharedWindowsTests
         {
             string? shared = RepoTree.Find(SharedWindowsFolder);
             string row = shared is null ? string.Empty : File.ReadAllText(Path.Combine(shared, "LevelChoiceRow.cs"));
+            // WPF cannot load in this headless suite, so the drawing is read as its source: the loop over the
+            // control's rows must add a TextBlock to the locked panel, showing the row's words, greyed.
             Match drawn = Regex.Match(
                 row,
                 @"foreach\s*\(\s*string\s+(?<r>\w+)\s+in\s+control\.LockedRows\s*\)\s*\{(?<body>.*?)\r?\n            \}",
                 RegexOptions.CultureInvariant | RegexOptions.Singleline);
             string body = drawn.Groups["body"].Value;
+            // The rows are only drawn if the panel they are added to is itself in the row: a loop adding to a panel
+            // nobody attached draws nothing, so the attachment is held in the constructor, ahead of any Show.
             Match ctor = Regex.Match(row, @"public\s+LevelChoiceRow\s*\(\s*\)\s*\{(?<body>.*?)?
     \}", RegexOptions.CultureInvariant | RegexOptions.Singleline);
             run.True(ctor.Success, "the row has its constructor");
@@ -253,6 +284,7 @@ internal static class SharedWindowsTests
         return run.Report("shared windows");
     }
 
+    /// <summary>A declaration of <paramref name="type"/>, whatever its kind.</summary>
     private static Regex Declaration(string type)
         => new($@"\b(class|record|struct|interface)\s+{type}\b", RegexOptions.CultureInvariant);
 
@@ -262,8 +294,13 @@ internal static class SharedWindowsTests
         return file.Contains($"{sep}obj{sep}", StringComparison.Ordinal) || file.Contains($"{sep}bin{sep}", StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Every backticked word in the second column of the standard's <c>HPS-51</c> table, lower-cased,
+    /// or null when the table is not where this expects it.
+    /// </summary>
     private static HashSet<string>? StandardWords()
     {
+        // The root's docs/, not a host's: autocad/docs is met first walking up from the AutoCAD suite.
         string? docs = RepoTree.Find("docs", folder => File.Exists(Path.Combine(folder, "host-plugin-standard.md")));
         string? path = docs is null ? null : Path.Combine(docs, "host-plugin-standard.md");
         if (path is null)
@@ -294,6 +331,7 @@ internal static class SharedWindowsTests
             }
         }
 
+        // HPS-62 names the two surfaces in prose, outside the table: "The words are `Credits` and `Notices`".
         if (lines.Any(line => line.Contains("The words are `Credits` and `Notices`", StringComparison.Ordinal)))
         {
             words.Add("Credits");

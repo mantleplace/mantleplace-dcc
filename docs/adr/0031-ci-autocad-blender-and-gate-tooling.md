@@ -268,7 +268,7 @@ Source: tools/public-hygiene/check_docs_integrity.py
 **The reference gate exempts exactly one path, its own test corpus, and not the directory.** The gate's own script must be held to the same prose rule, while the corpus has to contain forbidden strings.
 Source: tools/public-hygiene/check_public_references.py
 
-**The qualified-reference and private-sibling patterns are structural and kept disjoint from the bare form.** They wave through single-letter language versions like C#12 and allow only two tracked log filenames, so one token yields one finding.
+**The qualified-reference and private-sibling patterns are structural and kept disjoint from the bare form.** They wave through single-letter language versions like C-sharp 12 and allow only two tracked log filenames, so one token yields one finding.
 Source: tools/public-hygiene/check_public_references.py
 
 **The file surface allows PascalCase brand strings only from a closed, exact-case set matched as whole tokens or documented prefixes.** Any other tail is treated as a sibling repository name and refused.
@@ -280,7 +280,7 @@ Source: tools/public-hygiene/check_public_references.py
 **Findings that will be posted publicly redact the refused token.** The tracker gate comments on the offending issue, and quoting the token would make a second permanent copy that editing the issue cannot clean up. The CI log keeps it.
 Source: tools/public-hygiene/check_public_references.py
 
-**The hex-colour exemption reads forward from the hash in the line, not from the matched token.** The digit-only match stops at the first letter and would turn colours like #0B0C10 into false private-tracker citations.
+**The hex-colour exemption reads forward from the hash in the line, not from the matched token.** The digit-only match stops at the first letter and would turn colours like 0B0C10 with a hash into false private-tracker citations.
 Source: tools/public-hygiene/check_public_references.py
 
 **The gate dispatches on whether the branch-name flag was given, never on its truthiness.** An empty value falling through to the tree scan would print a false green for a name that was never checked.
