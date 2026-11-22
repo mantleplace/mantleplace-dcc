@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using MantlePlace.Revit.CarrierSpike;
 using MantlePlace.Core;
+using GeoPackageGeometry = MantlePlace.Revit.CarrierSpike.GeoPackageGeometry;
 
 if (args.Length == 3 && args[0] == "--compare")
 {

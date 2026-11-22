@@ -32,6 +32,7 @@ internal static class SiteVectorTests
 
         RunFrameCases(run);
         RunVectorCases(run);
+        RunPathRuleCases(run);
         RunTreeCases(run);
         RunFoliageVocabularyCases(run);
 
@@ -297,6 +298,59 @@ internal static class SiteVectorTests
                 "road centrelines",
                 out _);
             run.Contains(error, "features", "a collection with no features array is a read failure, not an empty layer");
+        });
+    }
+
+    private static void RunPathRuleCases(TestRun run)
+    {
+        LayerFrame metricLayer = new(LayerCoordinates.AbsoluteProjected, LinearUnit.Metre);
+        LayerFrame footLayer = new(LayerCoordinates.AbsoluteProjected, LinearUnit.UsSurveyFoot);
+
+        run.Case("a vertex places at absolute minus origin, with Z in metres", () =>
+        {
+            run.True(
+                SiteVectorReader.TryPlaceVertex(MetricFrame, metricLayer, 472195.0, 4257585.0, 12.5, out SiteVertex vertex),
+                "a metric position places");
+            run.Within(vertex.EastM, 600.0, 1e-6, "east offset");
+            run.Within(vertex.NorthM, 535.0, 1e-6, "north offset");
+            run.Within(vertex.ElevationM ?? 0.0, 12.5, 1e-9, "metric Z passes through");
+
+            run.True(
+                SiteVectorReader.TryPlaceVertex(FootFrame, footLayer, 1450131.2, 13171825.6, 100.0, out SiteVertex foot),
+                "a foot position places");
+            run.Within(foot.ElevationM ?? 0.0, 30.480061, 1e-6, "a foot Z converts to metres");
+
+            run.True(
+                SiteVectorReader.TryPlaceVertex(MetricFrame, metricLayer, 472195.0, 4257585.0, null, out SiteVertex flat),
+                "a position without Z places");
+            run.True(flat.ElevationM is null, "a missing Z stays missing");
+        });
+
+        run.Case("a position the frame cannot place is skipped, never guessed", () =>
+        {
+            run.False(
+                SiteVectorReader.TryPlaceVertex(FootFrame, LayerFrame.Geographic, -105.3, 38.4, null, out _),
+                "a geographic position against a State Plane origin");
+        });
+
+        run.Case("a ring drops its repeated closing position and needs three vertices", () =>
+        {
+            List<SiteVertex> ring = [new(0, 0, null), new(10, 0, null), new(10, 10, null), new(0, 0, null)];
+            run.True(SiteVectorReader.TryFinishPath(ring, closed: true), "three distinct vertices make a ring");
+            run.Equal(ring.Count, 3, "the closing position is dropped");
+
+            List<SiteVertex> sliver = [new(0, 0, null), new(10, 0, null), new(0, 0, null)];
+            run.False(SiteVectorReader.TryFinishPath(sliver, closed: true), "two distinct vertices are no ring");
+        });
+
+        run.Case("a line needs two vertices and keeps a repeated end", () =>
+        {
+            List<SiteVertex> loop = [new(0, 0, null), new(10, 0, null), new(0, 0, null)];
+            run.True(SiteVectorReader.TryFinishPath(loop, closed: false), "a line of three places");
+            run.Equal(loop.Count, 3, "a line keeps its last position");
+
+            List<SiteVertex> point = [new(0, 0, null)];
+            run.False(SiteVectorReader.TryFinishPath(point, closed: false), "one vertex is no line");
         });
     }
 

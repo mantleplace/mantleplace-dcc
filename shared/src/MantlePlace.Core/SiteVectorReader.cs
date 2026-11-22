@@ -225,19 +225,7 @@ public static class SiteVectorReader
             }
         }
 
-        if (closed)
-        {
-            if (vertices.Count > 1 && SamePlanPosition(vertices[0], vertices[^1]))
-            {
-                vertices.RemoveAt(vertices.Count - 1);
-            }
-
-            if (vertices.Count < MinimumRingVertices)
-            {
-                return;
-            }
-        }
-        else if (vertices.Count < MinimumLineVertices)
+        if (!TryFinishPath(vertices, closed))
         {
             return;
         }
@@ -308,15 +296,40 @@ public static class SiteVectorReader
             ordinal++;
         }
 
-        if (first is not { } x
-            || second is not { } y
-            || !placement.Frame.TryPlace(placement.Layer, x, y, out double east, out double north))
+        return first is { } x
+            && second is { } y
+            && TryPlaceVertex(placement.Frame, placement.Layer, x, y, elevation, out vertex);
+    }
+
+    public static bool TryPlaceVertex(SiteFrame frame, LayerFrame layer, double x, double y, double? z, out SiteVertex vertex)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+
+        if (!frame.TryPlace(layer, x, y, out double east, out double north))
         {
+            vertex = default;
             return false;
         }
 
-        vertex = new SiteVertex(east, north, elevation * LinearUnits.MetresPerUnit(placement.Layer.Unit));
+        vertex = new SiteVertex(east, north, z * LinearUnits.MetresPerUnit(layer.Unit));
         return true;
+    }
+
+    public static bool TryFinishPath(List<SiteVertex> vertices, bool closed)
+    {
+        ArgumentNullException.ThrowIfNull(vertices);
+
+        if (!closed)
+        {
+            return vertices.Count >= MinimumLineVertices;
+        }
+
+        if (vertices.Count > 1 && SamePlanPosition(vertices[0], vertices[^1]))
+        {
+            vertices.RemoveAt(vertices.Count - 1);
+        }
+
+        return vertices.Count >= MinimumRingVertices;
     }
 
     private readonly record struct Placement(SiteFrame Frame, LayerFrame Layer);

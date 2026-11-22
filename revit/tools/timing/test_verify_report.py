@@ -16,7 +16,7 @@ def write(path, text):
 def run_dir(placement_rows, verify, links_rows=""):
     folder = tempfile.mkdtemp()
     write(os.path.join(folder, "placement.csv"), "index,east_m,north_m,expected_z_m,measured_z_m\n" + placement_rows)
-    write(os.path.join(folder, "link-buildings.csv"), "link,guid,centre_east_m,centre_north_m,base_z_m,top_z_m,ground_z_m\n" + links_rows)
+    write(os.path.join(folder, "link-buildings.csv"), "link,guid,centre_east_m,centre_north_m,base_z_m,top_z_m,ground_z_m,ground_min_z_m,ground_max_z_m\n" + links_rows)
     write(os.path.join(folder, "verify.json"), json.dumps(verify))
     return folder
 
@@ -120,13 +120,29 @@ class PlacementCases(unittest.TestCase):
 
 
 class LinkCases(unittest.TestCase):
-    rows = "Model.ifc,a,1000.0,2000.0,100.2,110,100.0\nModel.ifc,b,1050.0,2050.0,90.0,95,90.5\n"
+    rows = "Model.ifc,a,1000.0,2000.0,100.2,110,100.0,99.8,100.3\nModel.ifc,b,1050.0,2050.0,90.0,95,90.5,90.2,90.9\n"
 
     def test_buildings_sitting_on_the_ground_pass(self):
         report = verify_report.judge(run_dir("0,1,2,1,1\n", verify_record(), self.rows))
         self.assertTrue(report["link"]["pass"])
         self.assertEqual(report["link"]["buildings"], 2)
         self.assertAlmostEqual(report["link"]["median_base_minus_ground_m"], -0.15, places=6)
+
+    def test_a_building_on_a_slope_may_sit_as_far_below_as_the_ground_rises_under_it(self):
+        sloped = "Model.ifc,a,1000.0,2000.0,96.0,110,100.0,95.0,105.0\n"
+        report = verify_report.judge(run_dir("0,1,2,1,1\n", verify_record(), sloped))
+        self.assertTrue(report["link"]["pass"])
+        self.assertEqual(report["link"]["within_base_tolerance"], 1)
+
+    def test_a_building_off_flat_ground_by_more_than_the_placement_tolerance_fails(self):
+        floating = "Model.ifc,a,1000.0,2000.0,102.5,110,100.0,100.0,100.0\nModel.ifc,b,1050.0,2050.0,93.0,95,90.5,90.5,90.5\n"
+        report = verify_report.judge(run_dir("0,1,2,1,1\n", verify_record(), floating))
+        self.assertFalse(report["link"]["pass"])
+        self.assertEqual(report["link"]["within_base_tolerance"], 0)
+
+    def test_a_row_without_the_ground_span_is_held_to_the_placement_tolerance(self):
+        older = "Model.ifc,a,1000.0,2000.0,100.5,110,100.0,,\n"
+        self.assertTrue(verify_report.judge(run_dir("0,1,2,1,1\n", verify_record(), older))["link"]["pass"])
 
     def test_a_link_that_is_not_origin_to_origin_fails(self):
         moved = verify_record(links=[{"name": "Model.ifc", "loaded": True, "transform_is_identity": False, "elements_with_ifc_guid": 2}])
