@@ -12,17 +12,11 @@ class IHttpRequest;
 class IHttpResponse;
 class UMantlePlaceAuthSystemBase;
 
-/**
- * Native (C++) completion delegates, broadcast alongside the Blueprint events below so a C++
- * orchestrator (the editor vault-import facade) can drive the async vault flow without a
- * reparented Blueprint child. Not UPROPERTY (native delegates cannot be) - bind with AddUObject.
- */
-DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnVaultListedNative, bool /*bSuccess*/, const TArray<FMantlePlaceVaultItem>& /*Bundles*/, const FString& /*Message*/);
-DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnPresignedNative, bool /*bSuccess*/, const FMantlePlacePresignedDownload& /*Download*/, const FString& /*Message*/);
-DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStartedNative, bool /*bSuccess*/, const FMantlePlaceMaterializeStart& /*Start*/, const FString& /*Message*/);
-/** A 3.0 level download is about to be requested: the order, the level and the files named (native: the files are a plain array). */
-DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnLevelRequestedNative, const FString& /*OrderId*/, const FString& /*Level*/, const TArray<FString>& /*Files*/);
-DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStatusNative, bool /*bOk*/, const FMantlePlaceMaterializeStatus& /*Status*/, const FString& /*Message*/);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnVaultListedNative, bool, const TArray<FMantlePlaceVaultItem>&, const FString&);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnPresignedNative, bool, const FMantlePlacePresignedDownload&, const FString&);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStartedNative, bool, const FMantlePlaceMaterializeStart&, const FString&);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnLevelRequestedNative, const FString&, const FString&, const TArray<FString>&);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnMaterializeStatusNative, bool, const FMantlePlaceMaterializeStatus&, const FString&);
 
 /**
  * C++ client for the Mantle Place vault API - this host's consumer of the platform's two
@@ -87,28 +81,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
 	void GetPresignedBundleUrl(const FString& OrderId);
 
-	/**
-	 * Begin minting a presigned URL for Unreal's download VIEW: the files `hosts.unreal` points at and
-	 * the whole-bundle manifest, a fraction of the archive that carries every host's meshes and rasters.
-	 * The platform cuts it; the host never assembles one from file names. The response says whether a
-	 * view was cut (FMantlePlacePresignedDownload::bIsView). Result via OnPresignedUrlReady.
-	 */
 	void GetPresignedViewUrl(const FString& OrderId);
 
-	/**
-	 * Begin minting a presigned URL for an MPB 3.0 order's download at one level (`Max`, `Med` or `Min`):
-	 * the promised files this host's import reads, named by path from the bundle root (the editor declares
-	 * them beside its import steps), and Manifest.json, which comes with every download. The answer is
-	 * marked with the level (FMantlePlacePresignedDownload::Level) and held against its own stated length
-	 * and manifest digest. Result via OnPresignedUrlReady. A 2.x order keeps GetPresignedViewUrl.
-	 */
 	void GetPresignedLevelUrl(const FString& OrderId, const FString& Level, const TArray<FString>& Files);
 
-	/**
-	 * Begin minting a presigned URL for one Extra of an MPB 3.0 order (`TerrainTiles`, say): a free download
-	 * beside the bundle, asked for by the id the vault listing gave it. The answer is the plain link answer,
-	 * marked with no level and no view. Result via OnPresignedUrlReady.
-	 */
 	void GetPresignedExtraUrl(const FString& OrderId, const FString& ExtraId);
 
 	/**
@@ -127,13 +103,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
 	void RequestMaterialize(const FString& OrderId, const FString& Scope);
 
-	/**
-	 * The same request for an EXPLICIT token list - the re-pick after a joined run ends short.
-	 *
-	 * Neither scope keyword can express "the remainder": "unreal" re-asks for everything the run
-	 * did land, and "all" dispatches real compute for a catalogue nobody wanted. Result via
-	 * OnMaterializeStarted, same as RequestMaterialize.
-	 */
 	void RequestMaterializeTokens(const FString& OrderId, const TArray<FString>& Tokens);
 
 	/**
@@ -142,13 +111,6 @@ public:
 	 * the caller's (the orchestrator polls on an interval until complete).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Mantle Place|Vault")
-	/**
-	 * Poll the materialize status.
-	 *
-	 * Requested is the token set whose delivery decides completion. The platform answers this
-	 * endpoint with a delivery-state document carrying no status word, so without it there is nothing
-	 * to compare against and no way to know a build has finished.
-	 */
 	void GetMaterializeStatus(const FString& OrderId, const TArray<FString>& Requested);
 
 	/**
@@ -159,18 +121,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mantle Place|Vault")
 	static bool IsBundleIncomplete(const FMantlePlaceVaultItem& Item);
 
-	/**
-	 * Which way an Import press goes, from the one materialize start it made: a complete order (the
-	 * no-op, or a 503 delivery_state_unknown) downloads its view; anything else is the Prepare's.
-	 * Thin wrapper over the tested vault logic, as above.
-	 */
 	static EMantlePlaceImportRoute DecideImportRoute(const FMantlePlaceMaterializeStart& Start);
 
-	/**
-	 * What to fetch once the platform has answered the view request: the view, the whole archive (a
-	 * no-op order that was not cut into parts), or the Prepare (a partial view, or an unproven order
-	 * answered with no view). Thin wrapper over the tested vault logic, as above.
-	 */
 	static EMantlePlaceViewFetch DecideViewFetch(
 		const FMantlePlacePresignedDownload& Download, bool bDeliveryKnown, const TArray<FString>& Delivered);
 
@@ -178,11 +130,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mantle Place|Vault")
 	static FString GetBundleTierLabel(const FMantlePlaceVaultItem& Item);
 
-	/**
-	 * True iff a downloaded bundle read as incomplete should be completed in the cloud before
-	 * import. Thin wrapper over the tested vault logic so the orchestrator can decide the
-	 * post-download self-heal without the private logic header.
-	 */
 	static bool ShouldRecoverMissingUnrealPayload(
 		bool bManifestReadable, bool bManifestValid, const FString& OrderId, bool bAlreadyRecovered);
 
@@ -210,115 +157,53 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Mantle Place|Vault")
 	void OnMaterializeComplete(bool bSuccess, const FMantlePlaceMaterializeStatus& Status, const FString& Message);
 
-	//~ Native completion delegates (C++ orchestrator hooks; fired alongside the Blueprint events).
 	FMantlePlaceOnVaultListedNative OnVaultListedNative;
 	FMantlePlaceOnPresignedNative OnPresignedUrlReadyNative;
 	FMantlePlaceOnMaterializeStartedNative OnMaterializeStartedNative;
 
-	/**
-	 * Fired by GetPresignedLevelUrl for a level it accepts, before the request is sent and whether or not
-	 * a session is held. What a headless test reads to see which level, and which files, the host asks the
-	 * platform for; the request body is built from exactly these (FMantlePlaceVaultLogic::BuildLevelDownloadBody).
-	 */
 	FMantlePlaceOnLevelRequestedNative OnLevelRequestedNative;
 
-	/**
-	 * The platform answered a call with HTTP 426 `client_update_required`: this plugin is below the
-	 * minimum it serves. Fired once per such answer, before the failing completion signal; the surface
-	 * offers the update from FMantlePlaceClientUpdate::DownloadUrl.
-	 */
 	FMantlePlaceOnClientUpdateRequiredNative OnClientUpdateRequiredNative;
 
-	/**
-	 * The tokens the in-flight status poll measures delivery against.
-	 *
-	 * Held on the client because the status response is a delivery-state document with no status
-	 * word: without the requested set there is nothing to compare `delivered` to, and no way to tell
-	 * a finished build from one that has not started.
-	 */
 	TArray<FString> PendingStatusTokens;
 	FMantlePlaceOnMaterializeStatusNative OnMaterializeStatusNative;
 
-	//~ Begin UObject interface
 	virtual void BeginDestroy() override;
-	//~ End UObject interface
 
 private:
 #if WITH_DEV_AUTOMATION_TESTS
-	/** The suite drives the answer path with no network (MantlePlace.Vault.Levels.NotInBundleClient). */
 	friend struct FMantlePlaceVaultClientTestAccess;
 #endif
 
-	/** Validate config + auth and fetch the JWT; fills OutError on failure. */
 	bool EnsureReady(FString& OutError, FString& OutJwt) const;
 
-	/**
-	 * How to run the operation currently in flight again, captured when it was sent.
-	 *
-	 * The completion handlers do not keep the arguments they were called with - HandleDownloadResponse
-	 * has no idea which order id it is answering for - so a request that has to be replayed after a
-	 * token renewal has to have said how, before it went out.
-	 */
 	TFunction<void()> LastOperation;
 
-	/** The operation waiting on an in-flight renewal. Runs, once, when that renewal settles. */
 	TFunction<void()> PendingReplayOperation;
 
-	/**
-	 * Renewals performed since the last successful vault response.
-	 *
-	 * Bounds the retry at exactly one. Without it a platform answering 401 to everything - a
-	 * revoked account, a misconfigured vault base URL pointed at something that always refuses -
-	 * would renew, replay, renew, replay, forever, and each renewal is a network round trip.
-	 */
 	int32 RenewalsSinceSuccess = 0;
 
-	/** Subscription to the auth system's refresh-settled signal; bound lazily, once. */
 	FDelegateHandle RefreshSettledHandle;
 
-	/**
-	 * Ask for a token renewal and replay Replay when it settles.
-	 *
-	 * Returns true when the operation has been deferred, in which case the caller must NOT report a
-	 * failure - the operation has not failed, it is waiting. Returns false when there is nothing to
-	 * renew from, the retry budget is spent, or no auth system is attached, and the caller should
-	 * report its error as usual.
-	 */
 	bool DeferUntilRenewed(TFunction<void()> Replay);
 
-	/** Run the deferred operation, or let it fail honestly, once a renewal has settled. */
 	void HandleRefreshSettled(bool bSuccess);
 
-	/** HTTP completion handlers (game thread): parse + fire the relevant event. */
 	void HandleListResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
 	void HandleDownloadResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
-	/** The platform's answer to a download mint, by status and body: everything HandleDownloadResponse does past the transport. */
 	void HandleDownloadAnswer(int32 ResponseCode, const FString& Content);
-	/** Announce a 3.0 level request (OnLevelRequestedNative) and send it: the first one and each one asked again. */
 	void RequestLevel(const FString& OrderId, const FString& Level, const TArray<FString>& Files);
 	void HandleProbeResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
-	/**
-	 * The download-mint POST every download entry point shares; they differ only in the body they build.
-	 * A non-empty Level is a 3.0 request for that level and Files; a non-empty ExtraId is one for that Extra;
-	 * neither is ever a view.
-	 */
 	void MintDownload(const FString& OrderId, const FString& Format, bool bView,
 		const FString& Level = FString(), const TArray<FString>& Files = TArray<FString>(),
 		const FString& ExtraId = FString());
 
-	/** The 3.0 level the in-flight download mint asked for; empty for a 2.x request. Read by its answer. */
 	FString PendingDownloadLevel;
-	/** The order and files the in-flight 3.0 mint asked for: what it is asked again without a file the bundle lacks. */
 	FString PendingDownloadOrderId;
 	TArray<FString> PendingDownloadFiles;
-	/**
-	 * The files the platform refused as not in the bundle across this level request's tries (404
-	 * `file_not_in_bundle`). Each retry names strictly fewer files, so the tries end within the file count.
-	 * Handed to the download (FMantlePlacePresignedDownload::AbsentFiles) to be held against its manifest.
-	 */
 	TArray<FString> LevelAbsentFiles;
 	void SendMaterializeRequest(const FString& OrderId, const FString& Body, const FString& Jwt);
 
@@ -327,26 +212,18 @@ private:
 	void HandleMaterializeStatusResponse(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
 
-	/**
-	 * If this response is the platform asking for a newer plugin, broadcast it, put the curator-facing
-	 * sentence in OutMessage and return true; the caller then fails the call with that message and
-	 * does nothing else (no token renewal: the session is fine).
-	 */
 	bool TryHandleClientUpdate(int32 ResponseCode, const FString& Content, FString& OutMessage);
 
-	/** Fire the native delegate + the Blueprint event together (single source of truth per signal). */
 	void NotifyVaultListed(bool bSuccess, const TArray<FMantlePlaceVaultItem>& Bundles, const FString& Message);
 	void NotifyPresigned(bool bSuccess, const FMantlePlacePresignedDownload& Download, const FString& Message);
 	void NotifyMaterializeStarted(bool bSuccess, const FMantlePlaceMaterializeStart& Start, const FString& Message);
 	void NotifyMaterializeStatus(bool bOk, const FMantlePlaceMaterializeStatus& Status, const FString& Message);
 
-	/** Unbind + cancel + reset any in-flight request. */
 	void CancelActiveRequest();
 
 	/** The auth base supplying the JWT (kept referenced so it isn't GC'd out from under us). */
 	UPROPERTY()
 	TObjectPtr<UMantlePlaceAuthSystemBase> AuthSystem;
 
-	/** The in-flight request (single at a time; the HTTP module also retains it). */
 	TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> ActiveRequest;
 };

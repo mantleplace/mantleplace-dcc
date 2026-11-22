@@ -2,60 +2,18 @@ using System.Globalization;
 
 namespace MantlePlace.Core;
 
-/// <summary>The regular lattice a points file turned out to be, when it is one.</summary>
 public readonly record struct SurfaceGridShape(int ColumnCount, int RowCount, double Spacing, double MinX, double MinY);
 
-/// <summary>
-/// Recognises the regular grid a toposurface points file is sampled on, and the signature of an edge
-/// line the producer filled with a constant. Pure.
-/// </summary>
-/// <remarks>
-/// <para>
-/// ⛔ <b>This detects a fill, it does not judge terrain.</b> The distinction is the whole design. The
-/// bundle that surfaced this defect has 223 m of genuine relief and 1 m neighbour steps up to 13.5 m
-/// — a rule of the form "reject a Z that differs too much from its neighbours" would eat the Marin
-/// Headlands along with the artefact. What is actually diagnostic is that the producer wrote the
-/// <em>same bits</em> to every point in the affected lines: 400 points, two whole grid columns, all
-/// carrying exactly 9.372 m, against neighbours 5 m away reaching 221 m. A DEM does not produce 400
-/// bit-identical float32 values in an edge column whose neighbours span 200 m.
-/// </para>
-/// <para>
-/// It is the second of two guards and the one that needs nothing from the manifest.
-/// <see cref="SurfaceCrop"/> is better when it is available — it removes the cause rather than the
-/// symptom — but it needs a bbox and a projectable frame, and this needs neither.
-/// </para>
-/// </remarks>
 public static class SurfaceGrid
 {
-    /// <summary>How many outer lines per side are examined. Beyond this it stops being an edge artefact.</summary>
     public const int MaxEdgeLines = 3;
 
-    /// <summary>How much of a line must share one value before it reads as filled rather than flat.</summary>
     public const double IdenticalFraction = 0.9;
 
-    /// <summary>How far a filled line must sit from its neighbour before it is worth dropping.</summary>
-    /// <remarks>
-    /// In the points file's own unit. A genuinely flat edge — a lake, a runway, the Bay — is common
-    /// and harmless; what makes a fill a defect is that it does not join the terrain beside it.
-    /// </remarks>
     public const double SuspiciousOffset = 10.0;
 
-    /// <summary>The most of a surface this guard may ever remove.</summary>
-    /// <remarks>
-    /// ⛔ A guard that can eat the terrain is worse than the artefact it removes. Above the cap it
-    /// drops nothing and reports instead, so the failure mode is a visible fin plus a log line rather
-    /// than a silently truncated site.
-    /// </remarks>
     public const double MaxDroppedFraction = 0.02;
 
-    /// <summary>
-    /// The lattice <paramref name="points"/> lie on, or <c>null</c> when they are not a regular grid.
-    /// </summary>
-    /// <remarks>
-    /// Deliberately strict: it recognises the grid only when the distinct X and Y values are evenly
-    /// spaced by the same step and their product is the point count exactly. Anything less regular is
-    /// not something this guard should be reasoning about line-by-line.
-    /// </remarks>
     public static SurfaceGridShape? Detect(IReadOnlyList<SurfacePoint> points)
     {
         ArgumentNullException.ThrowIfNull(points);
@@ -96,14 +54,6 @@ public static class SurfaceGrid
         return new SurfaceGridShape(xs.Count, ys.Count, stepX, xs.Min, ys.Min);
     }
 
-    /// <summary>
-    /// The X values of the outer columns, and Y values of the outer rows, that carry a producer's
-    /// fill constant rather than terrain.
-    /// </summary>
-    /// <returns>
-    /// Empty when nothing looks filled, when the points are not a grid, or when the drop would exceed
-    /// <see cref="MaxDroppedFraction"/>. <paramref name="report"/> says which.
-    /// </returns>
     public static FilledEdges DetectFilledEdges(IReadOnlyList<SurfacePoint> points, out string? report)
     {
         ArgumentNullException.ThrowIfNull(points);
@@ -151,13 +101,11 @@ public static class SurfaceGrid
         return new FilledEdges(columns, rows, dropped);
     }
 
-    /// <summary>Outer grid lines carrying a fill constant, keyed by their own X or Y value.</summary>
     public readonly record struct FilledEdges(
         IReadOnlySet<double>? Columns,
         IReadOnlySet<double>? Rows,
         int PointCount)
     {
-        /// <summary>Whether this point sits on one of the filled lines.</summary>
         public bool Covers(SurfacePoint point)
             => (Columns?.Contains(point.X) ?? false) || (Rows?.Contains(point.Y) ?? false);
 
@@ -172,16 +120,6 @@ public static class SurfaceGrid
         return filled;
     }
 
-    /// <summary>
-    /// Walks inward from one end, collecting the run of lines that each carry one dominant value, and
-    /// marks the whole run when it does not join the first line of real terrain beyond it.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ It has to consider the run as a whole rather than one line at a time. The bundle that
-    /// surfaced this has <em>two</em> adjacent filled columns, and a line-at-a-time scan compares the
-    /// outermost against its neighbour, finds them in perfect agreement — both are the same fill —
-    /// and keeps both. The reference has to be the first line that is not part of the run.
-    /// </remarks>
     private static void ScanFromEnd(
         double[] keys,
         Dictionary<double, List<double>> lines,
@@ -201,8 +139,6 @@ public static class SurfaceGrid
             index += inward;
         }
 
-        // Nothing flat at this end, or the whole axis is flat and there is no terrain to compare
-        // against. Either way there is nothing here this guard can be confident about.
         if (run.Count == 0 || index < 0 || index >= keys.Length)
         {
             return;
@@ -218,7 +154,6 @@ public static class SurfaceGrid
         }
     }
 
-    /// <summary>The bit-identical value most of a line shares, when it shares one.</summary>
     private static bool TryFillValue(List<double> zs, out double fill)
     {
         fill = 0.0;
@@ -246,16 +181,6 @@ public static class SurfaceGrid
         return best >= zs.Count * IdenticalFraction;
     }
 
-    /// <summary>
-    /// How far a candidate fill value sits from the terrain beside it, robustly.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ The median, never the maximum — and <see cref="SurfaceTinSanitiser"/> shares it for exactly
-    /// that reason. Genuinely flat ground at the edge of a site (the Bay, in the bundle that
-    /// motivated all this) routinely has a cliff somewhere along it, so a maximum would condemn the
-    /// water along with the fill. A median asks whether the value joins the terrain beside it
-    /// <em>generally</em>, which is the question that separates the two.
-    /// </remarks>
     internal static double MedianAbsoluteOffset(IReadOnlyList<double> zs, double fill)
     {
         if (zs.Count == 0)

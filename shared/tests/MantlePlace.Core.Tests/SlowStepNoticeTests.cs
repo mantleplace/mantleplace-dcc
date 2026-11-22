@@ -3,19 +3,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The notices said before a long wait: which steps have one, when, and what each quotes. A step
-/// measured at 30 s or more in any version is announced, only when it has the work that was measured,
-/// it names this terrain without inventing a count, and it never predicts a duration.
-/// </summary>
 internal static class SlowStepNoticeTests
 {
-    /// <summary>
-    /// What the measurements make slow — 30 s or more in at least one version, read off Phase 1's full
-    /// imports, the IFC conversions and the hazard runs. Every other kind is quiet: contours, the
-    /// coordinates and the location, the centrelines, water, attribution, steep ground on a plan that
-    /// already exists, and the DXF terrain, which was never measured.
-    /// </summary>
     private static readonly ImportStepKind[] MeasuredSlow =
     [
         ImportStepKind.ToposurfaceFromPointsFile,
@@ -28,21 +17,15 @@ internal static class SlowStepNoticeTests
         ImportStepKind.FloodZones,
     ];
 
-    /// <summary>The steps whose notice is about one commit on the terrain: the slow polygon layer and the drape.</summary>
     private static readonly ImportStepKind[] CommitKinds =
     [
         ImportStepKind.RoadPolygons,
         ImportStepKind.ImageryDrape,
     ];
 
-    /// <summary>
-    /// The point count a commit kind's notice quotes: a polygon layer quotes the order its row was
-    /// measured on, and the drape has its own.
-    /// </summary>
     private static string MeasuredTerrainOf(ImportStepKind kind)
         => GroundCuts.LayerOf(kind) is null ? "80,372" : "75,314";
 
-    /// <summary>What the site context step decides, for the notice to read.</summary>
     private static SiteContextDecision ContextDecision(NamedElementAction view, NamedElementAction filter) => new()
     {
         View = view,
@@ -67,9 +50,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("the imagery drape announces itself too — the fix is not half of one", () =>
         {
-            // ⛔ The measurement's second correction: the drape's ChangeTypeId costs nearly as much
-            // as creating all 17 subdivisions, so a notice on the boundaries alone leaves half the
-            // freeze silent.
             string? notice = SlowStepNotice.For(ImportStepKind.ImageryDrape, 80_372, 1);
             run.True(notice is not null, "the drape is announced");
             run.Contains(notice, "80,372", "it names the terrain's point count");
@@ -78,8 +58,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("a polygon layer quotes its own row of the measurement, and explains nothing", () =>
         {
-            // ⛔ This notice was wrong twice by explaining one run. It now quotes the layer's own
-            // whole-import figures and how many of its subdivisions the order cut, and stops.
             string? notice = SlowStepNotice.For(ImportStepKind.RoadPolygons, 74_855, 300);
             run.True(notice is not null, "announced");
             run.Contains(notice, "Next: the road surfaces — 300", "it names the layer and how many are coming");
@@ -107,8 +85,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("no work means no warning", () =>
         {
-            // A re-import whose 17 rings are all already on the terrain commits an empty transaction.
-            // Announcing a ten-minute freeze there teaches a curator to ignore the line.
             foreach (ImportStepKind kind in MeasuredSlow)
             {
                 run.True(
@@ -122,8 +98,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("an unknown point count is said, never invented", () =>
         {
-            // The terrain step did not run this time — a boundaries-only re-import onto a toposolid
-            // an earlier import built. There is no N to report and none is made up.
             foreach (ImportStepKind kind in CommitKinds)
             {
                 string? notice = SlowStepNotice.For(kind, null, 1);
@@ -151,7 +125,6 @@ internal static class SlowStepNoticeTests
 
             run.Equal(SlowStepNotice.MeasuredPointCount, 80_372, "the measured reference count");
 
-            // Order 4276ef78, which every figure of the whole-import measurement is: issue 258's table.
             run.Equal(SlowStepNotice.MeasuredOrderVertexCount, 75_314, "the measured order's terrain");
             run.Equal(SlowStepNotice.MeasuredOrderBuildings, 1_319, "its site model's buildings");
             run.Equal(SlowStepNotice.MeasuredOrderPlantings, 19_755, "its trees and shrubs");
@@ -160,9 +133,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("every slow notice ends on the same reassurance", () =>
         {
-            // One sentence, said once: a copy per notice is how the later layers' version lost the
-            // line about the import window. The window now has a thread of its own and stays live
-            // through the commit, so the line says what it shows there and what it still cannot.
             foreach (ImportStepKind kind in CommitKinds)
             {
                 string? notice = SlowStepNotice.For(kind, 80_372, 1);
@@ -178,9 +148,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("it says what cannot be shown and why, not that nothing can", () =>
         {
-            // The staged import shows every step and every chunk. What it still cannot show is the
-            // inside of one commit, and a notice that still said "there is no progress to show"
-            // would contradict the window it is read beside.
             foreach (ImportStepKind kind in CommitKinds)
             {
                 string? notice = SlowStepNotice.For(kind, 80_372, 1);
@@ -195,10 +162,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("retyping subdivisions for the photograph announces itself", () =>
         {
-            // Revit 2026 and later: every subdivision is typed and takes the photograph only through
-            // its type. Measured in a real 2027 import, the wait is the calls AND a two-minute commit,
-            // so the sentence names both — a probe on a reopened project had suggested the commit was
-            // free, and a notice built on that would have understated the wait by more than half.
             string? notice = SlowStepNotice.ForSubDivisionRetypes(33, 74_852);
             run.True(notice is not null, "announced");
             run.Contains(notice, "33 subdivision(s)", "it names how many are coming");
@@ -233,9 +196,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("a cut that takes a type says the typing is coming, in its own layer's figure", () =>
         {
-            // The retype the drape used to announce now happens as each subdivision is cut, so the
-            // wait moved into the polygon step and the sentence moved with it. Said at the first cut
-            // that shows it takes a type, so it names no version.
             foreach (GroundLayer layer in (GroundLayer[])[GroundLayer.RoadSurface])
             {
                 string? notice = SlowStepNotice.ForTypesAtCut(layer, SubDivisionMaterialRoute.Type, drapePlanned: true, 40, 12_000);
@@ -279,7 +239,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("nothing to type says nothing", () =>
         {
-            // Revit 2025: a cut reports no type and keeps its instance material.
             run.True(
                 SlowStepNotice.ForTypesAtCut(GroundLayer.RoadSurface, SubDivisionMaterialRoute.Instance, drapePlanned: true, 40, 74_855) is null,
                 "a typeless cut is not typed, so nothing is announced");
@@ -296,8 +255,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("a drape over subdivisions already on their types announces its commit", () =>
         {
-            // With every cut typed as it was cut, the drape has no retype to announce, and its one
-            // commit is still the longest wait left in the step.
             string? notice = SlowStepNotice.ForDrapeCommit(405, subDivisionsToRetype: 0, terrainRetypes: 0, 12_000);
             run.True(notice is not null, "announced");
             run.Contains(notice, "405 subdivision(s)", "it names how many");
@@ -316,11 +273,8 @@ internal static class SlowStepNoticeTests
 
         run.Case("the drape's commit is announced exactly when neither retype notice is", () =>
         {
-            // Revit 2025: every subdivision takes the photograph on the instance, the commit is
-            // seconds, and nothing about it changed.
             run.True(SlowStepNotice.ForDrapeCommit(0, 0, 0, 74_855) is null, "no typed subdivision, no notice");
 
-            // The guard is the other two notices themselves, so the three cannot drift apart.
             foreach ((int toRetype, int terrainRetypes) in (ValueTuple<int, int>[])[(0, 0), (5, 0), (0, 1), (5, 1)])
             {
                 bool retypeSaid = SlowStepNotice.ForSubDivisionRetypes(toRetype, 74_855) is not null
@@ -334,7 +288,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("converting the site model announces itself, and linking one already converted does not", () =>
         {
-            // The conversion is the cost: linking a file an earlier import converted took about 5 s.
             string? notice = SlowStepNotice.For(ImportStepKind.LinkSiteIfc, null, 1);
             run.Contains(notice, "Next: the site model.", "it names the step");
             run.Contains(
@@ -352,8 +305,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("the site context view, made before the subdivisions, is quiet whatever it makes", () =>
         {
-            // Made after the subdivisions it took 33 to 53 s in Revit 2027; made before them, about a
-            // second, so nothing is announced.
             run.False(SlowStepNotice.IsAnnounced(ImportStepKind.SiteContextView), "it is measured under the line");
             run.True(SlowStepNotice.For(ImportStepKind.SiteContextView, null, 2) is null, "making both is not announced");
             run.True(
@@ -375,8 +326,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("the terrain announces itself when it is built for the drape, as the default import builds it", () =>
         {
-            // Built on the type that will wear the photograph, its commit took 45 s where on the default
-            // type it took 3 s: the drape, ticked by default, is what makes this step slow.
             string? notice = SlowStepNotice.For(ImportStepKind.ToposurfaceFromSurfaceTin, 60_000, 1);
             run.Contains(notice, "Next: the terrain", "it names the step");
             run.Contains(notice, "(75,314 points)", "the order it was measured on");
@@ -393,7 +342,6 @@ internal static class SlowStepNoticeTests
                 "the points path says the same as the TIN path");
             run.True(SlowStepNotice.For(ImportStepKind.ToposurfaceFromSurfaceTin, 60_000, 0) is null, "not built for the drape: unannounced");
 
-            // The shim says which type the terrain went on; the core decides what that means.
             run.Equal(
                 SlowStepNotice.ForTerrain(ImportStepKind.ToposurfaceFromSurfaceTin, onImageryType: true, 60_000),
                 notice,
@@ -448,7 +396,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("the land plans were measured, at seconds, and are quiet", () =>
         {
-            // ADR 0015: drawn on a plan, the layers that were most of an import's time as subdivisions.
             run.True(SlowStepNotice.Measured(ImportStepKind.LandUse) is not null, "the land use has its measurement");
             run.True(SlowStepNotice.Measured(ImportStepKind.LandCover) is not null, "and so does the land cover");
             run.True(SlowStepNotice.For(ImportStepKind.LandUse, null, 76) is null, "76 land-use regions are drawn in under two seconds, unannounced");
@@ -457,8 +404,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("smooth shading after the last step announces itself when there are subdivisions to shade", () =>
         {
-            // Committed after every row when the drape did not settle it first: 98 to 111 s in Revit
-            // 2026 and 2027 with the order's 405 subdivisions, about a second with none.
             string? notice = SlowStepNotice.ForSmoothShading(405, 60_000);
             run.Contains(notice, "Next: smooth shading", "it names the work");
             run.Contains(notice, "(75,314 points)", "the order it was measured on");
@@ -474,8 +419,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("a step is announced exactly when it was measured at 30 s or more in some version", () =>
         {
-            // The rule, whose one home is revit/docs/api-record.md: the quiet steps follow from the
-            // measurements rather than being kept by hand.
             run.Within(SlowStepNotice.AnnouncedFromSeconds, 30, 0, "the threshold");
             foreach (ImportStepKind kind in Enum.GetValues<ImportStepKind>())
             {
@@ -487,10 +430,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("the drape over subdivisions that take the photograph on themselves announces itself", () =>
         {
-            // Revit 2025: a subdivision is typeless and wears the photograph through its own Material,
-            // one at a time, and the drape took 26 to 62 s on the measured order. The other drape
-            // notices are for typed subdivisions and the terrain's retype, so without this the 2025
-            // drape, measured over the threshold, said nothing.
             string? notice = SlowStepNotice.ForDrapeOnInstances(405, 60_000);
             run.Contains(notice, "Next: the imagery drape", "it names the step");
             run.Contains(notice, "405 subdivision(s)", "and how many");
@@ -516,8 +455,6 @@ internal static class SlowStepNoticeTests
 
         run.Case("no polygon layer promises another step's speed or its place in the order", () =>
         {
-            // The order is the planner's to change, and it has changed once. A notice that ranked the
-            // steps, or compared one with another, went stale when it did.
             foreach (ImportStepKind kind in (ImportStepKind[])
                 [ImportStepKind.RoadPolygons])
             {

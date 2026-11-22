@@ -1,25 +1,10 @@
 // Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
-// `unreal.foliage_points` (HPS-32/HPS-33): tree points. Resolved from the bundle's own pointer —
-// never layout.tree_points or landcover.tree_points, which are other blocks' pointers to the same
-// layer. Absence means the bundle simply doesn't ship the layer (base tier / treeless AOI), not an
-// error. Rows land in a UDataTable under the bundle's content folder: PCG-ready scatter input, no
-// actors spawned. The table's columns are a documented contract (unreal/docs/foliage-table-contract.md):
-// a row carries the platform's foliage type, its sizes in the engine's unit as well as the published
-// metres, and whether the ground height was measured -- decoded where the CSV is read, not left raw.
-//
-// The bytes reaching Import have already been through the integrity pre-check. What is still checked
-// HERE is the row count — the digest proves the bytes, the count proves the rows this reader made of
-// them — and the frame (HPS-53): the CRS and units the pointer states must be this host's, and the
-// rows are held against the landscape extent the manifest publishes as the backstop — the whole of
-// the check on a bundle older than MPB 1.3.0, whose pointer states no frame. Either way a file not in
-// this frame is refused by name.
-
 #include "MantlePlaceArtifactHandler.h"
 
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceImportNaming.h"
-#include "MantlePlaceLandcoverTypes.h" // runtime: FMantlePlaceTreePointRow
+#include "MantlePlaceLandcoverTypes.h"
 #include "MantlePlaceManifestJson.h"
 #include "MantlePlaceTreePointsLogic.h"
 
@@ -32,9 +17,6 @@
 
 namespace
 {
-// One `levels.<LEVEL>` member, verbatim. A same_as wins over a cut over a pointer; a member that
-// states none of them is Absent, which for MAX is the entry itself and for MED and MIN is a level
-// the bundle does not publish.
 FMantlePlaceTreeLevelEntry ReadLevelEntry(const TSharedPtr<FJsonObject>& Levels, const TCHAR* Name)
 {
 	using namespace MantlePlaceManifestJson;
@@ -53,8 +35,6 @@ FMantlePlaceTreeLevelEntry ReadLevelEntry(const TSharedPtr<FJsonObject>& Levels,
 	}
 	if (const TSharedPtr<FJsonObject>* Cut = GetObject(*Member, TEXT("cut")))
 	{
-		// A cut by anything but `rows` (or by rows that are not positive) is a form this build does
-		// not know: the level stays Absent and fails closed to MAX.
 		const int32 Rows = GetInt(*Cut, TEXT("rows"));
 		if (Rows > 0)
 		{
@@ -77,8 +57,6 @@ FMantlePlaceTreeLevelEntry ReadLevelEntry(const TSharedPtr<FJsonObject>& Levels,
 	return Entry;
 }
 
-// The level the project asked for. A handler reading the default settings object is how the
-// foliage scatter beside this one reads its meshes.
 EMantlePlaceTreeLevel RequestedLevel()
 {
 	const UMantlePlaceEditorSettings* Settings = GetDefault<UMantlePlaceEditorSettings>();
@@ -98,20 +76,11 @@ public:
 		if (const TSharedPtr<FJsonObject>* FoliagePointsPtr = GetObject(In.Unreal, TEXT("foliage_points")))
 		{
 			M.Foliage.Path = GetString(*FoliagePointsPtr, TEXT("path"));
-			// Both OPTIONAL in the schema, on purpose: the facts come from a best-effort sidecar, so
-			// requiring them would refuse bundles that are perfectly importable. Absent therefore means
-			// "unknown" and never "corrupt" (spec/format.md section 5) — the digest is skipped and the
-			// row count is not cross-checked, and the importer says which of the two it did.
 			M.Foliage.Sha256 = GetString(*FoliagePointsPtr, TEXT("sha256"));
 			M.Foliage.Count = GetInt(*FoliagePointsPtr, TEXT("point_count"));
-			// The file's frame, as stated (MPB 1.3.0). Read verbatim and judged nowhere here: whether
-			// it is this host's frame is FMantlePlaceTreePointsLogic's call, and a frame that is not
-			// refuses the layer by name rather than the manifest (HPS-53).
 			M.Foliage.Crs = GetString(*FoliagePointsPtr, TEXT("crs"));
 			M.Foliage.Units = GetString(*FoliagePointsPtr, TEXT("units"));
 			M.Foliage.HorizontalUnits = GetString(*FoliagePointsPtr, TEXT("horizontal_units"));
-			// The published levels (MPB 1.9.0). Read as stated; which one is imported is the
-			// project's choice, and FMantlePlaceTreePointsLogic::ResolveLevel decides what it means.
 			if (const TSharedPtr<FJsonObject>* LevelsPtr = GetObject(*FoliagePointsPtr, TEXT("levels")))
 			{
 				M.Foliage.LevelMax = ReadLevelEntry(*LevelsPtr, TEXT("MAX"));
@@ -119,10 +88,6 @@ public:
 				M.Foliage.LevelMin = ReadLevelEntry(*LevelsPtr, TEXT("MIN"));
 			}
 		}
-		// The vocabulary the CSV's `foliage_type` values come from (MPB 1.2.0). Published once, on the
-		// shared tree-points block, so this is the one read from outside `unreal`; it is the meaning of
-		// a column in this block's own file, not a second pointer to it. Verbatim, and judged nowhere:
-		// a vocabulary this build was not taught still has its known values mapped.
 		if (const TSharedPtr<FJsonObject>* LandcoverPtr = GetObject(In.Root, TEXT("landcover")))
 		{
 			if (const TSharedPtr<FJsonObject>* TreePointsPtr = GetObject(*LandcoverPtr, TEXT("tree_points")))
@@ -136,16 +101,10 @@ public:
 
 	bool IsPresent(const FMantlePlaceVaultManifest& M) const override { return M.Foliage.bPresent; }
 
-	// The tree points, no longer the exception: the digest comes off `unreal.foliage_points`, this
-	// host's own block -- never `landcover.tree_points`, which carries the same value addressed to
-	// somebody else (HPS-33). It stays OPTIONAL in the schema, so a bundle without one is imported
-	// and reported unverified rather than refused.
 	void CollectDeclared(const FMantlePlaceVaultManifest& M, TArray<FMantlePlaceDeclaredArtifact>& Out) const override
 	{
 		if (M.Foliage.bPresent && !M.Foliage.Path.IsEmpty())
 		{
-			// The file the chosen level reads: the MAX file for MAX and for a row cut of it, a
-			// level's own file for an older bundle's per-level pointer.
 			const FMantlePlaceResolvedTreeLevel Level = FMantlePlaceTreePointsLogic::ResolveLevel(M.Foliage, RequestedLevel());
 			Out.Add(FMantlePlaceDeclaredArtifact{ Level.Path, Level.Sha256 });
 		}
@@ -173,9 +132,7 @@ public:
 		}
 		FString CsvText, TreesError;
 		FFileHelper::BufferToString(CsvText, CsvBytes.GetData(), CsvBytes.Num());
-		// A row cut keeps the first rows of the one ranked file: a row's number is its rank.
 		CsvText = FMantlePlaceTreePointsLogic::CutRows(CsvText, Level.RowLimit);
-		// A per-level file states its own frame; a cut and MAX read the block's.
 		FMantlePlaceTreePointsFrame Frame = Manifest.GetFoliagePointsFrame();
 		if (Level.bOwnFrame)
 		{
@@ -185,17 +142,13 @@ public:
 		}
 		TArray<FMantlePlaceTreePointRow> Rows;
 		FString OutsideNote;
-		// A 3.x Trees.csv is already offsets from the origin (FMantlePlaceFoliagePointsBlock::bSiteFrame).
 		const bool bSiteFrame = Manifest.Foliage.bSiteFrame;
 		const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
 			CsvText, bSiteFrame ? 0.0 : Manifest.Georef.OriginEastingM, bSiteFrame ? 0.0 : Manifest.Georef.OriginNorthingM, Frame,
-			Manifest.GetAoiSizeUeCm(), // zero when the block publishes no landscape transform
+			Manifest.GetAoiSizeUeCm(),
 			Level.DeclaredCount, Rows, TreesError, Manifest.Foliage.FoliageTypeVocabulary, &OutsideNote);
 		if (Outcome == EMantlePlaceTreePointsOutcome::CountMismatch)
 		{
-			// A count that disagrees with the payload FAILS the import rather than skipping the
-			// layer: the rows that did parse are a silent subset, and a scatter built from a
-			// subset reads as a sparse forest rather than as an error.
 			Ctx.Log.Add(FString::Printf(
 				TEXT("Tree points FAILED (%s): %s"), *Level.Path, *TreesError));
 			Ctx.bAllRequestedSucceeded = false;
@@ -205,15 +158,10 @@ public:
 		{
 			if (!OutsideNote.IsEmpty())
 			{
-				// A few points past the landscape's edge are named, not silently dropped (HPS-53).
 				Ctx.Log.Add(FString::Printf(TEXT("Tree points (%s): %s"), *Level.Path, *OutsideNote));
 			}
-			// The rows were read and checked in the bundle's own frame (the HPS-53 extent test is
-			// against this block's landscape about its origin); only now do they move to the level's.
 			for (FMantlePlaceTreePointRow& Row : Rows)
 			{
-				// A 3.x ground height is metres above the site origin's: the stated height is added, so
-				// the table holds the same absolute heights a 2.x one does.
 				if (bSiteFrame && Row.bGroundKnown)
 				{
 					Row.GroundZM += static_cast<float>(Manifest.Foliage.SiteHeightM);
@@ -224,11 +172,6 @@ public:
 		}
 		if (Outcome != EMantlePlaceTreePointsOutcome::Parsed)
 		{
-			// A drifted column contract stays a SKIP, as it always has been. It says the ETL
-			// changed this payload's shape, which is not a reason to report the terrain, the
-			// imagery and the buildings beside it as failed. A file that is not in this host's
-			// frame is the same news (HPS-53): a NAMED skip, no table made, so nothing downstream
-			// scatters a forest a thousand kilometres off site.
 			Ctx.Log.Add(FString::Printf(
 				TEXT("Tree points skipped (%s): %s"), *Level.Path, *TreesError));
 			return;
@@ -240,13 +183,6 @@ public:
 				Ctx.DestPackagePath, MantlePlaceImportNaming::ESubfolder::Landcover)
 			/ AssetName;
 		UPackage* Package = CreatePackage(*PackageName);
-		// RF_Transactional is set AFTER RowStruct, not passed to NewObject. A transactional
-		// object constructed while a transaction is open is serialized into the undo buffer
-		// there and then, and UDataTable::Serialize logs an Error when it is written with no
-		// RowStruct -- which is precisely its state on the line between these two. Latent
-		// until the import's transaction started surviving to the end (see
-		// MantlePlaceImportNaming::ImportNameFor); before that the buffer was purged out
-		// from under it and the snapshot never happened.
 		UDataTable* Table = NewObject<UDataTable>(Package, FName(*AssetName), RF_Public | RF_Standalone);
 		Table->RowStruct = FMantlePlaceTreePointRow::StaticStruct();
 		Table->SetFlags(RF_Transactional);
@@ -264,9 +200,6 @@ public:
 			ShrubCount += Row.FoliageType == EMantlePlaceFoliageType::Shrub ? 1 : 0;
 			GroundUnknownCount += Row.bGroundKnown ? 0 : 1;
 		}
-		// Three states, said out loud. A payload the platform published no digest for is
-		// VALID BUT UNVERIFIED — reporting it as verified is a lie and reporting it as
-		// corrupt makes every sidecar-less bundle un-importable (spec/format.md section 5).
 		Ctx.Log.Add(FString::Printf(
 			TEXT("Tree points imported (%s level, %d rows -> %s: %d shrub, %d without a measured ground height, %s)."),
 			Level.Applied == EMantlePlaceTreeLevel::Max ? TEXT("MAX") : (Level.Applied == EMantlePlaceTreeLevel::Med ? TEXT("MED") : TEXT("MIN")),

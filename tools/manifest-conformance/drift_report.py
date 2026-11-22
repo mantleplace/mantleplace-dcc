@@ -1,12 +1,3 @@
-"""Report when the published bundle-manifest schema is ahead of `verified-against.json`.
-
-The scheduled drift workflow runs this. It prints nothing when every host's pin is level with the
-newest published schema (or only a patch behind, which `spec/compatibility.md` section 2 makes
-editorial). When some host is behind, it prints one JSON object: the `title` and `body` of the single
-tracking issue, the `newest` version and the `hosts` behind. The workflow finds the open issue that
-carries `MARKER` and edits it, or opens one if none exists, so drift surfaces once.
-"""
-
 from __future__ import annotations
 
 import json
@@ -17,12 +8,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_manifest_conformance as gate  # noqa: E402
 
-#: Hidden marker the workflow searches for to find the one tracking issue.
 MARKER = "<!-- manifest-drift-tracker -->"
 
 
 def build_report(pinned_doc: dict) -> dict | None:
-    """The tracking issue's content, or None when no host is behind by a minor or major."""
     behind: list[str] = []
     newest_overall: str | None = None
     for host, entry in gate.host_entries(pinned_doc):

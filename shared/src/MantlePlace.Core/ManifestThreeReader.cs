@@ -3,72 +3,42 @@ using System.Text.Json;
 
 namespace MantlePlace.Core;
 
-/// <summary>
-/// Reads a 3.x <c>Manifest.json</c> into the <see cref="BundleManifest"/> every host already consumes.
-/// Pure: text and the bundle's entry names in, facts out.
-/// </summary>
-/// <remarks>
-/// <para>
-/// A 3.x manifest has one file catalog and no block for any one host (<c>spec/format.md</c> §9.5,
-/// §9.7). Each file is found by its name in the catalog, and a name the catalog lacks is a file this
-/// download does not hold, not an error. Nothing here reads a per-host block, and a test holds this
-/// source to that.
-/// </para>
-/// <para>
-/// The members read are the served 3.0.0 schema's: the level, the <c>catalog</c>, each entry's
-/// <c>count.value</c> and digest, and the <c>not_held</c> list of <c>{path, reason}</c>. The two
-/// frames (§9.4) are read once, by <see cref="ManifestFramesReader"/>, and each file's unit follows
-/// the frame its family is in; no unit stands in for one the manifest states.
-/// </para>
-/// </remarks>
 internal static class ManifestThreeReader
 {
-    /// <summary>The download's one level (<c>spec/format.md</c> §9.3).</summary>
     private const string LevelMember = "level";
 
-    /// <summary>The bundle statement's order (§9.3), and its identity: the one id that joins a bundle to its vault entry.</summary>
     private const string OrderMember = "order";
 
     private const string OrderIdMember = "id";
 
-    /// <summary>A GeoPackage entry's table names (§13, R20).</summary>
     private const string TablesMember = "tables";
 
-    /// <summary>A table entry's facts (§9.5): its columns and, for the tree points, the foliage types.</summary>
     private const string TableMember = "table";
 
     private const string FoliageTypesMember = "foliage_types";
 
     private const string VocabularyMember = "vocabulary";
 
-    /// <summary>The bundle's credits, each a line of text and a link (§9.8), and the two members of one.</summary>
     private const string CreditsMember = "credits";
 
     private const string CreditTextMember = "text";
 
     private const string CreditLinkMember = "link";
 
-    /// <summary>The one file catalog, keyed by each file's path in the zip (§9.5).</summary>
     private const string CatalogMember = "catalog";
 
-    /// <summary>A catalog entry's count of rows, features, triangles or pixels (§9.5).</summary>
     private const string CountMember = "count";
 
-    /// <summary>The number inside a count, <c>{"kind", "value"}</c>.</summary>
     private const string CountValueMember = "value";
 
-    /// <summary>A catalog entry's digest (§9.8).</summary>
     private const string DigestMember = "sha256";
 
-    /// <summary>The promised files the download does not hold, each with its reason (§9.6).</summary>
     private const string NotHeldMember = "not_held";
 
     private const string ReasonMember = "reason";
 
-    /// <summary>A not-held entry's path.</summary>
     private const string PathMember = "path";
 
-    /// <summary>A raster entry's facts (§9.5), and the four members of it this reader reads.</summary>
     private const string RasterMember = "raster";
 
     private const string WidthMember = "width";
@@ -79,19 +49,12 @@ internal static class ManifestThreeReader
 
     private const string RectangleMember = "rectangle";
 
-    /// <summary>The extensions of the georeferenced family (§4).</summary>
     private static readonly HashSet<string> Georeferenced =
         new(["tif", "gpkg", "dxf", "landxml", "ifc"], StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The extensions of the host-ready family (§4).</summary>
     private static readonly HashSet<string> HostReady =
         new(["glb", "usdz", "obj", "png", "csv"], StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Reads <paramref name="jsonText"/>, found at the bundle's root, against the entries
-    /// <paramref name="entries"/> holds. Never throws; a refusal is <see cref="BundleManifest.IsValid"/>
-    /// <c>false</c> with <see cref="BundleManifest.Error"/> saying why.
-    /// </summary>
     internal static BundleManifest Read(string jsonText, BundleEntryIndex entries)
     {
         BundleManifest manifest = new();
@@ -120,8 +83,6 @@ internal static class ManifestThreeReader
 
     private static BundleManifest ReadRoot(BundleManifest manifest, JsonElement root, BundleEntryIndex entries)
     {
-        // The version first, and nothing else until it is known to be one this reader reads: a later
-        // major may have changed what every other member means (spec/format.md §14).
         manifest.Version = root.Str("version");
         ManifestVersion version = ManifestVersion.Parse(manifest.Version);
         if (!version.IsValid)
@@ -158,8 +119,6 @@ internal static class ManifestThreeReader
                     manifest.Version));
         }
 
-        // Fail closed on a level this reader does not know, naming it (spec/format.md §4): the level
-        // says what every host-ready file was built at.
         string? levelText = root.OptionalStr(LevelMember);
         if (ParseLevel(levelText) is not { } level)
         {
@@ -173,8 +132,6 @@ internal static class ManifestThreeReader
                     levelText ?? "(absent)"));
         }
 
-        // The two frames, stated once for every file of their family (§9.4). A unit, datum or axis
-        // order this reader does not understand refuses the manifest, naming the value (§4).
         if (ManifestFramesReader.Read(root, out string? framesError) is not { } frames)
         {
             return Refuse(manifest, version.Major, BundleRefusal.Unreadable, framesError ?? "Manifest.json states no frames.");
@@ -220,7 +177,6 @@ internal static class ManifestThreeReader
                 entry.Value.ValueKind == JsonValueKind.Object ? Count(entry.Value) : null,
                 entry.Value.ValueKind == JsonValueKind.Object ? entry.Value.OptionalStr(DigestMember) : null)
             {
-                // A file is in the unit of the frame its family is in, as that frame states it (§4, §9.4).
                 Unit = family switch
                 {
                     FileFamily.HostReady => frames.Local.Unit.Unit,
@@ -233,8 +189,6 @@ internal static class ManifestThreeReader
             });
         }
 
-        // A file listed as not held is shown with the reason as the manifest states it, never matched
-        // on (§9.6): the reasons grow. A path the catalog also names is the catalog's.
         if (root.TryGetProperty(NotHeldMember, out JsonElement notHeld) && notHeld.ValueKind == JsonValueKind.Array)
         {
             foreach (JsonElement entry in notHeld.EnumerateArray())
@@ -248,17 +202,11 @@ internal static class ManifestThreeReader
             }
         }
 
-        // The terms of each file, read as a 2.x catalog's are: the members did not change (§9.8).
         BundleManifestReader.ReadFileEntries(manifest, root, CatalogMember);
 
-        // The order's identity, verbatim (§9.3): what the bundle is filed under and what every element a
-        // host places is stamped with, as a 2.x order_id is. So the same order is one cache entry and one
-        // set of stamps from the vault or from a zip of any name, and a re-import finds what it placed.
         manifest.OrderId = root.Object(OrderMember)?.OptionalStr(OrderIdMember) ?? string.Empty;
         manifest.FilingKey = manifest.OrderId;
 
-        // The credits are the attribution a 2.x manifest's attribution.sources carried: each line verbatim,
-        // with its link. Never a refusal, as there: a malformed line costs that line alone.
         manifest.AttributionSources = Credits(root);
 
         manifest.Contents = new BundleContents
@@ -274,7 +222,6 @@ internal static class ManifestThreeReader
         return manifest;
     }
 
-    /// <summary>The <c>credits</c> lines as attribution, each verbatim; a line with neither text nor link is left out.</summary>
     private static List<AttributionSource> Credits(JsonElement root)
     {
         List<AttributionSource> read = [];
@@ -301,7 +248,6 @@ internal static class ManifestThreeReader
         return read;
     }
 
-    /// <summary>The family a file's extension states (§4), matched regardless of case.</summary>
     internal static FileFamily FamilyOf(string path)
     {
         string name = path[(path.LastIndexOf('/') + 1)..];
@@ -317,7 +263,6 @@ internal static class ManifestThreeReader
             : FileFamily.None;
     }
 
-    /// <summary>The level as a 3.x manifest spells it, exactly: <c>Max</c>, <c>Med</c> or <c>Min</c>.</summary>
     private static FidelityLevel? ParseLevel(string? text) => text switch
     {
         "Max" => FidelityLevel.Max,
@@ -326,7 +271,6 @@ internal static class ManifestThreeReader
         _ => null,
     };
 
-    /// <summary>The count an entry states, as a non-negative integer; <c>null</c> when it states none.</summary>
     private static long? Count(JsonElement entry) =>
         entry.TryGetProperty(CountMember, out JsonElement counted)
         && counted.ValueKind == JsonValueKind.Object
@@ -337,11 +281,6 @@ internal static class ManifestThreeReader
             ? value
             : null;
 
-    /// <summary>
-    /// What an entry's <c>raster</c> member states (§9.5): its width and height, the frame its
-    /// rectangle is in and the rectangle as four numbers, west, south, east and north. <c>null</c> when
-    /// the entry is not a raster; a value it does not state is left unstated, never filled in.
-    /// </summary>
     private static RasterGrid? Raster(JsonElement entry)
     {
         if (entry.Object(RasterMember) is not { } raster)
@@ -366,10 +305,6 @@ internal static class ManifestThreeReader
             rectangle);
     }
 
-    /// <summary>
-    /// The vocabulary a tree-points entry's <c>table.foliage_types</c> names (§9.5), verbatim, or
-    /// <c>null</c> when the entry states none. Never defaulted: without one every point is a tree.
-    /// </summary>
     private static string? FoliageVocabulary(JsonElement entry) =>
         entry.Object(TableMember)?.Object(FoliageTypesMember)?.OptionalStr(VocabularyMember);
 
@@ -381,10 +316,6 @@ internal static class ManifestThreeReader
             ? number
             : 0;
 
-    /// <summary>
-    /// A relative path that stays inside the bundle: no leading slash, no drive, no back-slash and no
-    /// <c>..</c> segment (<c>spec/format.md</c> §10).
-    /// </summary>
     private static bool IsPlainPath(string path) =>
         path.Length > 0
         && !path.StartsWith('/')

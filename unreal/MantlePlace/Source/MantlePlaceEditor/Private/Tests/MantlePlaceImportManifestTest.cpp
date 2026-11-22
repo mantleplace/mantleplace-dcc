@@ -4,31 +4,21 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-#include "MantlePlaceDrapeAlignmentLogic.h" // the alignment descriptor the corpus pins the shapes of
+#include "MantlePlaceDrapeAlignmentLogic.h"
 #include "MantlePlaceImportManifest.h"
-#include "MantlePlaceIntegrityLogic.h"      // which payloads the pre-check covers, as a list
-#include "MantlePlaceLandscapeWeightsLogic.h" // the band legend the corpus states the answer for
-#include "MantlePlaceRoadSplinesLogic.h"      // the height-datum check the road-layer table drives
-#include "MantlePlaceTreePointsLogic.h"     // the row-count and frame checks the vector tables drive
-#include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion, MantlePlaceMaxSupportedManifestMajor
+#include "MantlePlaceIntegrityLogic.h"
+#include "MantlePlaceLandscapeWeightsLogic.h"
+#include "MantlePlaceRoadSplinesLogic.h"
+#include "MantlePlaceTreePointsLogic.h"
+#include "MantlePlaceVaultTypes.h"
 #include "Tests/MantlePlaceConformanceCorpus.h"
 
 #include "Serialization/JsonWriter.h"
-
-// Every manifest vector this suite asserts lives in the shared conformance corpus at
-// tools/manifest-conformance/corpus/manifest/ (HPS-40). They used to be inline C++ literals here,
-// which made them a perfectly good test suite and a completely unusable specification: a second
-// host could read them only by reading C++, and would inevitably re-derive them slightly
-// differently. What stays inline below is the handful of assertions about this host's own small
-// helpers (ParseEpsg, DeriveCesiumTerrainPrefix) — host API surface, not cross-host contract.
 
 namespace
 {
 using namespace MantlePlaceConformanceCorpus;
 
-/** Expectation keys this host knows how to assert. The list no longer proves coverage by itself —
- *  the per-case AssertedKeys tracking does (HPS-46) — it is kept to tell "unknown key" apart from
- *  "known key declared with a type this host could not read" in the failure message. */
 const TCHAR* const ConsumedExpectationKeys[] = {
 	TEXT("jobId"),
 	TEXT("orderId"),
@@ -128,9 +118,6 @@ void AssertIntExpectation(FAutomationTestBase& T, const FCase& Case, const TCHAR
 	}
 }
 
-/** A numeric tuple with the tolerance the case states (never a tighter one we invented). A tuple
- *  declared with the wrong shape (wrong type, wrong arity, a non-number element) reads nothing and
- *  records nothing, so the UnassertedExpectations guard flags it (HPS-46) — no local check needed. */
 void AssertTupleExpectation(
 	FAutomationTestBase& T,
 	const FCase& Case,
@@ -154,7 +141,6 @@ void AssertTupleExpectation(
 	}
 }
 
-/** A string array the case may declare, compared element-wise so a length mismatch reads clearly. */
 void AssertStringArrayExpectation(
 	FAutomationTestBase& T, const FCase& Case, const TCHAR* Key, const TArray<FString>& Actual)
 {
@@ -170,9 +156,6 @@ void AssertStringArrayExpectation(
 	}
 }
 
-/** One `ue_ready[].value_mapping`. The corpus declares only the keys this raster's `encoding`
- *  uses, so each read is attempted and the ones the case did not declare simply record nothing —
- *  which is how one assertion path covers all five encodings without branching on the encoding. */
 void AssertValueMapping(
 	FAutomationTestBase& T,
 	const FCase& Case,
@@ -248,9 +231,6 @@ void AssertValueMapping(
 	}
 }
 
-/** `landscapeLayers` — the whole `unreal.landscape_layers` block, layer by layer and companion by
- *  companion. Every leaf the case declares is read here, which is the point: the block's defect was
- *  that it parsed to nothing at all. */
 void AssertLandscapeLayers(FAutomationTestBase& T, const FCase& Case, const FMantlePlaceVaultManifest& M)
 {
 	TArray<TSharedPtr<FJsonObject>> Rows;
@@ -266,14 +246,12 @@ void AssertLandscapeLayers(FAutomationTestBase& T, const FCase& Case, const FMan
 		const TSharedPtr<FJsonObject>& Row = Rows[Index];
 		FString Text;
 
-		// Order is the parser's promise (sorted by name), so the row index IS the layer index.
 		const FMantlePlaceLandscapeLayer* Layer =
 			M.LandscapeLayers.Layers.IsValidIndex(Index) ? &M.LandscapeLayers.Layers[Index] : nullptr;
 
 		if (ExpectRowString(Case, RowPath, Row, TEXT("name"), Text))
 		{
 			T.TestEqual(RowPath + TEXT(".name"), Layer != nullptr ? Layer->Name : FString(), Text);
-			// And the same layer must be reachable by name, not only by position.
 			T.TestTrue(RowPath + TEXT(" is findable by name"), M.FindLandscapeLayer(*Text) == Layer);
 		}
 		if (ExpectRowString(Case, RowPath, Row, TEXT("path"), Text))
@@ -361,9 +339,6 @@ void AssertLandscapeLayers(FAutomationTestBase& T, const FCase& Case, const FMan
 	}
 }
 
-/** `materialWeightBands` — the band legend resolved to (companion, channel). This is the one
- *  derivation the legend exists for, and it is cross-host: any host with a weight-blended material
- *  resolves it identically, so the answer lives in the corpus rather than in this suite. */
 void AssertMaterialWeightBands(
 	FAutomationTestBase& T, const FCase& Case, const FMantlePlaceVaultManifest& M)
 {
@@ -408,8 +383,6 @@ void AssertMaterialWeightBands(
 	}
 }
 
-/** The corpus's name for a classified alignment shape. One mapping, so a rename in the enum turns
- *  the suite red rather than quietly re-labelling what the corpus pins. */
 const TCHAR* AlignmentShapeName(EMantlePlaceDrapeAlignment Shape)
 {
 	switch (Shape)
@@ -420,12 +393,9 @@ const TCHAR* AlignmentShapeName(EMantlePlaceDrapeAlignment Shape)
 	case EMantlePlaceDrapeAlignment::Diverges:     return TEXT("diverges");
 	case EMantlePlaceDrapeAlignment::Unrecognised: return TEXT("unrecognised");
 	}
-	// A shape added to the enum and not to the corpus's vocabulary fails loudly here rather than
-	// being mapped onto a name the corpus already uses.
 	return TEXT("?");
 }
 
-/** Apply every expectation the case declares to a parsed manifest. */
 void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantlePlaceVaultManifest& M)
 {
 	AssertStringExpectation(T, Case, TEXT("jobId"), M.JobId);
@@ -461,8 +431,6 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 	AssertBoolExpectation(T, Case, TEXT("hasFoliagePoints"), M.Foliage.bPresent);
 	AssertBoolExpectation(T, Case, TEXT("hasLandscapeLayers"), M.LandscapeLayers.bPresent);
 	AssertBoolExpectation(T, Case, TEXT("row0IsNorth"), M.Heightmap.bRow0IsNorth);
-	// An empty mesh sha means the manifest declared none, so the integrity check is skipped —
-	// "valid but unverified", never "verified".
 	AssertBoolExpectation(T, Case, TEXT("integrityCheckedMesh"), !M.Mesh.Sha256.IsEmpty());
 
 	AssertIntExpectation(T, Case, TEXT("epsg"), M.Georef.Epsg);
@@ -473,9 +441,6 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 	AssertIntExpectation(T, Case, TEXT("componentCountX"), M.Heightmap.ComponentCountX);
 	AssertIntExpectation(T, Case, TEXT("componentCountY"), M.Heightmap.ComponentCountY);
 
-	// The heightmap's range as the importer holds it: the `min` and `max` the 16-bit codes 0 and 65535
-	// stand for, read from the unreal block or, on a 2.x bundle, from `file_entries[path].value_mapping`.
-	// 2.2.0's `vertical_tier` and `vertical_grid_index` sit beside them and change neither.
 	AssertTupleExpectation(T, Case, TEXT("heightmapRangeM"), TEXT("heightmapRangeToleranceM"),
 		{ M.Heightmap.ZMinM, M.Heightmap.ZMaxM });
 
@@ -507,22 +472,13 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 	AssertLandscapeLayers(T, Case, M);
 	AssertMaterialWeightBands(T, Case, M);
 
-	// --- The tree-points payload's own two facts -------------------------------------------
-	// An empty digest means the manifest declared none, so the check is SKIPPED — "valid but
-	// unverified", never "verified" and never "corrupt". Same shape as integrityCheckedMesh, and
-	// deliberately so: this payload used to be the one that had no such state at all.
 	AssertIntExpectation(T, Case, TEXT("foliagePointsPointCount"), M.Foliage.Count);
 	AssertBoolExpectation(
 		T, Case, TEXT("integrityCheckedFoliagePoints"), !M.Foliage.Sha256.IsEmpty());
 
-	// And the list itself, so "the tree points are in the integrity chain" is an assertion rather
-	// than a claim about a boolean expression nobody can walk.
 	AssertStringArrayExpectation(
 		T, Case, TEXT("integrityVerifiedPaths"), FMantlePlaceIntegrityLogic::VerifiablePaths(M));
 
-	// --- The public-record layers ------------------------------------------------------------
-	// Found by the shape of their block and located by the path each entry states, so the same
-	// reader takes `Records/<Family>/` and the legacy root folders, and a family it has never met.
 	{
 		TArray<FString> Families, Paths, Pointers, Skipped, Frames;
 		for (const FMantlePlaceRecordLayer& Layer : M.PublicRecords.Layers)
@@ -546,7 +502,6 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 		{
 			Skipped.Add(FString::Printf(TEXT("%s:%s:%s"), *Source.Layer, *Source.RecordHolder, *Source.Reason));
 		}
-		// The integrity chain's view of them: every record file the manifest pins is in it.
 		TArray<FString> Verified;
 		for (const FString& Path : FMantlePlaceIntegrityLogic::VerifiablePaths(M))
 		{
@@ -563,25 +518,15 @@ void AssertExpectations(FAutomationTestBase& T, const FCase& Case, const FMantle
 		AssertStringArrayExpectation(T, Case, TEXT("publicRecordFrames"), Frames);
 	}
 
-	// --- The drape's alignment descriptor ---------------------------------------------------
 	const FMantlePlaceDrapeAlignment Alignment =
 		FMantlePlaceDrapeAlignmentLogic::Classify(M.Drape.Alignment);
 	AssertStringExpectation(
 		T, Case, TEXT("drapeAlignmentShape"), FString(AlignmentShapeName(Alignment.Shape)));
 	AssertBoolExpectation(T, Case, TEXT("drapeAlignmentWarns"), Alignment.ShouldWarn());
-	// The measured figures, pinned so a reader that echoes the sentence without reading it fails.
 	AssertTupleExpectation(T, Case, TEXT("drapeAlignmentMeasured"), TEXT("drapeAlignmentMeasuredTolerance"),
 		{ Alignment.CoveredPercent, Alignment.OvershootRatio });
 }
 
-/**
- * The text a corpus case is driven with. Every case is its file, except `manifest.reject.majorAhead`:
- * that case holds a 2.0 manifest for readers that stop at 1.x (format.md 11), and this reader reads 2.x,
- * so a 2.0 manifest is no longer "a major ahead" of it. The case is driven with its own document restamped
- * one major above what this reader speaks (the corpus README: "when the hosts read 2.x it is restamped one
- * major ahead of them"), so the refusal it exists to pin is still asserted here, on the real document and
- * not on a literal. A file the corpus has already restamped past this reader is driven as it stands.
- */
 FString DrivenPayload(const FCase& Case)
 {
 	if (Case.Id != TEXT("manifest.reject.majorAhead") || !Case.PayloadObject.IsValid())
@@ -605,11 +550,6 @@ FString DrivenPayload(const FCase& Case)
 	return Out;
 }
 
-/**
- * Lay a row's overlay object over `Target`: a member set to null is removed, any other value
- * replaces. False when the row carries the overlay and there is no target to lay it on, so a
- * fixture that drifted fails loudly instead of quietly testing the unmodified manifest.
- */
 bool OverlayMembers(const TSharedPtr<FJsonObject>& Row, const TCHAR* OverlayField, const TSharedPtr<FJsonObject>& Target)
 {
 	const TSharedPtr<FJsonObject>* Overlay = nullptr;
@@ -635,7 +575,6 @@ bool OverlayMembers(const TSharedPtr<FJsonObject>& Row, const TCHAR* OverlayFiel
 	return true;
 }
 
-/** The `vector.layers` entry named `road_splines`, or null when the document carries none. */
 TSharedPtr<FJsonObject> RoadSplinesLayer(const TSharedPtr<FJsonObject>& Manifest)
 {
 	const TSharedPtr<FJsonObject>* Vector = nullptr;
@@ -664,14 +603,6 @@ TSharedPtr<FJsonObject> RoadSplinesLayer(const TSharedPtr<FJsonObject>& Manifest
 	return nullptr;
 }
 
-/**
- * The case's embedded `manifest` with the row's overlays laid on it: `root` over the document,
- * `unreal` over `hosts.unreal`, `foliagePoints` over `hosts.unreal.foliage_points`,
- * `engineRoadSplines` over `hosts.unreal.road_splines` and `roadSplines` over the `road_splines`
- * entry of `vector.layers`, in that order. One manifest per
- * case and a few members per row keeps the table about the frame and not about the document.
- * Empty — which no parser accepts — when an overlay has nothing to land on.
- */
 FString ManifestWithOverlays(const FCase& Case, const TSharedPtr<FJsonObject>& Row)
 {
 	TSharedPtr<FJsonObject> Manifest;
@@ -693,7 +624,6 @@ FString ManifestWithOverlays(const FCase& Case, const TSharedPtr<FJsonObject>& R
 	{
 		return FString();
 	}
-	// Last, so a `root` overlay that replaces `vector` is the document this one lands on.
 	if (!OverlayMembers(Row, TEXT("roadSplines"), RoadSplinesLayer(Manifest)))
 	{
 		return FString();
@@ -705,11 +635,6 @@ FString ManifestWithOverlays(const FCase& Case, const TSharedPtr<FJsonObject>& R
 	return Text;
 }
 
-/**
- * One row of a tree-points known-answer table, through the pure parser. Shared by the three cases
- * that drive FMantlePlaceTreePointsLogic::ParseCsv — the count table and the two frame tables — so
- * the outcome names and what a refusal owes (a reason, and no rows) are stated once.
- */
 void AssertTreePointsRow(
 	FAutomationTestBase& T,
 	const FCase& Case,
@@ -721,7 +646,6 @@ void AssertTreePointsRow(
 {
 	const FString Name = RowString(Row, TEXT("name"));
 	const FString ErrorContains = RowString(Row, TEXT("errorContains"));
-	// Absent on the frame table, where no row is about the count: 0 is "the manifest published none".
 	const int32 Declared = static_cast<int32>(RowNumber(Row, TEXT("declaredPointCount")));
 
 	TArray<FMantlePlaceTreePointRow> Parsed;
@@ -754,8 +678,6 @@ void AssertTreePointsRow(
 		return;
 	}
 
-	// Every non-parsed outcome must SAY why; a bare "tree points failed" leaves a user with no way
-	// to tell a drifted column from a truncated download from a file on another grid (HPS-53).
 	T.TestFalse(FString::Printf(TEXT("[%s] \"%s\" states a reason"), *Case.Id, *Name), Error.IsEmpty());
 	T.TestEqual(
 		FString::Printf(TEXT("[%s] \"%s\" discards the rows it will not stand behind"), *Case.Id, *Name),
@@ -768,7 +690,7 @@ void AssertTreePointsRow(
 			Error.Contains(ErrorContains));
 	}
 }
-} // namespace
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceImportManifestTest,
@@ -782,7 +704,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		return true;
 	}
 
-	// --- The corpus drives every manifest vector -------------------------------------------
 	TArray<FCase> Cases;
 	FString LoadError;
 	if (!LoadGroup(TEXT("manifest"), Cases, LoadError))
@@ -791,13 +712,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	// The corpus is pinned at one manifest version; this parser has its own floor. Equality was
-	// the rule while every host repinned together. Hosts repin INDEPENDENTLY now — the
-	// corpus tracks the newest published contract, while a host that has not yet taken the clean
-	// break still floors lower and accepts the newer shape (the readers gate `<`, not `!=`). What
-	// must never happen is the corpus falling BELOW this floor: then every accept case below is a
-	// document this parser refuses, and a dozen derived assertions fail with confusing messages
-	// instead of this one saying it once, loudly.
 	TestTrue(
 		FString::Printf(
 			TEXT("corpus manifestVersion (%s) >= this host's MinSupportedManifestVersion (%s) "
@@ -809,10 +723,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 	TSet<FString> Driven;
 	for (const FCase& Case : Cases)
 	{
-		// Known-answer tables are not documents to feed the parser; they are dispatched by id
-		// below and recorded into Driven there. Their `expectations` are swept after that
-		// dispatch, not here — sweeping now would read every vector case's keys as unasserted
-		// because the assertions that record them have not run yet.
 		if (Case.IsVector())
 		{
 			continue;
@@ -829,8 +739,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 			{
 				AddError(FString::Printf(TEXT("[%s] rejected with: %s"), *Case.Id, *Error));
 			}
-			// An accepted manifest must come back with a CLEAN error string. A parser that fills
-			// OutError and still reports bValid leaves the importer showing a warning it cannot act on.
 			TestEqual(Case.What(TEXT("accepted with no error text")), Error, FString());
 		}
 		else if (Case.IsReject())
@@ -853,29 +761,19 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 				Error.Contains(Case.ErrorContains));
 		}
 
-		// A reject case may still carry expectations — values the parser must have read BEFORE
-		// refusing (HPS-37), e.g. the orderId that lets a base-on-demand bundle be materialized.
 		AssertExpectations(*this, Case, M);
 
-		// Consumption is proven by what was ASSERTED, not by the allow-list alone: a declared key
-		// nothing read — unknown, mistyped, or on an assertion path that never ran — fails (HPS-46).
 		for (const FString& Problem : UnassertedExpectations(Case, ConsumedExpectationKeys))
 		{
 			AddError(FString::Printf(TEXT("[%s] %s"), *Case.Id, *Problem));
 		}
 
-		// And below the top level: recording `items` proves the array was reached, never
-		// that anything inside it was read (HPS-46b).
 		for (const FString& Problem : UnassertedNestedExpectations(Case))
 		{
 			AddError(FString::Printf(TEXT("[%s] %s"), *Case.Id, *Problem));
 		}
 	}
 
-	// --- HPS-47: the materialization predicate, driven by the neutral-signal vectors ---------
-	// Each row embeds a complete v18 manifest; the revit-block-only and dcc-readiness-only rows are
-	// the ones that catch a host keying off its own block — materialized bundles carrying nothing
-	// this host imports, which must still read as materialized.
 	if (const FCase* Case = FindCase(Cases, TEXT("manifest.materializationSignals")))
 	{
 		Driven.Add(Case->Id);
@@ -902,11 +800,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		AddError(TEXT("corpus case manifest.materializationSignals has gone missing"));
 	}
 
-	// --- point_count against the rows a reader really produced -------------------------------
-	// The other half of the tree-points integrity story. The digest (asserted through
-	// integrityVerifiedPaths above) proves the bytes; this proves the rows this reader made of
-	// them, which a digest cannot — a column-contract drift parses to a shorter table with the
-	// hash still matching, because one malformed row is skipped rather than failing the layer.
 	if (const FCase* Case = FindCase(Cases, TEXT("manifest.treePointsRowCount")))
 	{
 		Driven.Add(Case->Id);
@@ -914,9 +807,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		TestTrue(Case->What(TEXT("has rows")), Vectors.Num() > 0);
 		for (const TSharedPtr<FJsonObject>& Row : Vectors)
 		{
-			// The origin and the landscape span are the reference fixture's, so a row's coordinates
-			// land where the rest of the corpus says they land; this table is about the COUNT, not
-			// the frame — manifest.treePointsFrame, below, is the one about that.
 			AssertTreePointsRow(*this, *Case, Row, 441959.5, 4014372.5, FMantlePlaceTreePointsFrame(),
 				FVector2D(140100.0, 142500.0));
 		}
@@ -926,11 +816,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		AddError(TEXT("corpus case manifest.treePointsRowCount has gone missing"));
 	}
 
-	// --- HPS-53: a tree-point file outside the landscape's published extent is refused ---------
-	// The origin and the span both come from the embedded manifest THROUGH this host's parser, so
-	// what is proven is the path the importer takes — Parse, GetAoiSizeUeCm, ParseCsv — and not a
-	// span this file happened to get right. The just-inside and just-outside rows sit between the
-	// two half-spans, so an extent with its axes swapped fails here rather than on a user's site.
 	if (const FCase* Case = FindCase(Cases, TEXT("manifest.treePointsFrame")))
 	{
 		Driven.Add(Case->Id);
@@ -938,7 +823,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		const FMantlePlaceVaultManifest M = MantlePlaceImportManifest::Parse(
 			RowBodyAsText(Case->PayloadObject, TEXT("manifest")), ManifestError);
 		TestTrue(Case->What(*FString::Printf(TEXT("embedded manifest parses (%s)"), *ManifestError)), M.bValid);
-		// A manifest older than 1.3.0 states no frame, and this table is the extent substitute alone.
 		const FMantlePlaceTreePointsFrame Frame = M.GetFoliagePointsFrame();
 		TestFalse(Case->What(TEXT("a pre-1.3.0 pointer that states no frame owes none")), Frame.IsOwed());
 
@@ -954,11 +838,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		AddError(TEXT("corpus case manifest.treePointsFrame has gone missing"));
 	}
 
-	// --- HPS-53: the frame the pointer states is read, and must be this host's (MPB 1.3.0) ------
-	// Each row lays its own members over the one embedded manifest — the pointer's frame, and
-	// where it matters the version or the heightmap — and the manifest is parsed again per row, so what is proven is the importer's
-	// path — Parse, GetFoliagePointsFrame, ParseCsv — including that a missing member is read as
-	// missing rather than defaulted, and that the version, not the keys, says a frame is owed.
 	if (const FCase* Case = FindCase(Cases, TEXT("manifest.treePointsStatedFrame")))
 	{
 		Driven.Add(Case->Id);
@@ -980,12 +859,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		AddError(TEXT("corpus case manifest.treePointsStatedFrame has gone missing"));
 	}
 
-	// --- The foliage type (MPB 1.2.0): a value this build does not know is a tree -------------------
-	// The two rules spec/format.md section 4.4 states and nothing bound until a second host read the
-	// column. Each row is the payload verbatim beside the vocabulary the manifest names (or none), and
-	// the answer is the type each row it produced reads as, in the vocabulary's own words. The
-	// origin and span are the reference fixture's, as for the row-count table: this one is about the
-	// column, not the frame.
 	if (const FCase* Case = FindCase(Cases, TEXT("manifest.foliageTypeUnknownValue")))
 	{
 		Driven.Add(Case->Id);
@@ -994,13 +867,12 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		for (const TSharedPtr<FJsonObject>& Row : Vectors)
 		{
 			const FString Name = RowString(Row, TEXT("name"));
-			// A JSON null reads as empty: the manifest names no vocabulary, so there is no column.
 			const FString Vocabulary = RowString(Row, TEXT("foliageTypeVocabulary"));
 			TArray<FMantlePlaceTreePointRow> Parsed;
 			FString Error;
 			const EMantlePlaceTreePointsOutcome Outcome = FMantlePlaceTreePointsLogic::ParseCsv(
 				RowString(Row, TEXT("csv")), 441959.5, 4014372.5, FMantlePlaceTreePointsFrame(),
-				FVector2D(140100.0, 142500.0), /*DeclaredPointCount*/ 0, Parsed, Error, Vocabulary);
+				FVector2D(140100.0, 142500.0), 0, Parsed, Error, Vocabulary);
 			TestTrue(Case->What(*FString::Printf(TEXT("\"%s\": parses (%s)"), *Name, *Error)),
 				Outcome == EMantlePlaceTreePointsOutcome::Parsed);
 
@@ -1021,12 +893,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		AddError(TEXT("corpus case manifest.foliageTypeUnknownValue has gone missing"));
 	}
 
-	// --- The datum the road layer states is read, and must be this host's (MPB 1.8.0) ----------
-	// Each row lays its members over the one embedded manifest — the layer's datum, and where it
-	// matters the version — and the manifest is parsed again per row, so what is proven is the
-	// importer's path, Parse then GetRoadSplinesDatum then CanPlaceHeights: that the datum is read
-	// off the layer the importer selects, that a missing one is read as missing, and that the
-	// version, not the key, says one is owed.
 	if (const FCase* Case = FindCase(Cases, TEXT("manifest.roadSplinesStatedDatum")))
 	{
 		Driven.Add(Case->Id);
@@ -1054,8 +920,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 				TestTrue(Case->What(*NoRefusal), Reason.IsEmpty());
 				continue;
 			}
-			// A refusal names what was stated, as HPS-53's named skip does, so a curator can tell a
-			// layer in another datum from one that said nothing.
 			const FString StatesReason = FString::Printf(TEXT("\"%s\" states a reason"), *Name);
 			TestFalse(Case->What(*StatesReason), Reason.IsEmpty());
 			const FString ErrorContains = RowString(Row, TEXT("errorContains"));
@@ -1071,10 +935,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		AddError(TEXT("corpus case manifest.roadSplinesStatedDatum has gone missing"));
 	}
 
-	// --- The Unreal block's own road copy is read first, and its datum is asked (MPB 1.16.0) -----
-	// Each row lays its members over the one embedded manifest and parses it again, so what is proven
-	// is the importer's path: Parse, then GetRoadSplinesPlan, which the importer walks in order. A
-	// source that is declared but not placeable is refused by name, and nothing is shifted.
 	if (const FCase* Case = FindCase(Cases, TEXT("manifest.unrealRoadSplinesPointer")))
 	{
 		Driven.Add(Case->Id);
@@ -1121,7 +981,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 				const FString PathWhat = FString::Printf(TEXT("\"%s\": the copy is read from its own pointer"), *Name);
 				TestEqual(Case->What(*PathWhat), M.RoadSplines.EnginePath, EnginePath);
 			}
-			// A refusal names what was stated, as HPS-53's named skip does.
 			const FString ErrorContains = RowString(Row, TEXT("errorContains"));
 			if (!ErrorContains.IsEmpty())
 			{
@@ -1136,9 +995,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		AddError(TEXT("corpus case manifest.unrealRoadSplinesPointer has gone missing"));
 	}
 
-	// Vector cases' `expectations`, swept once every id-dispatched assertion above has run. HPS-46
-	// exempts a case skipped wholesale by appliesTo, never one this host executes — and a vector
-	// case is executed, just through a different door than a document case.
 	for (const FCase& Case : Cases)
 	{
 		if (!Case.IsVector())
@@ -1150,8 +1006,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 			AddError(FString::Printf(TEXT("[%s] %s"), *Case.Id, *Problem));
 		}
 
-		// And below the top level: recording `items` proves the array was reached, never
-		// that anything inside it was read (HPS-46b).
 		for (const FString& Problem : UnassertedNestedExpectations(Case))
 		{
 			AddError(FString::Printf(TEXT("[%s] %s"), *Case.Id, *Problem));
@@ -1166,10 +1020,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 			*Missing));
 	}
 
-	// --- Host-local helpers the corpus does not (and should not) specify --------------------
-	// Zip-entry prefix derivation and EPSG string parsing are this plugin's own API, not part of
-	// the cross-host contract: another host reads `layout.cesiumTerrain` verbatim and has no
-	// equivalent function to conform to.
 	{
 		TestEqual(TEXT("empty path yields empty prefix"),
 			MantlePlaceImportManifest::DeriveCesiumTerrainPrefix(FString()), FString());
@@ -1181,13 +1031,7 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("epsg empty"), MantlePlaceImportManifest::ParseEpsg(TEXT("")), 0);
 	}
 
-	// --- The world axis mapping ------------------------------------------------------------
-	// The one conversion every projected coordinate goes through, plus the mesh path's separate
-	// correction. Both are asserted by their EFFECT on a known offset rather than by restating
-	// the literal, so a sign or an axis that drifts fails here rather than in a screenshot.
 	{
-		// 100 m north of the origin is +X; 100 m east is +Y. Both components each time, because a
-		// half-done swap satisfies either one alone.
 		const FVector North = FMantlePlaceVaultManifest::ProjectedToUeCm(0.0, 100.0, 0.0);
 		TestEqual(TEXT("100 m north -> +10000 cm X"), North.X, 10000.0, 1e-9);
 		TestEqual(TEXT("100 m north -> 0 Y"), North.Y, 0.0, 1e-9);
@@ -1199,9 +1043,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		const FVector Up = FMantlePlaceVaultManifest::ProjectedToUeCm(0.0, 0.0, 100.0);
 		TestEqual(TEXT("100 m up -> +10000 cm Z"), Up.Z, 10000.0, 1e-9);
 
-		// Interchange lands glTF with East on +X and South on +Y. The mesh rotation must carry
-		// mesh-space east onto world +Y and mesh-space south onto world -X, WITHOUT mirroring:
-		// a determinant of +1 is the thing that distinguishes this from the old `-1` Y workaround.
 		const FRotator MeshRot = FMantlePlaceVaultManifest::GetMeshRotation();
 		const FVector MeshEast = MeshRot.RotateVector(FVector(1.0, 0.0, 0.0));
 		const FVector MeshSouth = MeshRot.RotateVector(FVector(0.0, 1.0, 0.0));
@@ -1214,9 +1055,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 				FVector(1.0, 0.0, 0.0), FVector(0.0, 1.0, 0.0)).Z, 1e-6);
 	}
 
-	// --- Bundle-level behaviour with no cross-host analogue --------------------------------
-	// cesium_terrain streaming is a Cesium-for-Unreal concern; the retired pre-v13 tile-count key
-	// is Unreal's own deleted fallback. Neither belongs in a corpus a Revit host must consume.
 	{
 		FString Error;
 		const FMantlePlaceVaultManifest M = MantlePlaceImportManifest::Parse(
@@ -1229,10 +1067,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("tile count"), M.Cesium.TerrainTileCount, 1287);
 		TestTrue(TEXT("bundle has cesium terrain"), M.Cesium.bHasTerrain);
 
-		// The retired `terrain` block is doubly dead at 1.0.0: the key map deletes the block
-		// outright, and this host had already deleted its fallback to the key inside it. Kept as a
-		// regression guard because a retired block that reappears in a bundle must be IGNORED, not
-		// resurrected as a fallback — that is how a clean break becomes dual-parsing.
 		Error.Reset();
 		const FMantlePlaceVaultManifest Legacy = MantlePlaceImportManifest::Parse(
 		    TEXT("{\"job_id\":\"x\",\"version\":\"1.0.0\",")
@@ -1243,9 +1077,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("retired pre-v13 tile-count key is ignored"), Legacy.Cesium.TerrainTileCount, 0);
 	}
 
-	// --- The version gate, both directions --------------------------------------------------
-	// Too old and too new are DIFFERENT refusals with different remedies (re-download vs update
-	// the plugin), and a bare "unsupported" message makes them indistinguishable to the user.
 	{
 		FString Error;
 		const FMantlePlaceVaultManifest Integer = MantlePlaceImportManifest::Parse(
@@ -1261,8 +1092,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("an absent version is refused"), Absent.bValid);
 		TestTrue(TEXT("absent version is named, not shown as 0"), Error.Contains(TEXT("(absent)")));
 
-		// This reader speaks 1.x and 2.x (MantlePlaceMaxSupportedManifestMajor): 2.0 changed the
-		// layout and not the pointer doctrine, so a 2.0 manifest with the same host block reads.
 		Error.Reset();
 		const FMantlePlaceVaultManifest Second = MantlePlaceImportManifest::Parse(
 		    TEXT("{\"job_id\":\"x\",\"version\":\"2.0.0\",")
@@ -1272,7 +1101,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("a 2.0 manifest is read through its pointer"), Second.Mesh.Path, FString(TEXT("Site/Terrain.glb")));
 		TestEqual(TEXT("a 2.0 manifest is read with no error text"), Error, FString());
 
-		// One major above what this reader speaks is refused, naming the version and the remedy.
 		Error.Reset();
 		const FString AheadVersion = FString::Printf(TEXT("%d.0.0"), MantlePlaceMaxSupportedManifestMajor + 1);
 		const FMantlePlaceVaultManifest Future = MantlePlaceImportManifest::Parse(
@@ -1294,9 +1122,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("a higher MINOR is accepted — minors are strictly additive"), AdditiveMinor.bValid);
 	}
 
-	// --- The base-on-demand guidance string (surface copy, not contract) --------------------
-	// The corpus case manifest.baseOnDemand pins the *data* read off a base marker bundle; the
-	// wording steered at the user is this host's UI, so it is asserted here.
 	{
 		const FCase* BaseCase = FindCase(Cases, TEXT("manifest.baseOnDemand"));
 		if (BaseCase == nullptr)
@@ -1316,11 +1141,6 @@ bool FMantlePlaceImportManifestTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// The reader self-test (HPS-46): the corpus reader itself is proven against the deliberately
-// broken fixtures at tools/manifest-conformance/corpus/self-test/. Every fixture must be
-// REJECTED — a fixture that passes is the failure. This proves the READER, where the corpus
-// proper proves the parser; the two are never mixed in one index. Each fixture's index entry
-// declares its one break in `selfTestFailure`; the classes asserted below mirror that list.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceConformanceReaderSelfTest,
 	"MantlePlace.Conformance.ReaderSelfTest",
@@ -1328,9 +1148,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceConformanceReaderSelfTest::RunTest(const FString& Parameters)
 {
-	// --- When a missing corpus skips: in a packaged plugin always, in a source tree only where CI
-	// is unset. Asserted before the skip itself, so it holds in a release zip's run too, where
-	// nothing below can run. ---
 	TestTrue(TEXT("no corpus, source tree, CI unset: the corpus tests skip"), MissingCorpusSkips(FString(), false));
 	TestFalse(TEXT("no corpus, source tree, CI=true: the corpus tests fail"), MissingCorpusSkips(TEXT("true"), false));
 	TestFalse(TEXT("no corpus, source tree, CI=1: the corpus tests fail"), MissingCorpusSkips(TEXT("1"), false));
@@ -1351,9 +1168,6 @@ bool FMantlePlaceConformanceReaderSelfTest::RunTest(const FString& Parameters)
 	}
 	const FString SelfTestDir = FPaths::Combine(CorpusRoot, TEXT("self-test"));
 
-	// --- The structural fixtures: missing file, undeclared malformed bytes, duplicate id ----
-	// The load must fail AND name every structural break — a reader that stops at the first one
-	// would leave the other fixture classes unproven.
 	TArray<FCase> Cases;
 	FString Error;
 	TestFalse(TEXT("a rotten index does not load cleanly"),
@@ -1365,13 +1179,8 @@ bool FMantlePlaceConformanceReaderSelfTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("duplicate-id fixture is flagged (selfTestFailure: duplicateId)"),
 		Error.Contains(TEXT("selfTest.duplicateId")) && Error.Contains(TEXT("more than once")));
 
-	// --- The per-case fixtures, driven off the cases that DID load ---------------------------
-	// A host that consumes `orderId` (and nothing else) is simulated here; the fixtures prove the
-	// asserted-keys mechanics an allow-list reader gets wrong.
 	static const TCHAR* const SelfTestConsumedKeys[] = { TEXT("orderId") };
 
-	// An expectations key NO host may ever consume (`selfTest*` is reserved for exactly this) must
-	// come back as "not asserted", or a platform session's new assertion silently binds nobody.
 	if (const FCase* Unknown = FindCase(Cases, TEXT("selfTest.unknownExpectationKey")))
 	{
 		FString OrderId;
@@ -1389,9 +1198,6 @@ bool FMantlePlaceConformanceReaderSelfTest::RunTest(const FString& Parameters)
 		AddError(TEXT("self-test case selfTest.unknownExpectationKey did not load"));
 	}
 
-	// A universally consumed key declared with the wrong JSON type (`orderId: 999`) must read as
-	// NOTHING and then fail as unasserted — the exact asserted-keys bug: an allow-list reader
-	// stays green.
 	if (const FCase* WrongType = FindCase(Cases, TEXT("selfTest.wrongTypeExpectation")))
 	{
 		FString OrderId;
@@ -1409,9 +1215,6 @@ bool FMantlePlaceConformanceReaderSelfTest::RunTest(const FString& Parameters)
 		AddError(TEXT("self-test case selfTest.wrongTypeExpectation did not load"));
 	}
 
-	// --- The nested fixture: the obligation reaches BELOW the top level (HPS-46b) ------------
-	// The top level is entirely satisfied here, so a reader that stops there reports this case
-	// covered — which is the whole reason the rule exists.
 	if (const FCase* Nested = FindCase(Cases, TEXT("selfTest.nestedUnreadExpectation")))
 	{
 		FString OrderId;
@@ -1430,13 +1233,9 @@ bool FMantlePlaceConformanceReaderSelfTest::RunTest(const FString& Parameters)
 			TestTrue(Nested->What(TEXT("items[0].orderId reads")),
 				ExpectRowString(*Nested, Path, Rows[0], TEXT("orderId"), Text));
 
-			// An explicit null is a VALUE and counts as read — otherwise `sha256: null`, the row
-			// ⛔HPS-27 exists for, becomes the one leaf a suite skips for free.
 			TestFalse(Nested->What(TEXT("items[0].sha256 is null, so there is no value to assert")),
 				ExpectRowString(*Nested, Path, Rows[0], TEXT("sha256"), Text));
 
-			// The coercion half (one level down): `status` is a number, and TryGetStringField
-			// would hand back "404" and mark the path read. A strict read gets NOTHING.
 			TestFalse(Nested->What(TEXT("a strictly typed read gets nothing from a number")),
 				ExpectRowString(*Nested, Path, Rows[0], TEXT("status"), Text));
 		}
@@ -1472,7 +1271,6 @@ bool FMantlePlaceConformanceReaderSelfTest::RunTest(const FString& Parameters)
 		AddError(TEXT("self-test case selfTest.nestedUnreadExpectation did not load"));
 	}
 
-	// --- The orphan file: on disk, absent from `cases` — found by the directory sweep --------
 	{
 		TArray<FString> Orphans;
 		FString SweepError;
@@ -1483,7 +1281,6 @@ bool FMantlePlaceConformanceReaderSelfTest::RunTest(const FString& Parameters)
 			Orphans.Num(), 1);
 	}
 
-	// --- The broken-index siblings: each must FAIL to load, never resolve to zero cases ------
 	for (const TCHAR* Broken : { TEXT("broken-index-json"), TEXT("broken-index-schema") })
 	{
 		TArray<FCase> BrokenCases;
@@ -1497,4 +1294,4 @@ bool FMantlePlaceConformanceReaderSelfTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

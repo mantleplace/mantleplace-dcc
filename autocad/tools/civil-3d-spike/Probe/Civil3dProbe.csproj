@@ -1,14 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    The spike's AutoCAD-only half (../README.md): a scratch add-in, never shipped. It references no
-    Civil 3D assembly, so it loads in plain AutoCAD and in Civil 3D's "as AutoCAD" mode; it decides
-    whether Civil 3D is loaded in the process and only then loads the Civil 3D half (../Civil/).
-    It builds against the installed API of the year it runs in, at the framework that install's own
-    runtime configs name (an updated 2025 or 2026 install is .NET 10, not the .NET 8 it shipped on):
-    Invoke-Civil3dProbe.ps1 passes AcadYear, AcadDir and AcadFramework.
-  -->
-
   <PropertyGroup>
     <AcadYear Condition="'$(AcadYear)' == ''">2027</AcadYear>
     <AcadDir Condition="'$(AcadDir)' == ''">$(ProgramFiles)\Autodesk\AutoCAD $(AcadYear)</AcadDir>

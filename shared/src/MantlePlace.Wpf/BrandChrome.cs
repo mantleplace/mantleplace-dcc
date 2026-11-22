@@ -7,67 +7,17 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Wpf;
 
-/// <summary>
-/// The two brand touches the plugin's windows share, in every host that opens them: the header row,
-/// and the fill on the one primary action.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Both windows had nothing but a title bar saying who they belonged to. This puts the mark and the
-/// window's purpose above the content, and the brand orange on exactly one button in the whole
-/// plugin. <b>Everything else keeps the host's own chrome</b> — no restyled list rows, no custom fonts,
-/// no brand background. An add-in that paints its own windows stops looking like part of the host,
-/// which is the failure the ribbon pass exists to fix, not one to introduce here.
-/// </para>
-/// <para>
-/// One source for both .NET hosts rather than a copy in each, because the second copy is the one that
-/// drifts. What is decided here is WPF assembly and nothing else: the words are
-/// <see cref="WindowLabels"/>, the colour is <see cref="BrandPalette"/>, and which render of the mark
-/// goes in the <see cref="MarkRenders.HeaderSlotPixels"/> slot is <see cref="MarkRenders"/> — all
-/// three in the pure core, where CI can see them (<c>HPS-02</c>, <c>HPS-42</c>). The decode itself is
-/// <see cref="MarkImages.Decode"/>, which a host's ribbon may use for the same renders.
-/// </para>
-/// </remarks>
 public static class BrandChrome
 {
-    /// <summary>Names the one element in the primary button's template that the triggers repaint.</summary>
     private const string FillName = "MantlePlaceFill";
 
-    /// <summary>
-    /// The primary action's look, built once per thread and shared by that thread's windows.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ Per thread, because a <see cref="Style"/> has thread affinity until it is sealed, and a host
-    /// may run more than one UI thread: Revit runs its own, for the vault and sign-in windows, and the
-    /// import window's own. One shared instance was built by whichever thread reached it first and
-    /// would have been refused by the other.
-    /// </remarks>
     [ThreadStatic]
     private static Style? _primaryStyle;
 
-    /// <summary>The gap between the header and the content beneath it.</summary>
     private const double HeaderGap = 12;
 
-    /// <summary>
-    /// What a header costs a window in logical pixels — what to make it taller by.
-    /// </summary>
-    /// <remarks>
-    /// The mark is the tallest thing in the row: the heading is 18pt, which sets about 24 px. So the
-    /// height is the mark's slot plus the gap, and a window that grows by exactly this keeps the
-    /// content it showed before.
-    /// </remarks>
     public const double HeaderHeight = MarkRenders.HeaderSlotPixels + HeaderGap;
 
-    /// <summary>
-    /// Puts the mark and the window's purpose above everything else in <paramref name="root"/>.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ Call it before adding anything else. A <see cref="DockPanel"/> lays its children out in the
-    /// order they were added, so a header added second docks below whatever went first — which is how
-    /// a header ends up under a button row.
-    /// </remarks>
-    /// <param name="root">The window's root panel, still empty.</param>
-    /// <param name="heading">The window's purpose — one of <see cref="WindowLabels"/>'s headings.</param>
     public static void AddHeader(DockPanel root, string heading)
     {
         ArgumentNullException.ThrowIfNull(root);
@@ -77,23 +27,6 @@ public static class BrandChrome
         root.Children.Insert(0, header);
     }
 
-    /// <summary>
-    /// Puts the Mantle Place mark in <paramref name="window"/>'s title bar, in place of the host's logo.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// ⛔ A WPF window given no icon of its own shows the host process's, so without this every window
-    /// of the plugin carries the host's logo, which is what an app store review refuses. Call it from
-    /// every window that has a title bar; the headless suite reads the shim and fails a window that
-    /// does not (<c>ShimWindowTests</c>).
-    /// </para>
-    /// <para>
-    /// The icon is every render of the mark in one multi-frame image, not one render: Windows wants a
-    /// small icon for the title bar and a large one for the taskbar and Alt+Tab, at whatever the
-    /// display's scale makes those in pixels, and WPF takes the closest frame for each rather than
-    /// scaling one render up or down. Which renders exist is <see cref="MarkRenders"/>'s.
-    /// </para>
-    /// </remarks>
     public static void ShowMarkInTitleBar(Window window)
     {
         ArgumentNullException.ThrowIfNull(window);
@@ -104,15 +37,6 @@ public static class BrandChrome
         }
     }
 
-    /// <summary>
-    /// Every render of the mark as the frames of one image, or null when none decodes (a build defect
-    /// the headless suite already fails on).
-    /// </summary>
-    /// <remarks>
-    /// TIFF because it is the one multi-frame format WPF both encodes and decodes with an alpha
-    /// channel. Built per window, on that window's thread: a decoder is bound to the thread that made
-    /// it, and a host may run more than one UI thread (Revit does).
-    /// </remarks>
     private static BitmapFrame? TitleBarIcon()
     {
         TiffBitmapEncoder encoder = new();
@@ -129,24 +53,12 @@ public static class BrandChrome
             return null;
         }
 
-        // Not disposed: the decoder caches every frame on load, and the stream is managed memory.
         System.IO.MemoryStream stream = new();
         encoder.Save(stream);
         stream.Position = 0;
         return new TiffBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
     }
 
-    /// <summary>
-    /// Marks <paramref name="button"/> as the window's one primary action and fills it with the brand
-    /// orange.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ Setting <c>Background</c> alone does not hold. The hosts' WPF ships the Aero2 theme, whose
-    /// default <c>Button</c> template replaces the background with a theme brush on hover and on
-    /// press — so a button painted that way is orange until the cursor touches it and blue-grey
-    /// after. Replacing the template is the only way the colour survives an interaction, and it is
-    /// still one button in one window rather than a restyle.
-    /// </remarks>
     public static void MakePrimary(Button button)
     {
         ArgumentNullException.ThrowIfNull(button);
@@ -162,12 +74,8 @@ public static class BrandChrome
         FrameworkElementFactory fill = new(typeof(Border), FillName);
         fill.SetValue(Border.BackgroundProperty, normal);
 
-        // Aero2's own button is a rounded rectangle, and this one sits in a row beside three of
-        // them. A square-cornered fill would read as a different kind of control rather than as the
-        // same button in the brand's colour, which is the opposite of the point.
         fill.SetValue(Border.CornerRadiusProperty, new CornerRadius(3));
 
-        // The button keeps setting its own Padding, as every other button in the row does.
         fill.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Control.PaddingProperty));
         fill.SetValue(UIElement.SnapsToDevicePixelsProperty, true);
 
@@ -175,8 +83,6 @@ public static class BrandChrome
         content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
         content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
 
-        // Aero2's own template sets this, and a replaced template that does not would draw a literal
-        // underscore the day a face gains an access key.
         content.SetValue(ContentPresenter.RecognizesAccessKeyProperty, true);
         fill.AppendChild(content);
 
@@ -184,8 +90,6 @@ public static class BrandChrome
         template.Triggers.Add(Repaint(UIElement.IsMouseOverProperty, true, Border.BackgroundProperty, hovered));
         template.Triggers.Add(Repaint(ButtonBase.IsPressedProperty, true, Border.BackgroundProperty, pressed));
 
-        // A replaced template replaces the theme's disabled look too. Without this a disabled primary
-        // action would sit there at full brand orange, reading as the most clickable thing on screen.
         template.Triggers.Add(Repaint(UIElement.IsEnabledProperty, false, UIElement.OpacityProperty, 0.45));
 
         Style style = new(typeof(Button));
@@ -209,17 +113,6 @@ public static class BrandChrome
         return brush;
     }
 
-    /// <summary>
-    /// The mark and the window's purpose, on one row.
-    /// </summary>
-    /// <remarks>
-    /// A type rather than a builder method because the mark has to be re-chosen when the display
-    /// scale changes: WPF hands an <see cref="Image"/> logical pixels and scales whatever is in it, so
-    /// the render that is crisp at 100% is a blurred square at 200% (<see cref="MarkRenders"/>). The
-    /// scale is not knowable in the constructor — the window is not in a tree yet — so it is read at
-    /// <see cref="FrameworkElement.Loaded"/> and again whenever the window crosses to a monitor at a
-    /// different scale.
-    /// </remarks>
     private sealed class HeaderRow : StackPanel
     {
         private readonly Image _mark = new()
@@ -230,7 +123,6 @@ public static class BrandChrome
             Margin = new Thickness(0, 0, 10, 0),
         };
 
-        /// <summary>The render currently in <see cref="_mark"/>, so an unchanged scale re-decodes nothing.</summary>
         private string _showing = string.Empty;
 
         internal HeaderRow(string heading)
@@ -249,7 +141,6 @@ public static class BrandChrome
                 VerticalAlignment = VerticalAlignment.Center,
             });
 
-            // 100% until the real scale is known, so the header is never briefly empty.
             Show(1.0);
             Loaded += (_, _) => Show(VisualTreeHelper.GetDpi(this).DpiScaleX);
         }

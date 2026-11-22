@@ -1,8 +1,5 @@
 // Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
-// The heightmap: the headline path, a native Landscape built from the pre-baked heightmap PNG, with
-// the bundle's material-weight layers painted on it when it ships them.
-
 #include "MantlePlaceArtifactHandler.h"
 
 #include "MantlePlaceImportManifest.h"
@@ -21,7 +18,7 @@ class FLandscapeHandler final : public IMantlePlaceArtifactHandler
 public:
 	FName Id() const override { return MantlePlaceArtifactId::Landscape(); }
 	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::Terrain; }
-	FName EquivalenceGroup() const override { return FName(TEXT("terrain")); } // the Landscape and the Mesh stand for the same ground
+	FName EquivalenceGroup() const override { return FName(TEXT("terrain")); }
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactLandscape", "Landscape"); }
 
 	bool ParseFields(const FMantlePlaceParseInput& In, FMantlePlaceVaultManifest& M, FString& OutError) const override
@@ -37,13 +34,8 @@ public:
 		Heightmap.Path = GetString(H, TEXT("path"));
 		Heightmap.Resolution = GetInt(H, TEXT("resolution"));
 		Heightmap.bRow0IsNorth = GetBool(H, TEXT("row0_is_north"), true);
-		Heightmap.Sha256 = GetString(H, TEXT("sha256")); // verified against the extracted bytes at import
+		Heightmap.Sha256 = GetString(H, TEXT("sha256"));
 
-		// What the 16-bit pixels mean, in metres. A 1.x bundle states it in this host's block
-		// (`uint16_mapping`), applied verbatim as before. A 2.0 bundle states it only in the neutral
-		// `file_entries[<heightmap path>].value_mapping` (`min` and `max`, the heights codes 0 and 65535
-		// stand for), the host-block copy being refused by its schema; so it is read from there when
-		// the block does not carry it. Neither path guesses: absent in both, the range stays 0.
 		if (const TSharedPtr<FJsonObject>* MapPtr = GetObject(H, TEXT("uint16_mapping")))
 		{
 			Heightmap.ZMinM = GetNumber(*MapPtr, TEXT("z_min_m"));
@@ -75,8 +67,6 @@ public:
 			&& Heightmap.SectionSizeQuads > 0 && Heightmap.SectionsPerComponent > 0
 			&& Heightmap.ComponentCountX > 0 && Heightmap.ComponentCountY > 0;
 
-		// The schema requires heightmap.sha256, so an absent hash is a malformed manifest, not a
-		// legacy bundle — fail closed rather than silently skip the check.
 		if (Heightmap.bPresent && Heightmap.Sha256.IsEmpty())
 		{
 			OutError = TEXT("manifest hosts.unreal.heightmap has no sha256 (schema-required); refusing to import unverifiable bytes.");
@@ -87,7 +77,6 @@ public:
 
 	bool CrossCheck(const FMantlePlaceVaultManifest& M, FString& OutError) const override
 	{
-		// Consistency: the recommended-size formula must reproduce the stated resolution.
 		if (!M.Heightmap.bPresent)
 		{
 			return true;
@@ -133,11 +122,8 @@ public:
 			return;
 		}
 
-		// Material-weight layers, if the bundle published them. Non-fatal: a landscape with the
-		// drape and no weight layers is what every bundle produced before this, so a decode
-		// failure degrades to that rather than failing the import.
 		TArray<FMantlePlaceWeightPlane> WeightPlanes;
-		FIntPoint WeightRasterSize(0, 0); // what the planes were resampled FROM, for the log
+		FIntPoint WeightRasterSize(0, 0);
 		if (const FMantlePlaceLandscapeLayer* Weights = Manifest.FindLandscapeLayer(TEXT("material_weights")))
 		{
 			FString WeightsErr;
@@ -158,9 +144,6 @@ public:
 			}
 			if (bDecoded)
 			{
-				// ⛔ Hotspot: nearest-neighbour resampling of every weight plane. Measured on
-				// its own rather than inside the landscape phase, because the point of the
-				// baseline is to size this against the shader stall it shares a phase with.
 				const MantlePlaceImportTiming::FScopedPhase ResamplePhase(
 					Ctx.Timeline, MantlePlaceImportTiming::Phase::WeightResample,
 					FString::Printf(TEXT("%d plane(s)"), Images.Num()));
@@ -180,9 +163,6 @@ public:
 			FString::Printf(TEXT("landscape %dx%d"), Resolution, Resolution));
 		FString Err, HeightmapDisk;
 
-		// Inside the landscape phase and measured on its own: laying the heightmap on disk is
-		// an inflate plus a write of the same bytes the decode below then reads back, and it is
-		// the one step of the landscape artifact that happens before control leaves this file.
 		bool bHeightmapOnDisk = false;
 		{
 			const MantlePlaceImportTiming::FScopedPhase HeightmapExtractPhase(
@@ -206,8 +186,6 @@ public:
 			Ctx.Log.Add(FString::Printf(TEXT("Landscape created (%dx%d)."), Resolution, Resolution));
 			if (WeightPlanes.Num() > 0)
 			{
-				// The weight rasters are on the DEM's grid, not the Landscape's, so say what
-				// was resampled onto what rather than letting the numbers look identical.
 				Ctx.Log.Add(FString::Printf(
 					TEXT("Painted %d material weight layer(s), resampled from %dx%d onto the %dx%d grid."),
 					WeightPlanes.Num(), WeightRasterSize.X, WeightRasterSize.Y, Resolution, Resolution));

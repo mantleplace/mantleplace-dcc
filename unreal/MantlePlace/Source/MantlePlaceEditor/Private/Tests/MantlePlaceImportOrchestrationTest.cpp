@@ -18,16 +18,8 @@
 #include "HAL/FileManager.h"
 #include "Subsystems/EditorAssetSubsystem.h"
 
-// The import's orchestration, with no bundle: which artifacts a Mode fans out to, the order the
-// registry runs them in, that a selection of artifacts gates each step, the refusal that must come
-// BEFORE the destructive wipe, the provenance-guarded asset wipe itself, and that a re-import
-// REPLACES the prior actors rather than stacking them. This is the safety net under ImportVaultPackage's shrink to orchestration: the per-artifact
-// work is the handlers' and is covered where it always was (the Logic units, the live-bundle test);
-// what this covers is the wiring between them.
-
 namespace
 {
-/** A handler that does nothing but record being called, so ORDER and GATING can be asserted. */
 class FRecordingHandler final : public IMantlePlaceArtifactHandler
 {
 public:
@@ -88,8 +80,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceOrchestrationFanOutTest::RunTest(const FString& Parameters)
 {
-	// The registry is the explicit, ordered list: the drape first (the landscape adopts its material),
-	// every artifact exactly once, no discovery. Pinning it makes a reorder a visible, reviewed change.
 	const MantlePlaceArtifacts::FHandlers Registry = MantlePlaceArtifacts::MakeAll();
 	TArray<FString> AllIds = IdsIn(Registry, FMantlePlaceImportSelection::Everything());
 	const TArray<FString> ExpectedAll = {
@@ -97,9 +87,6 @@ bool FMantlePlaceOrchestrationFanOutTest::RunTest(const FString& Parameters)
 		TEXT("buildings"), TEXT("road_splines"), TEXT("foliage_points"), TEXT("foliage_scatter"), TEXT("public_records") };
 	TestEqual(TEXT("registry: every artifact, in import order"), FString::Join(AllIds, TEXT(",")), FString::Join(ExpectedAll, TEXT(",")));
 
-	// Mode fan-out. Landscape and Mesh are alternatives for the terrain; the rest is content that
-	// imports whenever the bundle ships it, whichever Mode was asked for -- except the foliage
-	// scatter, generated content that is opt-in.
 	TArray<FString> NoScatter = ExpectedAll;
 	NoScatter.Remove(TEXT("foliage_scatter"));
 	TArray<FString> NoMesh = NoScatter;
@@ -120,7 +107,6 @@ bool FMantlePlaceOrchestrationFanOutTest::RunTest(const FString& Parameters)
 		FString::Join(IdsIn(Registry, FMantlePlaceImportSelection::FromMode(EMantlePlaceImportMode::Both, true)), TEXT(",")),
 		FString::Join(ExpectedAll, TEXT(",")));
 
-	// Per-layer gating is DATA: any subset, and an artifact nobody named stays in by default.
 	FMantlePlaceImportSelection BuildingsOff;
 	BuildingsOff.Excluded.Add(FName(TEXT("buildings")));
 	TestFalse(TEXT("selection: an excluded layer is out"), BuildingsOff.Includes(FName(TEXT("buildings"))));
@@ -136,7 +122,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceOrchestrationRunTest::RunTest(const FString& Parameters)
 {
-	// --- The walk: registry order, three steps, an excluded handler is never called ------------------
 	{
 		TArray<FString> Calls;
 		MantlePlaceArtifacts::FHandlers Handlers;
@@ -162,7 +147,6 @@ bool FMantlePlaceOrchestrationRunTest::RunTest(const FString& Parameters)
 			TEXT("a.Prepare c.Prepare a.Import c.Import a.Finalize c.Finalize"));
 	}
 
-	// --- Nothing to import: decided from the selection, before the wipe -----------------------------
 	{
 		TArray<FString> Calls;
 		const auto Build = [&Calls](bool bLandscapePresent, bool bMeshPresent)
@@ -196,7 +180,6 @@ bool FMantlePlaceOrchestrationRunTest::RunTest(const FString& Parameters)
 			MantlePlaceImportOrchestration::ExplainNothingToImport(Build(false, false), Manifest, NoTerrain).IsEmpty());
 	}
 
-	// --- An archive cut without an artifact's payloads skips it, named, and runs the rest ---------------
 	{
 		TArray<FString> Calls;
 		MantlePlaceArtifacts::FHandlers Handlers;
@@ -230,8 +213,6 @@ bool FMantlePlaceOrchestrationRunTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("left out: as not in this archive"), Log.Num() == 1 && Log[0].Contains(TEXT("not in this archive")));
 		TestTrue(TEXT("left out: and the import did not fail for it"), Context.bAllRequestedSucceeded);
 
-		// The same archive with the part it claims to hold: nothing is skipped here (the pre-check refuses
-		// a missing entry, so a handler never meets one).
 		Manifest.Archive.Parts.Add(TEXT("records.parcels_gpkg@MAX"));
 		Calls.Reset();
 		Log.Reset();
@@ -241,7 +222,6 @@ bool FMantlePlaceOrchestrationRunTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("held: and nothing is logged as skipped"), Log.Num(), 0);
 	}
 
-	// --- Terrain whose only payload the archive lacks is "nothing to import", not an empty import --------
 	{
 		TArray<FString> Calls;
 		MantlePlaceArtifacts::FHandlers Handlers;
@@ -263,14 +243,12 @@ bool FMantlePlaceOrchestrationRunTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("and it does not claim Cesium terrain the archive does not hold"),
 			Refusal.Contains(TEXT("Cesium")) || Refusal.Contains(TEXT("quantized-mesh")));
 
-		// A manifest that points at a tileset does not make a selection hold it.
 		Manifest.Cesium.bHasTerrain = true;
 		Manifest.Cesium.TerrainPath = TEXT("CesiumTerrain/layer.json");
 		TestFalse(TEXT("a pointer to a tileset the selection left out is not offered"),
 			MantlePlaceImportOrchestration::ExplainNothingToImport(
 				Handlers, Manifest, FMantlePlaceImportSelection::Everything()).Contains(TEXT("Cesium")));
 
-		// The same refusal for an archive that DOES hold the Cesium tileset points at streaming it.
 		Manifest.Archive.Parts.Add(TEXT("terrain.cesium@MAX"));
 		const FString CesiumRefusal = MantlePlaceImportOrchestration::ExplainNothingToImport(
 			Handlers, Manifest, FMantlePlaceImportSelection::Everything());
@@ -294,7 +272,7 @@ bool FMantlePlaceOrchestrationActorReplacementTest::RunTest(const FString& Param
 		AddInfo(TEXT("No editor: actor replacement needs an editor world. Skipped."));
 		return true;
 	}
-	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, false,
 		FName(TEXT("MantlePlaceOrchestrationTestWorld")));
 	if (!TestNotNull(TEXT("a throwaway world to import into"), World))
 	{
@@ -332,14 +310,12 @@ bool FMantlePlaceOrchestrationActorReplacementTest::RunTest(const FString& Param
 	SpawnTagged(IdentityA);
 	TestEqual(TEXT("fixture: two actors carry order A's tag"), CountTagged(IdentityA), 2);
 
-	// Replacement: the prior import's actors go, matched on the tag, and only theirs.
 	TestEqual(TEXT("re-import removes exactly order A's actors"),
 		MantlePlaceImportOrchestration::ReplacePriorActors(World, IdentityA, Timeline), 2);
 	TestEqual(TEXT("order A's actors are gone"), CountTagged(IdentityA), 0);
 	TestEqual(TEXT("another order's actor is untouched"), CountTagged(IdentityB), 1);
 	TestTrue(TEXT("an untagged actor the user placed is untouched"), IsValid(Bystander));
 
-	// Idempotent: a second sweep finds nothing, and importing repeatedly does not stack.
 	TestEqual(TEXT("a second sweep removes nothing"),
 		MantlePlaceImportOrchestration::ReplacePriorActors(World, IdentityA, Timeline), 0);
 	for (int32 Round = 0; Round < 3; ++Round)
@@ -349,7 +325,7 @@ bool FMantlePlaceOrchestrationActorReplacementTest::RunTest(const FString& Param
 	}
 	TestEqual(TEXT("three re-imports in a row leave one generation, not three"), CountTagged(IdentityA), 1);
 
-	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	World->DestroyWorld(false);
 	return true;
 }
 
@@ -367,9 +343,8 @@ bool FMantlePlaceOrchestrationAssetWipeTest::RunTest(const FString& Parameters)
 		return true;
 	}
 
-	// A throwaway folder and record, under names no real order can have, removed on the way out.
 	const FString IdentityA = TEXT("zwipe001-aaaa");
-	const FString IdentityB = TEXT("zwipe001-bbbb"); // same eight characters, so the same folder
+	const FString IdentityB = TEXT("zwipe001-bbbb");
 	const FString Folder = FString(TEXT("/Game/MantlePlaceOrchestrationTest")) / MantlePlaceImportNaming::ShortIdentity(IdentityA);
 	const auto Cleanup = [&]()
 	{
@@ -388,23 +363,19 @@ bool FMantlePlaceOrchestrationAssetWipeTest::RunTest(const FString& Parameters)
 	MantlePlaceImportTiming::FTimeline Timeline;
 	Timeline.Start();
 
-	// Nothing there: import freely, nothing to refuse.
 	TestTrue(TEXT("no prior import: no refusal"),
 		MantlePlaceImportOrchestration::WipePriorAssets(IdentityA, Folder, Timeline).IsEmpty());
 
-	// Content with no record (0.3.0 or earlier): refused, and left alone.
 	TestTrue(TEXT("fixture: a content folder"), Assets->MakeDirectory(Folder));
 	TestFalse(TEXT("content with no record is refused"),
 		MantlePlaceImportOrchestration::WipePriorAssets(IdentityA, Folder, Timeline).IsEmpty());
 	TestTrue(TEXT("a refusal leaves the folder"), Assets->DoesDirectoryExist(Folder));
 
-	// Another order's folder (same truncated name): refused, and left alone.
 	TestTrue(TEXT("fixture: order B's record"), WriteRecord(IdentityB));
 	TestFalse(TEXT("another order's folder is refused"),
 		MantlePlaceImportOrchestration::WipePriorAssets(IdentityA, Folder, Timeline).IsEmpty());
 	TestTrue(TEXT("the refusal on another order's folder leaves it"), Assets->DoesDirectoryExist(Folder));
 
-	// Same identity: the folder is replaced, and a second wipe finds nothing to do.
 	TestTrue(TEXT("fixture: order A's record"), WriteRecord(IdentityA));
 	TestTrue(TEXT("same identity: no refusal"),
 		MantlePlaceImportOrchestration::WipePriorAssets(IdentityA, Folder, Timeline).IsEmpty());
@@ -416,4 +387,4 @@ bool FMantlePlaceOrchestrationAssetWipeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
+#endif

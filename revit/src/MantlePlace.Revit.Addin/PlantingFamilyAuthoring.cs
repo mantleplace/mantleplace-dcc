@@ -1,4 +1,3 @@
-// UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -8,43 +7,12 @@ using RevitApplication = Autodesk.Revit.ApplicationServices.Application;
 
 namespace MantlePlace.Revit.Addin;
 
-/// <summary>
-/// The developer command that authors <c>Mantle Place Tree.rfa</c> and <c>Mantle Place Shrub.rfa</c>
-/// from the installed Revit's Planting template, measures them, and saves them for committing. Not
-/// product: no button, no curator ever reaches it.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Set <see cref="DirectoryVariable"/> to a folder and start Revit <b>2025</b>; once Revit has
-/// initialised, this writes both families and one log per family into that folder and changes
-/// nothing else. 2025 because a family saved by a Revit loads in that Revit and every later one,
-/// never an earlier one — the same floor the shim compiles against. The files it writes are committed
-/// as <c>Families/MantlePlaceTree.rfa</c> and <c>Families/MantlePlaceShrub.rfa</c> beside this source
-/// and embedded in the assembly; see <c>revit/README.md</c> for the whole loop.
-/// </para>
-/// <para>
-/// It is code rather than a click-by-click recipe so that each family is a function of this file:
-/// its parameters, formulas and proportions are <see cref="TreeFamily"/>'s or
-/// <see cref="ShrubFamily"/>'s, the same constants the DirectShape fallback builds with, and a change
-/// to them is a re-run rather than a re-draw.
-/// </para>
-/// <para>
-/// ⛔ <b>It is not finished until both logs say the measurements agree.</b> For each family, three
-/// flexes in the family document and one placed instance in a scratch project are measured against
-/// the numbers that drove them. A family whose dimension labels did not take would still save, still
-/// load and still place — every point at the template's default size — so the measurement is the
-/// only proof. One run writes both families, and neither is ready to commit unless both agreed:
-/// each log ends with the run's verdict as well as its own.
-/// </para>
-/// </remarks>
 internal static class PlantingFamilyAuthoring
 {
-    /// <summary>The folder the families and their logs are written to. Unset, nothing happens.</summary>
     internal const string DirectoryVariable = "MANTLEPLACE_AUTHOR_PLANTING_FAMILIES";
 
     private const string TemplateFileName = "Metric Planting.rft";
 
-    /// <summary>The only Revit whose saved family every supported Revit can load.</summary>
     private const string AuthoringRevit = "2025";
 
     private const string TrunkHeightParameter = "Trunk Height";
@@ -55,17 +23,8 @@ internal static class PlantingFamilyAuthoring
     private const string BaseRadiusParameter = "Base Radius";
     private const string ApexRadiusParameter = "Apex Radius";
 
-    /// <summary>How closely a measured extent must agree with the number that drove it.</summary>
     private const double ToleranceM = 0.005;
 
-    /// <summary>
-    /// One family to author: what it is called, its defaults — a plant a curator would recognise if
-    /// they placed one by hand — the sizes it is flexed through, and the point it is placed at.
-    /// </summary>
-    /// <param name="Flexes">
-    /// Height and crown pairs. The first two move height and crown in different directions, so a label
-    /// tied to the wrong parameter shows; the last is the default, which the type saves with.
-    /// </param>
     private sealed record FamilySpec(
         FoliageType Foliage,
         string FamilyName,
@@ -99,10 +58,6 @@ internal static class PlantingFamilyAuthoring
         [(2.5, 1.0), (0.8, 0.45), (1.5, 1.0)],
         new SiteTreePoint(3.0, -2.25, 104.25, 1.8, 1.1, FoliageType.Shrub));
 
-    /// <summary>
-    /// Authors, measures and saves both families. Always writes both logs, whatever happened.
-    /// </summary>
-    /// <returns>Whether both families were saved and every measurement of both agreed.</returns>
     internal static bool Run(RevitApplication application, string outputDirectory)
     {
         ArgumentNullException.ThrowIfNull(application);
@@ -133,12 +88,10 @@ internal static class PlantingFamilyAuthoring
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Nowhere left to say it; the handler this runs in must not take Revit's startup down.
             return false;
         }
     }
 
-    /// <summary>Authors, measures and saves one family, and says in its log whether it agreed.</summary>
     private static bool AuthorOne(RevitApplication application, string outputDirectory, FamilySpec spec, StringBuilder log)
     {
         string familyPath = Path.Combine(outputDirectory, spec.FileName);
@@ -166,7 +119,6 @@ internal static class PlantingFamilyAuthoring
                     AuthorTree(family, spec, log);
                 }
 
-                // `&`, not `&&`: every flex runs and is logged even after one disagrees.
                 agreed = true;
                 foreach ((double heightM, double crownRadiusM) in spec.Flexes)
                 {
@@ -209,26 +161,8 @@ internal static class PlantingFamilyAuthoring
         return agreed;
     }
 
-    /// <summary>
-    /// Whether the saved file names the folder it was made in. It is committed to a public repository.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Revit writes the full path a file was saved to into the file, where the Family Editor never
-    /// shows it and where it is permanent once pushed. A family saved under a user profile carries
-    /// that user's login name and whatever else the path says about the machine, so the command
-    /// refuses to call it ready: point the variable at a neutral folder such as
-    /// <c>C:\MantlePlace</c>.
-    /// </para>
-    /// <para>
-    /// Revit also writes the saving Revit's user name, which for a Revit signed in to an Autodesk
-    /// account is that account's name and cannot be changed from here. It is reported, not refused:
-    /// whoever commits the file decides whether that name may be public.
-    /// </para>
-    /// </remarks>
     private static bool RecordsNoFolder(RevitApplication application, string familyPath, StringBuilder log)
     {
-        // The path Revit records is the one it was just saved to.
         string savedTo = Path.GetFullPath(familyPath);
         string profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         bool neutral = !savedTo.StartsWith(profile, StringComparison.OrdinalIgnoreCase)
@@ -240,7 +174,6 @@ internal static class PlantingFamilyAuthoring
         return neutral;
     }
 
-    /// <summary>Whether this Revit is the one every supported Revit can load a family from.</summary>
     private static bool SavedByTheFloor(RevitApplication application, StringBuilder log)
     {
         bool floor = string.Equals(application.VersionNumber, AuthoringRevit, StringComparison.Ordinal);
@@ -260,8 +193,6 @@ internal static class PlantingFamilyAuthoring
             ? Directory.GetFiles(root, TemplateFileName, SearchOption.AllDirectories)
             : [];
 
-        // FamilyTemplatePath names the install's language folder, where the template is directly.
-        // Searching below it tolerates an install that points one level up.
         return candidates.Length > 0
             ? candidates[0]
             : throw new InvalidOperationException(
@@ -269,9 +200,6 @@ internal static class PlantingFamilyAuthoring
                 + "English family templates, or point Options ▸ File Locations at them.");
     }
 
-    /// <summary>
-    /// Adds the tree's parameters, draws a trunk and a crown, and ties every dimension of both to them.
-    /// </summary>
     private static void AuthorTree(Document family, FamilySpec spec, StringBuilder log)
     {
         FamilyManager manager = family.FamilyManager;
@@ -317,14 +245,6 @@ internal static class PlantingFamilyAuthoring
             $"Authored: trunk extrusion {trunk.Id}, crown blend {crownForm.Id}.");
     }
 
-    /// <summary>
-    /// Adds the shrub's parameters, draws its dome as two stacked blends, and ties every dimension of
-    /// both to them.
-    /// </summary>
-    /// <remarks>
-    /// Two blends meeting at the widest circle, not a revolve: <see cref="Label"/> drives a size by a
-    /// radial dimension on every arc of a sketch, which a circle has and a revolve's profile does not.
-    /// </remarks>
     private static void AuthorShrub(Document family, FamilySpec spec, StringBuilder log)
     {
         FamilyManager manager = family.FamilyManager;
@@ -364,7 +284,6 @@ internal static class PlantingFamilyAuthoring
         Label(family, plan, upper.BottomSketch, crown, log, "dome waist, from above");
         Label(family, plan, upper.TopSketch, apexRadius, log, "dome apex");
 
-        // Yellower and lighter than the tree's crown, so the two read apart in a shaded view.
         Color foliage = new(142, 168, 72);
         Paint(family, lower, "Mantle Place Shrub Foliage", foliage);
         Paint(family, upper, "Mantle Place Shrub Foliage", foliage);
@@ -374,7 +293,6 @@ internal static class PlantingFamilyAuthoring
             $"Authored: lower blend {lower.Id}, upper blend {upper.Id}.");
     }
 
-    /// <summary>The type, and the two instance parameters the planting step writes, at their defaults.</summary>
     private static (FamilyParameter Height, FamilyParameter Crown) Driving(FamilyManager manager, FamilySpec spec, StringBuilder log)
     {
         if (manager.CurrentType is null)
@@ -389,7 +307,6 @@ internal static class PlantingFamilyAuthoring
         return (height, crown);
     }
 
-    /// <summary>The sketch plane forms are drawn on, and the plan their radii are dimensioned in.</summary>
     private static (SketchPlane Plane, ViewPlan Plan) Canvas(Document family)
     {
         Level level = new FilteredElementCollector(family).OfClass(typeof(Level)).Cast<Level>().First();
@@ -401,7 +318,6 @@ internal static class PlantingFamilyAuthoring
         return (plane, plan);
     }
 
-    /// <summary>An instance length parameter, created unless the template already has one of that name.</summary>
     private static FamilyParameter InstanceLength(FamilyManager manager, string name, StringBuilder log)
     {
         if (manager.get_Parameter(name) is { } existing)
@@ -420,11 +336,6 @@ internal static class PlantingFamilyAuthoring
         return manager.AddParameter(name, GroupTypeId.Geometry, SpecTypeId.Length, isInstance: true);
     }
 
-    /// <summary>Labels every arc in a sketch with a radius parameter.</summary>
-    /// <remarks>
-    /// A circle in a sketch is two arcs, and each carries its own radius. Labelling one leaves the
-    /// other at its drawn size, and the loop tears the first time the label changes.
-    /// </remarks>
     private static void Label(Document family, View plan, Sketch sketch, FamilyParameter radius, StringBuilder log, string what)
     {
         int labelled = 0;
@@ -458,7 +369,6 @@ internal static class PlantingFamilyAuthoring
         form.get_Parameter(BuiltInParameter.MATERIAL_ID_PARAM)?.Set(material);
     }
 
-    /// <summary>Drives the family to a size, regenerates, and measures the result against it.</summary>
     private static bool Flex(Document family, FamilySpec spec, double heightM, double crownRadiusM, StringBuilder log)
     {
         FamilyManager manager = family.FamilyManager;
@@ -479,10 +389,6 @@ internal static class PlantingFamilyAuthoring
         return Agrees($"Flex to height {heightM} m, crown {crownRadiusM} m", box, 0.0, heightM, crownRadiusM, log);
     }
 
-    /// <summary>
-    /// Loads the saved family into a scratch project, places one point through
-    /// <see cref="TreeInstances"/> — the planting step's own code — and measures it.
-    /// </summary>
     private static bool VerifyPlacement(RevitApplication application, string familyPath, FamilySpec spec, StringBuilder log)
     {
         Document project = application.NewProjectDocument(Autodesk.Revit.DB.UnitSystem.Metric);
@@ -568,7 +474,6 @@ internal static class PlantingFamilyAuthoring
         return agreed;
     }
 
-    /// <summary>Deletes what the template brought and the family does not use, so the file is small.</summary>
     private static void Purge(Document family, FamilySpec spec, StringBuilder log)
     {
         int purged = 0;
@@ -629,7 +534,6 @@ internal static class PlantingFamilyAuthoring
         return profile;
     }
 
-    /// <summary>A horizontal circle about the family origin as two half-arcs.</summary>
     private static CurveArray Circle(double z, double radius)
     {
         XYZ centre = new(0.0, 0.0, z);

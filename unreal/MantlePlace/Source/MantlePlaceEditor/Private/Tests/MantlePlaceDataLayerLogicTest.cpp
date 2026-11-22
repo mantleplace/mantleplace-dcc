@@ -8,10 +8,6 @@
 #include "MantlePlaceDataLayerLogic.h"
 #include "MantlePlaceImportNaming.h"
 
-// The Data Layer decisions, asserted without a world: which family each artifact declares, what a
-// family's layer is called and where its asset lives, and that nothing is assigned outside World
-// Partition. The world-side round trip is MantlePlace.Import.WorldPartition.DataLayers.
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceDataLayerLogicTest,
 	"MantlePlace.Import.DataLayer.Logic",
@@ -21,7 +17,6 @@ bool FMantlePlaceDataLayerLogicTest::RunTest(const FString& Parameters)
 {
 	using namespace MantlePlaceDataLayerLogic;
 
-	// --- Every handler declares its family, and the families are the ones the bundle is layered in -
 	{
 		TMap<FName, EMantlePlaceLayerFamily> Expected;
 		Expected.Add(FName(TEXT("drape")), EMantlePlaceLayerFamily::Terrain);
@@ -47,7 +42,6 @@ bool FMantlePlaceDataLayerLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- Names: one per family, distinct, and none for None --------------------------------------
 	{
 		TSet<FString> Names;
 		for (const EMantlePlaceLayerFamily Family : AssignableFamilies())
@@ -61,14 +55,12 @@ bool FMantlePlaceDataLayerLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("None is not assignable"), AssignableFamilies().Contains(EMantlePlaceLayerFamily::None));
 	}
 
-	// --- Assignment happens in World Partition only, and only for a real family ------------------
 	{
 		TestTrue(TEXT("a partitioned level assigns a family"), ShouldAssign(true, EMantlePlaceLayerFamily::Buildings));
 		TestFalse(TEXT("a non-partitioned level assigns nothing"), ShouldAssign(false, EMantlePlaceLayerFamily::Buildings));
 		TestFalse(TEXT("None is never assigned"), ShouldAssign(true, EMantlePlaceLayerFamily::None));
 	}
 
-	// --- Scoping: per family, shared across orders, out of every order's force-deleted folder ------
 	{
 		using namespace MantlePlaceImportNaming;
 		const FString Root = TEXT("/Game/MantlePlace");
@@ -88,4 +80,4 @@ bool FMantlePlaceDataLayerLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

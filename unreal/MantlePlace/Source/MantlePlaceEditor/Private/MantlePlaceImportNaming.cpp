@@ -19,9 +19,6 @@ namespace MantlePlaceImportNaming
 {
 	namespace
 	{
-		// The asset-name prefixes, as documented in `unreal/CLAUDE.md`. Ordered most-derived first:
-		// MaterialInstanceConstant is a UMaterialInterface, so it has to be tested before the base
-		// class or every instance would come out `M_`.
 		const TCHAR* PrefixForClass(const UClass* Class)
 		{
 			if (Class == nullptr)
@@ -47,9 +44,6 @@ namespace MantlePlaceImportNaming
 			case ESubfolder::CoverageRasters: return TEXT("CoverageRasters");
 			case ESubfolder::Landcover:       return TEXT("Landcover");
 			}
-			// Unreachable for a valid enumerator. Returning a name rather than an empty string keeps
-			// a future enumerator someone forgot to list out of the import root itself, where the
-			// re-import wipe would then reach the whole import instead of one subfolder.
 			checkNoEntry();
 			return TEXT("Unclassified");
 		}
@@ -67,27 +61,17 @@ namespace MantlePlaceImportNaming
 			return TEXT("Actor");
 		}
 
-		// The abbreviation permitted on outliner-visible labels, and only there. See ADR 0003.
 		const TCHAR* const ActorLabelPrefix = TEXT("MP_");
 
-		// The fixed top segment of the outliner folder. Spelled in full: this is a folder name a
-		// user reads with room to read it, not a label in a narrow column.
 		const TCHAR* const OutlinerRoot = TEXT("MantlePlace");
 
-		// Tags follow the idiom the road splines already use: lower_snake key, `=`, value.
 		const TCHAR* const ImportTagKey = TEXT("mantleplace_import");
 
-		// An identity has to survive being a single package-path segment of a directory that gets
-		// force-deleted. Letters, digits, and the three separators an order id or a hash can
-		// contain. Everything else — a slash, a colon, a dot, whitespace — is refused rather than
-		// stripped, because stripping invents an identity nobody chose.
 		bool IsUsableIdentityChar(const TCHAR Char)
 		{
 			return FChar::IsAlnum(Char) || Char == TEXT('-') || Char == TEXT('_') || Char == TEXT('+');
 		}
 
-		// Long enough that the truncation to eight is meaningful, and long enough that a stray
-		// fragment of a field cannot pass for one.
 		constexpr int32 MinIdentityLength = 8;
 	}
 
@@ -109,8 +93,6 @@ namespace MantlePlaceImportNaming
 
 	FString ResolveIdentity(const FString& OrderId, const FString& ManifestSha256)
 	{
-		// The order first, always: it is the only one of the two that is stable across a rebuild,
-		// which is the whole point of ADR 0002.
 		if (IsUsableIdentity(OrderId))
 		{
 			return OrderId;
@@ -228,9 +210,7 @@ namespace MantlePlaceImportNaming
 			return false;
 		}
 		TArray<FString> Segments;
-		ContentRoot.ParseIntoArray(Segments, TEXT("/"), /*InCullEmpty*/ false);
-		// ParseIntoArray on a leading-slash path yields an empty first element; every element after
-		// it must be a real segment. An empty one means a doubled slash, which would collapse.
+		ContentRoot.ParseIntoArray(Segments, TEXT("/"), false);
 		for (int32 Index = 1; Index < Segments.Num(); ++Index)
 		{
 			const FString& Segment = Segments[Index];
@@ -292,7 +272,6 @@ namespace MantlePlaceImportNaming
 	FString ImportNameFor(const TCHAR* Prefix, const FString& SourceFile)
 	{
 		const FString Base = FPaths::GetBaseFilename(SourceFile);
-		// Idempotent: a source file that is already named to the standard must not become T_T_Drape.
 		return Base.StartsWith(Prefix) ? Base : FString(Prefix) + Base;
 	}
 

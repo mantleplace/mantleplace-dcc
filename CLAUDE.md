@@ -204,6 +204,11 @@ Most facts already have exactly one home. Find it before writing a fact down any
   **0018** the **Revit track goes to 1.0.0** for its storefront; Unreal's numbering is unaffected.
   Amendment A1: any track published to the Autodesk storefront starts at 1.0.0, and the AutoCAD track starts at `autocad-1.0.0`.
   **0019** plugins share **a common core, a .NET home and corpus cases**; each host keeps its **own version track**.
+  **0020** to **0031** the decisions the removed code comments held: **0020** the Revit plugin · **0021** Revit tooling and the shared core ·
+  **0022** the shared .NET core library · **0023** the shared core behind the Revit import · **0024** the shared client and WPF code ·
+  **0025** shared core, import and site handling · **0026** the Unreal editor importer · **0027** Unreal editor import path ·
+  **0028** Unreal editor module and tests · **0029** Unreal auth, cache and vault · **0030** Unreal runtime, corpus reader and Cesium streaming ·
+  **0031** CI, AutoCAD, Blender and gate tooling. **0032** **code carries no comments**; the `comment-ratchet` check holds the line.
   When to write one, and the two edits it takes: [`docs/agents/domain.md`](docs/agents/domain.md).
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the
   authority; never restate a value it owns or hardcode a version in prose — each host's verified

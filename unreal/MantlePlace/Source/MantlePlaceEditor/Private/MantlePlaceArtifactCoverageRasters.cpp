@@ -1,12 +1,5 @@
 // Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
-// `unreal.landscape_layers`: the sub-blocks other than material_weights (water_mask, worldcover,
-// hillshade, ndvi, slope, aspect, canopy_height). Each becomes a UTexture2D carrying its decoded
-// value_mapping and provenance, so a material or PCG graph can read real metres and degrees rather
-// than a 0-65535 ramp. Nothing in this plugin samples them — what they LOOK like is product design,
-// and the contract's obligation is that they are reachable with meaning. material_weights is the
-// landscape handler's: it changes what the Landscape IS.
-
 #include "MantlePlaceArtifactHandler.h"
 
 #include "MantlePlaceCoverageRasterLogic.h"
@@ -18,14 +11,6 @@
 
 namespace
 {
-/** A value mapping — every shape the five encodings use, read into one struct. Absent keys simply stay
- *  at their defaults: the mapping's shape follows the encoding, so reading by key rather than
- *  branching on the encoding means a new encoding is inert rather than lossy.
- *
- *  Two homes state it with the same members: `ue_ready[].value_mapping` in this host's block (1.x) and
- *  the neutral `file_entries[<path>].value_mapping` (1.14.0 on, and the only home in 2.0). They differ in
- *  one word, which this reads either way: the unit is `units` in the first and `value_units` in the
- *  second. */
 FMantlePlaceRasterValueMapping ParseValueMapping(const TSharedPtr<FJsonObject>& Mapping)
 {
 	using namespace MantlePlaceManifestJson;
@@ -56,8 +41,6 @@ FMantlePlaceRasterValueMapping ParseValueMapping(const TSharedPtr<FJsonObject>& 
 			}
 		}
 	}
-	// The neutral mapping may state the legend as an object of pixel code to class name instead
-	// ("a reader accepts both"): the codes are its keys.
 	const TSharedPtr<FJsonObject>* ClassesObject = nullptr;
 	if (Mapping->TryGetObjectField(TEXT("classes"), ClassesObject) && ClassesObject != nullptr)
 	{
@@ -77,10 +60,6 @@ public:
 	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::Coverage; }
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactCoverageRasters", "Coverage rasters"); }
 
-	// The whole block, not just the one entry the importer applies. It is addressed to this host by
-	// name, so leaving parts unparsed is how "published and ignored" happens a second time.
-	// Keys are read off the object and sorted: the block is `additionalProperties: true`, so a
-	// future ninth layer arrives without a code change, and JSON object order is not a contract.
 	bool ParseFields(const FMantlePlaceParseInput& In, FMantlePlaceVaultManifest& M, FString& OutError) const override
 	{
 		using namespace MantlePlaceManifestJson;
@@ -98,7 +77,7 @@ public:
 				const TSharedPtr<FJsonObject>* EntryPtr = GetObject(*LandscapeLayersPtr, *LayerName);
 				if (EntryPtr == nullptr)
 				{
-					continue; // not an object; the schema says it must be, so there is nothing to read
+					continue;
 				}
 				const TSharedPtr<FJsonObject> Entry = *EntryPtr;
 
@@ -131,10 +110,6 @@ public:
 						}
 						else if (const TSharedPtr<FJsonObject> FileEntry = FindFileEntry(In.Root, Raster.Path); FileEntry.IsValid())
 						{
-							// A 2.0 bundle: the host block states where the PNG is and whether its bytes are
-							// intact, and what its pixels mean is the file's own neutral entry, whose
-							// `encoding` is the one the host block used to carry. A 1.x block's own
-							// statement, above, is applied verbatim and wins.
 							if (const TSharedPtr<FJsonObject>* NeutralPtr = GetObject(FileEntry, TEXT("value_mapping")))
 							{
 								Raster.ValueMapping = ParseValueMapping(*NeutralPtr);
@@ -154,18 +129,11 @@ public:
 		return true;
 	}
 
-	// An MPB 3.x bundle's layers are its paint layers alone, which the Landscape applies; this step is
-	// then a named skip (FMantlePlaceVaultManifest::FormatSkips), never an empty run. 2.x sets no skip.
 	bool IsPresent(const FMantlePlaceVaultManifest& M) const override
 	{
 		return M.LandscapeLayers.bPresent && !M.FormatSkips.Contains(Id());
 	}
 
-	// Every landscape layer and every UE-ready companion, including the layers this importer parses
-	// but does not yet apply: the check is on the bundle's bytes, not on what today's importer
-	// happens to read.
-	// The files whose roles are these textures' roles: the UE-ready PNGs the importer reads, and a layer's
-	// source raster only when it has none. The source GeoTIFF is declared for integrity, never imported.
 	void CollectSourcePaths(const FMantlePlaceVaultManifest& M, TArray<FString>& Out) const override
 	{
 		for (const FMantlePlaceLandscapeLayer& Layer : M.LandscapeLayers.Layers)
@@ -200,11 +168,6 @@ public:
 		}
 	}
 
-	// Independent of Mode: they describe the ground rather than being a terrain representation, so
-	// like the buildings and road splines they import whenever the bundle ships them. Per-raster
-	// warn-and-skip, deliberately unlike the fail-closed weights path — a missing analysis channel
-	// costs a texture, not a wrong Landscape. (Their bytes are still fail-closed: a sha256 mismatch
-	// aborted in the integrity pre-check, before any actor.)
 	void Import(FMantlePlaceImportContext& Ctx) override
 	{
 		int32 RastersImported = 0;
@@ -244,8 +207,6 @@ public:
 		}
 		if (SkippedLayers.Num() > 0)
 		{
-			// Name the skipped set as a set, not only one line each: a reader scanning the log for
-			// what they got needs the gap to be as visible as the success count.
 			Ctx.Log.Add(FString::Printf(TEXT("Coverage rasters not imported: %s."), *FString::Join(SkippedLayers, TEXT(", "))));
 		}
 	}

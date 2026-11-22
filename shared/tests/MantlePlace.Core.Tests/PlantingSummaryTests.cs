@@ -2,10 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The one sentence the planting step ends on: one count of tree points, a breakdown by foliage type
-/// when the manifest publishes one, and the single-total suffixes it has always had.
-/// </summary>
 internal static class PlantingSummaryTests
 {
     private static PlantingTally Base => new()

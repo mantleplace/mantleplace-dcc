@@ -30,9 +30,6 @@ FMantlePlaceDeliveryFacts Declared(const TCHAR* UnitSystem, const TCHAR* LinearU
 	return Facts;
 }
 
-/** The corpus's reference manifest with `delivery` replaced by `DeliveryJson` (or removed, when
- *  it is empty), parsed by the real reader. The reference fixture is what makes Parse accept the
- *  document at all; nothing here asserts anything else about it. */
 FMantlePlaceVaultManifest ParseReferenceWith(FAutomationTestBase& T, const FString& DeliveryJson)
 {
 	const FString Path = FPaths::Combine(
@@ -63,14 +60,13 @@ FMantlePlaceVaultManifest ParseReferenceWith(FAutomationTestBase& T, const FStri
 	T.TestTrue(FString::Printf(TEXT("the reference manifest parses (%s)"), *Error), Manifest.bValid);
 	return Manifest;
 }
-} // namespace
+}
 
 bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 {
 	const FString FixedFrameLine =
 	    TEXT("Unreal content: metres, engine-native. The delivered GIS and CAD files are in feet.");
 
-	// --- A metric order: one line, and nothing about this host's frame, which is the delivery's ---
 	{
 		const TArray<FString> Lines = FMantlePlaceDeliveryLogic::DescribeDelivery(Declared(TEXT("metric"), TEXT("m"), 32613));
 		TestEqual(TEXT("metric: one line"), Lines.Num(), 1);
@@ -80,7 +76,6 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- An imperial order on a US-survey-foot State Plane grid: both lines, in that order ---
 	{
 		const TArray<FString> Lines = FMantlePlaceDeliveryLogic::DescribeDelivery(Declared(TEXT("imperial"), TEXT("ftUS"), 6543));
 		TestEqual(TEXT("sp_ftus: two lines"), Lines.Num(), 2);
@@ -91,7 +86,6 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- The international foot is a different unit, and is named as one ---
 	{
 		const TArray<FString> Lines = FMantlePlaceDeliveryLogic::DescribeDelivery(Declared(TEXT("imperial"), TEXT("ft"), 2223));
 		TestEqual(TEXT("sp_ft: two lines"), Lines.Num(), 2);
@@ -101,7 +95,6 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- The `local_ft` tier names no CRS, and the line says so rather than inventing one ---
 	{
 		const TArray<FString> Lines = FMantlePlaceDeliveryLogic::DescribeDelivery(Declared(TEXT("imperial"), TEXT("ft"), 0));
 		TestEqual(TEXT("local_ft: two lines"), Lines.Num(), 2);
@@ -111,7 +104,6 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- From 1.3.0 the CRS is the published label, verbatim, over the code beside it ---
 	{
 		FMantlePlaceDeliveryFacts Facts = Declared(TEXT("imperial"), TEXT("ftUS"), 6543);
 		Facts.Label = TEXT("NAD83(2011) / Colorado Central (ftUS)");
@@ -122,7 +114,6 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("label: printed verbatim"), Lines[0], FString(TEXT("Bundle delivery: Imperial · US survey feet · NAD83(2011) / Colorado Central (ftUS)")));
 		}
 
-		// The `local_ft` tier's label is a fixed phrase, and it names the grid the code cannot.
 		FMantlePlaceDeliveryFacts Local = Declared(TEXT("imperial"), TEXT("ft"), 0);
 		Local.Label = TEXT("Local grid (feet)");
 		const TArray<FString> LocalLines = FMantlePlaceDeliveryLogic::DescribeDelivery(Local);
@@ -133,12 +124,10 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- A bundle built before the block existed says nothing, rather than guessing metric ---
 	{
 		TestEqual(TEXT("no delivery block: no lines"), FMantlePlaceDeliveryLogic::DescribeDelivery(FMantlePlaceDeliveryFacts()).Num(), 0);
 	}
 
-	// --- A value this host has no word for is shown as published, and is not taken for feet ---
 	{
 		const TArray<FString> Lines = FMantlePlaceDeliveryLogic::DescribeDelivery(Declared(TEXT("nautical"), TEXT("fathom"), 9999));
 		TestEqual(TEXT("unknown values: one line, no fixed-frame guess"), Lines.Num(), 1);
@@ -148,7 +137,6 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- An imperial order whose files' unit has no word here is not said to be in feet ---
 	{
 		const TArray<FString> Lines = FMantlePlaceDeliveryLogic::DescribeDelivery(Declared(TEXT("imperial"), TEXT("yd"), 6543));
 		TestEqual(TEXT("imperial, unknown unit: one line, no feet claim"), Lines.Num(), 1);
@@ -158,7 +146,6 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- A declared block missing a field it requires says which, rather than a blank segment ---
 	{
 		const TArray<FString> Lines = FMantlePlaceDeliveryLogic::DescribeDelivery(Declared(TEXT(""), TEXT(""), 32613));
 		TestEqual(TEXT("missing values: one line"), Lines.Num(), 1);
@@ -168,9 +155,6 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- The reader carries the block verbatim, and a null CRS is no CRS ---
-	// The reference manifest is the corpus's, which a release zip does not ship: there the lines
-	// above have run and this block is skipped, with a warning naming the corpus.
 	if (!MantlePlaceConformanceCorpus::SkipWithoutCorpus(*this))
 	{
 		const FMantlePlaceVaultManifest Imperial = ParseReferenceWith(*this,
@@ -199,4 +183,4 @@ bool FMantlePlaceDeliveryLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

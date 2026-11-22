@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""A 3.x bundle (`spec/format.md`): the tree, the names, one level and the catalog.
-
-Most runs read a schema directory that holds none for 3.0.0, so the manifest is held to the format
-text's rules alone (`schema.pending`, at info) and each rule is seen on its own. The members are the
-served 3.0.0 schema's: the catalog in `catalog`, the level in `level`.
-"""
 
 from __future__ import annotations
 
@@ -26,7 +20,6 @@ ODBL = {"odbl_role": "database", "license": "ODbL-1.0",
 def bundle3(extra: dict[str, bytes] | None = None, *, level: object = "Max",
             drop_entries: tuple[str, ...] = (), add_entries: tuple[str, ...] = (),
             **manifest_extra: object) -> dict[str, bytes]:
-    """A 3.0 bundle: the root pair, three files of the tree, and a catalog that matches them."""
     files: dict[str, bytes] = {
         "Readme.md": b"A synthetic bundle.\n",
         "Elevation/Elevation.tif": b"elevation",
@@ -124,7 +117,7 @@ class AValidBundle(Case):
         self.assertIn("schema.version-unpublished", self.codes(self.run_folder(files)))
 
     def test_a_record_the_aoi_lacks_is_simply_absent(self) -> None:
-        self.assertEqual("pass", self.run_folder(bundle3()).verdict)  # no Records pair at all
+        self.assertEqual("pass", self.run_folder(bundle3()).verdict)
 
     def test_every_level_is_one_level(self) -> None:
         for level in ("Max", "Med", "Min"):
@@ -237,7 +230,6 @@ class TheCatalog(Case):
         self.assertRejects(self.run_folder(files), "catalog.absent")
 
     def test_the_2x_member_name_is_not_a_3x_catalog(self) -> None:
-        """The catalog is the schema's `catalog`; a 3.x manifest that states `file_entries` has none."""
         files = bundle3()
         document = json.loads(files["Manifest.json"])
         document["file_entries"] = document.pop("catalog")
@@ -270,7 +262,6 @@ class TheCatalog(Case):
         self.assertRejects(self.run_folder(files), "catalog.count-missing")
 
     def test_a_row_that_gives_no_count_needs_none(self) -> None:
-        """`Readme.md`, `Manifest.json` and `Terrain.mtl` say `None` in the file table."""
         files = bundle3({"Elevation/Terrain.mtl": b"material"})
         document = json.loads(files["Manifest.json"])
         document["catalog"]["Elevation/Terrain.mtl"] = {**TERMS, "sha256": sha256(b"material")}

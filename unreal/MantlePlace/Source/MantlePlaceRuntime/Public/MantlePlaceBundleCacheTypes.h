@@ -133,7 +133,6 @@ struct FMantlePlaceCachedBundle
 	EMantlePlaceCacheState State = EMantlePlaceCacheState::NotCached;
 };
 
-/** The size and digest a zip is held against; the bHas* flags carry the "null = unknown" rule. */
 struct FMantlePlaceCacheExpectation
 {
 	bool bHasSha256 = false;

@@ -12,13 +12,8 @@ class IHttpRequest;
 class IHttpResponse;
 class FArchive;
 
-/**
- * Native (C++) download delegates, broadcast alongside the Blueprint events so a C++ orchestrator
- * (the editor vault-import facade) can observe the streamed download without a reparented Blueprint
- * child. Not UPROPERTY (native delegates cannot be) - bind with AddUObject.
- */
-DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnDownloadCompleteNative, bool /*bSuccess*/, const FString& /*LocalBundlePath*/, const FString& /*Message*/);
-DECLARE_MULTICAST_DELEGATE_OneParam(FMantlePlaceOnDownloadProgressNative, const FMantlePlaceDownloadProgress& /*Progress*/);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnDownloadCompleteNative, bool, const FString&, const FString&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FMantlePlaceOnDownloadProgressNative, const FMantlePlaceDownloadProgress&);
 
 /**
  * Local vault bundle cache for the vault-in-editor import flow
@@ -84,17 +79,8 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mantle Place|Vault")
 	bool IsCachedAndValid(const FMantlePlaceVaultItem& Item) const;
 
-	/**
-	 * True iff the slot holds a valid download of Item at Level: an MPB 3.0 order's chosen level, or empty
-	 * for a 2.x download. A slot holding another level is not this one (FMantlePlaceBundleCacheLogic::StateAtLevel).
-	 */
 	bool IsCachedAndValidAtLevel(const FMantlePlaceVaultItem& Item, const FString& Level) const;
 
-	/**
-	 * True iff this item's cached zip is the host's download VIEW rather than the whole archive (its
-	 * sidecar says so). The caller that checks a view's manifest digest asks first: a whole archive
-	 * served from the cache has a different manifest and is checked against the listing instead.
-	 */
 	bool CachedHoldsView(const FMantlePlaceVaultItem& Item) const;
 
 	/** Delete this item's cache dir (user-owned cache management). Returns true if it is now gone. */
@@ -113,58 +99,39 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "Mantle Place|Vault")
 	void OnCacheStateResolved(const FMantlePlaceVaultItem& Item, const FMantlePlaceCachedBundle& Cached);
 
-	//~ Native download delegates (C++ orchestrator hooks; fired alongside the Blueprint events).
 	FMantlePlaceOnDownloadCompleteNative OnDownloadCompleteNative;
 	FMantlePlaceOnDownloadProgressNative OnDownloadProgressNative;
 
-	//~ Begin UObject interface
 	virtual void BeginDestroy() override;
-	//~ End UObject interface
 
 protected:
-	/** Absolute cache root: <ProjectSavedDir>/<CacheSubDir>. */
 	FString GetCacheRoot() const;
 
 private:
-	/** HTTP streamed-download handlers (game thread under CompleteOnGameThread policy). */
 	void HandleDownloadProgress(uint64 BytesReceived);
 	void HandleDownloadComplete(TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> Request,
 		TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response, bool bConnectedSuccessfully);
 
-	/** Close the streamed writer, drop the request, and (on failure) delete the partial file. */
 	void FinishStream(bool bDeletePartFile);
 
-	/** Report a failed download: clean up the partial file and fire OnDownloadComplete(false). */
 	void FailDownload(const FString& Message);
 
-	/** Fire the native delegate + the Blueprint event together (single source of truth per signal). */
 	void NotifyDownloadComplete(bool bSuccess, const FString& LocalBundlePath, const FString& Message);
 	void NotifyDownloadProgress(const FMantlePlaceDownloadProgress& Progress);
 
-	/** sha256 of a file, or empty when missing/over the size cap (size-only path). */
 	FString ComputeFileSha256(const FString& Path, int64& OutSizeBytes) const;
 
-	/**
-	 * Resolve cache state for an item (stat + sidecar, no event). Shared by Inspect/IsValid/Download. With
-	 * WantedLevel, the slot is valid only when it holds that level (empty: a 2.x download); without it,
-	 * whatever level the slot holds (the list row's badge).
-	 */
 	FMantlePlaceCachedBundle ResolveCached(const FMantlePlaceVaultItem& Item, const FString* WantedLevel = nullptr) const;
 
-	/** The in-flight request (single at a time; the HTTP module also retains it). */
 	TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> ActiveRequest;
 
-	/** The streamed-to-disk sink for the active download (the .part file). */
 	TSharedPtr<FArchive> ResponseFileWriter;
 
-	/** Active-download bookkeeping (valid only while a request is in flight). */
 	FMantlePlaceVaultItem ActiveItem;
 	FString ActivePartPath;
 	FString ActiveFinalPath;
 	uint64 ExpectedTotalBytes = 0;
-	/** The active download is the host's view, and its length as the platform stated it (0 = unstated). */
 	bool bActiveIsView = false;
 	int64 ActiveViewSizeBytes = 0;
-	/** The 3.0 level the active download holds, recorded in the sidecar; empty for a 2.x download. */
 	FString ActiveLevel;
 };

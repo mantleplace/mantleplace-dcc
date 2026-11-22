@@ -3,48 +3,18 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Client;
 
-/// <summary>Where the Realtime socket is and the key that opens it, or why neither is known.</summary>
-/// <param name="Location">The Realtime base; empty when <paramref name="WhyNot"/> is set.</param>
-/// <param name="PublishableKey">The publishable key; empty when <paramref name="WhyNot"/> is set. Never logged.</param>
-/// <param name="WhyNot">The reason the connected host stays off; <c>null</c> when both values are known.</param>
 public sealed record RealtimeValues(string Location, string PublishableKey, string? WhyNot);
 
-/// <summary>
-/// Resolves the Realtime location and key the connected host joins with: a local override first, then
-/// the platform's published route.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <b>Order.</b> Either override set (<c>realtimeUrl</c> or <c>realtimePublishableKey</c> in
-/// <c>config.json</c>) means the curator or a developer chose, and the route is not asked: a half-set
-/// pair stays off with the message it always gave, because a configured location with the production
-/// key is a guess at which key opens which socket. With neither set the route is read, and a pair is
-/// taken whole or not at all.
-/// </para>
-/// <para>
-/// <b>Off, with a reason.</b> A route that is unreachable, answers a non-success status, times out or
-/// answers a body that does not carry both values leaves the host off, as an unconfigured install is
-/// today. The reason comes back for the caller to log; the key is never in it.
-/// </para>
-/// <para>
-/// The route is public and unauthenticated, so the request carries no credential of any kind.
-/// </para>
-/// </remarks>
 public static class RealtimeLocator
 {
     private static readonly TimeSpan RouteTimeout = TimeSpan.FromSeconds(10);
 
-    /// <summary>True when a local override leaves nothing to ask the platform.</summary>
     public static bool HasOverride(MantlePlaceEndpoints endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         return !string.IsNullOrWhiteSpace(endpoints.RealtimeUrl) || !string.IsNullOrWhiteSpace(endpoints.RealtimePublishableKey);
     }
 
-    /// <summary>Resolves the values. Never throws for a network or a body; honours <paramref name="cancel"/>.</summary>
-    /// <param name="endpoints">The loaded endpoints: the override, and the platform base to read the route from.</param>
-    /// <param name="handler">For tests; the shared client when <c>null</c>.</param>
-    /// <param name="cancel">Cancels the read.</param>
     public static async Task<RealtimeValues> ResolveAsync(
         MantlePlaceEndpoints endpoints,
         HttpMessageHandler? handler = null,

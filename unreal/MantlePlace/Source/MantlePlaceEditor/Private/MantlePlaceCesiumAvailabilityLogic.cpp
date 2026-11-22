@@ -14,7 +14,6 @@ namespace
 	const TCHAR* const EndXField = TEXT("endX");
 	const TCHAR* const EndYField = TEXT("endY");
 
-	/** Unsigned integer, digits only — see the note on ParseTilePath. */
 	bool IsUnsignedInteger(const FString& Text)
 	{
 		if (Text.IsEmpty())
@@ -31,7 +30,6 @@ namespace
 		return true;
 	}
 
-	/** The tiles of one zoom level, as a set, for comparing against what a level declares. */
 	using FTileSet = TSet<TTuple<int32, int32>>;
 
 	TMap<int32, FTileSet> GroupByZoom(const TArray<FMantlePlaceCesiumTile>& Tiles, int32& OutMaxZoom)
@@ -46,7 +44,6 @@ namespace
 		return ByZoom;
 	}
 
-	/** One declared rectangle, inclusive on both ends. int64 so a deep whole-world area fits. */
 	struct FRect
 	{
 		int64 StartX = 0, StartY = 0, EndX = 0, EndY = 0;
@@ -64,10 +61,10 @@ namespace
 bool FMantlePlaceCesiumAvailabilityLogic::ParseTilePath(
 	const FString& TilePath, FMantlePlaceCesiumTile& OutTile)
 {
-	const FString YStr = FPaths::GetBaseFilename(TilePath);              // {y}
-	const FString XDir = FPaths::GetPath(TilePath);                      // .../{z}/{x}
-	const FString XStr = FPaths::GetCleanFilename(XDir);                 // {x}
-	const FString ZStr = FPaths::GetCleanFilename(FPaths::GetPath(XDir)); // {z}
+	const FString YStr = FPaths::GetBaseFilename(TilePath);
+	const FString XDir = FPaths::GetPath(TilePath);
+	const FString XStr = FPaths::GetCleanFilename(XDir);
+	const FString ZStr = FPaths::GetCleanFilename(FPaths::GetPath(XDir));
 	if (!IsUnsignedInteger(ZStr) || !IsUnsignedInteger(XStr) || !IsUnsignedInteger(YStr))
 	{
 		return false;
@@ -97,8 +94,6 @@ TArray<TSharedPtr<FJsonValue>> FMantlePlaceCesiumAvailabilityLogic::BuildAvailab
 		TArray<TSharedPtr<FJsonValue>> LevelRects;
 		if (const FTileSet* Level = ByZoom.Find(Zoom))
 		{
-			// Sorted, so the written file is a deterministic function of the tiles on disk: a diff of
-			// two rewrites of the same bundle is empty, and the reuse check upstream means something.
 			TArray<TTuple<int32, int32>> Sorted = Level->Array();
 			Sorted.Sort([](const TTuple<int32, int32>& A, const TTuple<int32, int32>& B)
 				{
@@ -133,17 +128,12 @@ bool FMantlePlaceCesiumAvailabilityLogic::IsAvailabilityConsistent(
 	const TArray<TSharedPtr<FJsonValue>>* Declared = nullptr;
 	if (!Root.IsValid() || !Root->TryGetArrayField(AvailableField, Declared) || Declared == nullptr)
 	{
-		// No `available` at all. Cesium treats that as "ask and find out", which is the 404 storm
-		// this workaround exists to prevent, so it is not consistent with anything.
 		OutDiff.UndeclaredTileCount = Tiles.Num();
 		return false;
 	}
 
-	// Every level is walked even once a mismatch is known, because the counts are what make the log
-	// line an upstream bug report rather than a complaint.
 	bool bConsistent = (Declared->Num() == MaxZoom + 1);
 
-	// Present tiles at a zoom the file has no entry for are undeclared, whatever the rest says.
 	for (const TPair<int32, FTileSet>& Level : ByZoom)
 	{
 		if (Level.Key >= Declared->Num())
@@ -166,7 +156,6 @@ bool FMantlePlaceCesiumAvailabilityLogic::IsAvailabilityConsistent(
 			continue;
 		}
 
-		// Read every rectangle first, so the level's size is known before anything is expanded.
 		TArray<FRect> LevelRects;
 		int64 LevelArea = 0;
 		for (const TSharedPtr<FJsonValue>& RectValue : *Rects)
@@ -188,9 +177,6 @@ bool FMantlePlaceCesiumAvailabilityLogic::IsAvailabilityConsistent(
 				continue;
 			}
 
-			// Inclusive on both ends, which is what makes the whole-world claim eight tiles rather
-			// than three. int64 because a low-zoom whole-world rectangle is small but a deep one is
-			// not.
 			FRect Parsed;
 			Parsed.StartX = StartX;
 			Parsed.StartY = StartY;
@@ -215,9 +201,6 @@ bool FMantlePlaceCesiumAvailabilityLogic::IsAvailabilityConsistent(
 		}
 		OutDiff.UndeclaredTileCount += UndeclaredHere;
 
-		// A bundle's levels hold a handful of tiles, so a level declaring more than this many is
-		// already far from what is on disk. Expanding it would cost memory to learn nothing, so its
-		// absent tiles are counted per rectangle instead — exact unless two rectangles overlap.
 		constexpr int64 ExpansionLimit = 1 << 20;
 		int64 AbsentHere = 0;
 		if (LevelArea > ExpansionLimit)

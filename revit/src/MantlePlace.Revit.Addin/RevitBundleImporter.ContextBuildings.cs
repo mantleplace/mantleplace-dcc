@@ -1,4 +1,3 @@
-// UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
 using System.Diagnostics;
 using System.IO;
 using Autodesk.Revit.DB;
@@ -6,47 +5,10 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// The context-building step: each building's own extrusion read out of the site model and created
-// in the project as a Generic Model element, in chunks, each stamped with its IFC GlobalId.
 internal sealed partial class RevitBundleImporter
 {
-    /// <summary>What a context building is called in the project.</summary>
     private const string ContextBuildingName = "Context Building";
 
-    /// <summary>
-    /// Every building in the site model as its own Generic Model element, the context terrain left
-    /// out — created in chunks, each building stamped.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The site model is converted the way the link step converts it, and nothing more: no geometry
-    /// is computed here. Each building's solid is the extrusion the platform published, read back out
-    /// of Revit's own IFC import and handed to a <see cref="DirectShape"/> in this project. Which
-    /// elements are buildings is <see cref="SiteModelReader"/>'s decision, from the IFC's text; this
-    /// finds each one again by the GlobalId Revit's import records on it.
-    /// </para>
-    /// <para>
-    /// ⛔ <b>Placed as the link was placed.</b> A link instance is created origin to origin, so the
-    /// geometry is copied with no transform at all: the buildings land exactly where the link put
-    /// them, and a placement computed here would be one the boundary refuses (<c>HPS-33</c>).
-    /// </para>
-    /// <para>
-    /// ⛔ <b>The converted site model never outlives the slice that opened it.</b> Every building's
-    /// solids are cloned out of it and it is closed before the first chunk, because a document held
-    /// open across slices is closed only if the step ends through <see cref="StagedImport"/> — and an
-    /// import abandoned from the event handler does not, which would leave an invisible document open
-    /// for the rest of the session. It is saved only when this import also links the site model
-    /// (<see cref="ImportStep.SavesLinkCompanion"/>), and then only as that link's version-qualified
-    /// companion <c>.rvt</c> (<see cref="SiteCompanionPath"/>), so the link step finds the conversion
-    /// on disk instead of making a second one.
-    /// </para>
-    /// <para>
-    /// One transaction per chunk and a yield after each commit, for the trees' reason
-    /// (<see cref="ImportVegetation"/>); every building carries its stamp
-    /// (<see cref="BuildingIdentity"/>), so a re-import of the same build creates only what a cancel
-    /// left missing, and an import where nothing is missing never converts the site model at all.
-    /// </para>
-    /// </remarks>
     private IEnumerable<StepProgress> ImportContextBuildings(ImportStep step)
     {
         if (HeightsRefused(step))
@@ -89,11 +51,8 @@ internal sealed partial class RevitBundleImporter
             yield break;
         }
 
-        // Before the site model is opened: that one call is most of the step, and the window can only
-        // time it. Nothing to copy means it is never opened, and nothing is announced above.
         Announce(SlowStepNotice.For(step.Kind, _terrainVertexCount, globalIds.Count));
 
-        // A companion already on disk is the link's to reuse, and is never overwritten here.
         string? companion = step.SavesLinkCompanion
             ? SiteCompanionPath.ForVersion(ifcPath, _application.VersionNumber)
             : null;
@@ -109,15 +68,11 @@ internal sealed partial class RevitBundleImporter
 
         if (solids.Count == 0)
         {
-            // One sentence rather than N "could not be found": this is Revit's import not recording
-            // the GlobalId where this looks, not N buildings each going missing.
             Say($"Revit's import of the site model ({step.EntryName}) recorded no IFC GlobalId matching any of "
                 + $"the {globalIds.Count:N0} building(s) the file declares, so no context building was copied.");
             yield break;
         }
 
-        // Converting the site model was one uninterruptible call. The window gets its count before
-        // the first chunk rather than after it.
         yield return new StepProgress(0, globalIds.Count);
 
         ElementId category = DirectShapeCategory(BuiltInCategory.OST_GenericModel);
@@ -129,8 +84,6 @@ internal sealed partial class RevitBundleImporter
             BuildingChunkResult result = CreateBuildingChunk(category, solids, globalIds, chunk, stem, step.ExpectedSha256);
             if (!result.Committed)
             {
-                // The swallower already said why, and the rollback took this chunk. The chunks before
-                // it stand, stamped; a re-import of this build picks up from here.
                 Say($"Stopped the context buildings after {created:N0} of {globalIds.Count:N0}: Revit did not "
                     + "accept a chunk.");
                 yield break;
@@ -174,11 +127,8 @@ internal sealed partial class RevitBundleImporter
         Say(summary + ".");
     }
 
-    /// <summary>What one chunk's transaction did.</summary>
     private readonly record struct BuildingChunkResult(bool Committed, int Created, int Unstamped, int Unbuilt);
 
-    /// <summary>Creates, stamps and commits one chunk of context buildings.</summary>
-    /// <remarks>A building Revit's import did not carry is skipped here and counted by the caller.</remarks>
     private BuildingChunkResult CreateBuildingChunk(
         ElementId category,
         Dictionary<string, List<GeometryObject>> solids,
@@ -210,8 +160,6 @@ internal sealed partial class RevitBundleImporter
 
             created++;
 
-            // Comments is the building's identity for the NEXT import. One it could not stamp is
-            // kept — it is real — and cannot be recognised later, which the summary says.
             Parameter? comments = shape.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS);
             if (comments is null || comments.IsReadOnly || !comments.Set(BuildingIdentity.Stamp(stem, sha256, globalId)))
             {
@@ -224,10 +172,6 @@ internal sealed partial class RevitBundleImporter
             : new BuildingChunkResult(false, 0, 0, 0);
     }
 
-    /// <summary>
-    /// The solids as they stand in the document: the site model's own coordinates are the bundle's
-    /// frame, so a bundle built at an offset (<see cref="Anchoring"/>) has them translated by it.
-    /// </summary>
     private List<GeometryObject> AtAnchor(List<GeometryObject> geometry)
     {
         if (!Anchoring.MovesGeometry)
@@ -240,38 +184,6 @@ internal sealed partial class RevitBundleImporter
         return [.. geometry.Select(item => item is Solid solid ? SolidUtils.CreateTransformed(solid, move) : item)];
     }
 
-    /// <summary>
-    /// Converts the site model, clones the solids of every building in <paramref name="globalIds"/>
-    /// out of it, saves it as <paramref name="companion"/> when one is given, and closes it — or says
-    /// why it could not be converted.
-    /// </summary>
-    /// <returns>
-    /// The solids by GlobalId, holding only the buildings Revit's import carried; <c>null</c> when
-    /// the conversion failed.
-    /// </returns>
-    /// <remarks>
-    /// <para>
-    /// The same conversion the link step runs, and like it, outside any transaction on the host
-    /// document. A separate method because a Revit exception has to be caught here, and an iterator
-    /// cannot catch around a <c>yield</c>.
-    /// </para>
-    /// <para>
-    /// Revit's IFC import writes an element's GlobalId to the built-in <c>IfcGUID</c> parameter. The
-    /// by-name lookup is the same parameter reached another way, for an import that adds it as a
-    /// plain parameter rather than the built-in one; neither is a guess about which element is a
-    /// building, which was settled from the file before this ran.
-    /// </para>
-    /// <para>
-    /// Solids only, each cloned, because nothing may reach into the site model once it is closed. A
-    /// mesh has no clone to make, and the site model publishes extrusions, which Revit imports as
-    /// solids; a building that came back as anything else is counted as one Revit would not accept.
-    /// </para>
-    /// </remarks>
-    /// <param name="companion">
-    /// Where the link step of this import will look for the conversion, or <c>null</c> to save
-    /// nothing. A save that fails costs only the second conversion it was saving: the link step
-    /// converts for itself, as it did before.
-    /// </param>
     private Dictionary<string, List<GeometryObject>>? ReadBuildingSolids(
         ImportStep step,
         string ifcPath,
@@ -318,8 +230,6 @@ internal sealed partial class RevitBundleImporter
         }
         catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException or IOException)
         {
-            // The exception says only that a transaction failed to commit; the error that made it
-            // fail, and so why there are no context buildings, is the one the session hook caught.
             Say($"Could not open the site model to copy its buildings ({step.EntryName}): {ex.Message}");
             if (SiteModelRefusal(step.EntryName, errorsBefore, "the context buildings were not imported") is { } why)
             {
@@ -334,13 +244,6 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>
-    /// Saves the converted site model as the link's companion, or says the link will convert it again.
-    /// </summary>
-    /// <remarks>
-    /// Its own catch, so a refused save never costs the buildings already read out of the model.
-    /// What is saved is the conversion the link step makes, unchanged: the buildings were only read.
-    /// </remarks>
     private void SaveLinkCompanion(Document siteModel, string companion)
     {
         try
@@ -354,8 +257,6 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>Every solid in <paramref name="geometry"/>, instances included, cloned free of its document.</summary>
-    /// <remarks>An instance's geometry is read in the site model's coordinates, the frame every other element is in.</remarks>
     private static void CloneSolids(GeometryElement geometry, List<GeometryObject> into)
     {
         foreach (GeometryObject item in geometry)
@@ -372,14 +273,6 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>
-    /// The Comments of every DirectShape in the project. Whatever is not a building stamp is ignored
-    /// by <see cref="BuildingIdentity"/>, so there is no category filter here to get wrong.
-    /// </summary>
-    /// <remarks>
-    /// The same read the tree step makes, kept here rather than shared: the trees are due to stop
-    /// being DirectShapes, and a building step that borrowed their collector would lose it with them.
-    /// </remarks>
     private List<string?> ExistingBuildingComments()
     {
         using FilteredElementCollector collector = new(_document);

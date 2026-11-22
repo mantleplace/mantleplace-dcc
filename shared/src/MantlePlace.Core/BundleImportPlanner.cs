@@ -2,23 +2,8 @@ using System.Globalization;
 
 namespace MantlePlace.Core;
 
-/// <summary>
-/// Turns a manifest plus a bundle's entry list into a <see cref="BundleImportPlan"/>. Pure.
-/// </summary>
 public static class BundleImportPlanner
 {
-    /// <summary>
-    /// The promised files of a 3.0 bundle that Revit's import steps read, by path from the bundle root:
-    /// what a 3.0 download asks for (<see cref="DownloadLevels.BuildRequestBody"/>). Declared once,
-    /// here, beside the steps.
-    /// </summary>
-    /// <remarks>
-    /// One file per step's source, as each <see cref="ImportStepKind"/> reads it in 2.x: the terrain's
-    /// TIN and the published contours, the site model (linked, and its buildings copied), the roads,
-    /// land use, land cover and water layers, the tree points, the imagery drape, the flood zones and
-    /// the steep ground. <c>Manifest.json</c> comes with every download, named or not. A file joins
-    /// the list when a step that reads it lands, and leaves it when the last step that reads it goes.
-    /// </remarks>
     public static IReadOnlyList<string> ThreeFiles { get; } =
     [
         "Elevation/Terrain.dxf",
@@ -34,17 +19,6 @@ public static class BundleImportPlanner
         "Records/Floodplain.gpkg",
     ];
 
-    /// <summary>
-    /// What a plan of an MPB 3.0 bundle leaves out that a plan of a 2.x bundle of the same site
-    /// carries, each with its reason: the release notes for <c>revit-1.2.0</c> name every one
-    /// (<c>revit/docs/release-notes-1.2.0.md</c>), and a test holds the two together.
-    /// </summary>
-    /// <remarks>
-    /// An item with a <see cref="ThreeLeftOutItem.Kind"/> is a step whose 2.x input has no 3.0 file,
-    /// skipped as <see cref="SkipReasonCode.NotInFormat"/> with the item's reason. The rest are facts a
-    /// planned step goes without. Each is left out because Revit never converts a georeferenced file
-    /// and never works out a value the manifest does not state (<c>HPS-33</c>).
-    /// </remarks>
     public static IReadOnlyList<ThreeLeftOutItem> ThreeLeftOut { get; } =
     [
         new(
@@ -69,43 +43,10 @@ public static class BundleImportPlanner
             "MPB 3.0 publishes no build threshold; the steep ground is still drawn from Elevation/Slope.gpkg."),
     ];
 
-    /// <summary>The reason a 3.0 plan's terrain and contours have no crop window: the left-out item's.</summary>
     private static string ThreeNoCrop => ThreeLeftOut[1].Why;
 
-    /// <summary>
-    /// How far a corroborated extent may disagree with the image's own grid, in pixels per axis.
-    /// </summary>
-    /// <remarks>
-    /// Two pixels is comfortably above the rounding that is always present — a drape whose grid is
-    /// derived by dividing an extent by a GSD lands within a fraction of a pixel — and nowhere near
-    /// the disagreement it exists to catch. The failure this guards is a drape cut to the imagery's
-    /// own footprint rather than to the DEM's, which differs by hundreds of metres, not centimetres.
-    /// A tolerance tight enough to trip on rounding would be worse than none: it would be switched
-    /// off the first time it fired.
-    /// </remarks>
     internal const double ExtentTolerancePixels = 2.0;
 
-    /// <summary>
-    /// Plans an import.
-    /// </summary>
-    /// <param name="manifest">A manifest already parsed by <see cref="BundleManifestReader"/>.</param>
-    /// <param name="entryNames">Every entry name in the bundle archive.</param>
-    /// <param name="probeImageSize">
-    /// Reads an archive entry's pixel dimensions from its header, by the entry name this planner
-    /// resolved — <c>null</c> when the entry is not a readable image.
-    /// </param>
-    /// <remarks>
-    /// <paramref name="probeImageSize"/> is REQUIRED, with no forgiving overload, for the reason
-    /// <c>LocalBundleArchive.Extract</c>'s digest argument is: the last optional integrity input this
-    /// codebase had was parsed and then consumed by nothing at all, because an overload let callers
-    /// not mention it. A defaulted probe would let a future call site plan a drape whose
-    /// extent nothing corroborated, and it would plan it silently.
-    /// </remarks>
-    /// <param name="choice">
-    /// The layers the curator ticked in the import window, or <c>null</c> for all of them — which is
-    /// the plan the checklist is built from, and the unattended path's plan. A layer left out gets no
-    /// step and one skip saying it was a choice.
-    /// </param>
     public static BundleImportPlan Plan(
         BundleManifest manifest,
         IEnumerable<string> entryNames,
@@ -122,8 +63,6 @@ public static class BundleImportPlanner
             return new BundleImportPlan { CanImport = false, BlockedReason = manifest.Error };
         }
 
-        // A 3.x reading is planned by the same code as a 2.x manifest, from the view that fills each
-        // step's pointer from the catalog and the frames; a 2.x manifest is planned as it always was.
         BundleManifest? three = null;
         if (RevitThreeView.IsThree(manifest))
         {
@@ -136,10 +75,6 @@ public static class BundleImportPlanner
         List<SkippedImport> skipped = [];
         List<string> notImported = [];
 
-        // Decided FIRST, appended LAST. Whether a drape will run decides which type the terrain is
-        // built on (ImportStep.ToposolidType), so the answer has to exist before the terrain step
-        // does — while the drape's place at the end of the list, and its skips' place at the end of
-        // theirs, stay exactly where they were.
         List<ImportStep> drapeSteps = [];
         List<SkippedImport> drapeSkipped = [];
         PlanImageryDrape(manifest, entries, drapeSteps, drapeSkipped, probeImageSize, choice.LevelOf(ImportLayer.ImageryDrape));
@@ -157,15 +92,6 @@ public static class BundleImportPlanner
         PlanSharedCoordinates(manifest, steps, skipped);
         PlanSiteLocation(manifest, steps, skipped);
 
-        // The drawn plans, after the terrain and before the road and water subdivisions: the two land
-        // plans, land use first, then the hazard plan, flood before steep because steep ground is a
-        // hatch drawn over the flood zones' fill. Before the subdivisions because in Revit 2027 a plan
-        // made over a terrain costs more the more subdivisions it carries, many times more after the
-        // land cuts than over bare ground, and nothing a plan draws depends on one. After the terrain
-        // because the terrain step may make the level a plan is drawn on the lowest of.
-        // The crop is the drape's, planned above whether or not the curator keeps the drape, because
-        // every plan is cropped to the published rectangle rather than to whatever this import
-        // happened to texture.
         FootprintExtent? crop = drapeSteps.FirstOrDefault()?.Drape is { } placed
             ? new FootprintExtent(placed.LeftM, placed.BottomM, placed.RightM, placed.TopM)
             : null;
@@ -174,30 +100,16 @@ public static class BundleImportPlanner
         PlanHazard(manifest, entries, steps, skipped, HazardLayer.FloodZones, crop, choice.LevelOf(ImportLayer.FloodZones));
         PlanHazard(manifest, entries, steps, skipped, HazardLayer.SteepGround, crop, choice.LevelOf(ImportLayer.SteepGround));
 
-        // With the drawn plans, before the layers that build the model, for the plans' reason. Its
-        // filter is a rule on Comments, so it finds what later steps stamp as well as what earlier
-        // ones did. It has no layer of its own, so the checklist never takes it out; it is taken out
-        // below when nothing else is left for it to find.
         steps.Add(new ImportStep { Kind = ImportStepKind.SiteContextView });
 
         PlanSiteContext(manifest, entries, steps, skipped, drapePlanned, choice);
 
-        // Every import, whatever else it carries: the order and the build are worth recording even
-        // when the manifest names no sources, and a record is how the next import finds the note
-        // this one wrote. After the layers it credits, and before the drape, which stays last.
         steps.Add(new ImportStep
         {
             Kind = ImportStepKind.AttributionAndProvenance,
             Provenance = ProjectProvenance.From(manifest),
         });
 
-        // Last, and last for three reasons. The drape needs the terrain step to have run before it —
-        // it writes the photograph into the material that step built the toposolid wearing; it also
-        // drapes the subdivisions this import created, which must exist before they
-        // can be draped; and it is the one kind whose Revit API surface has never executed
-        // anywhere, so if any step is going to fail it should be the one with nothing queued behind
-        // it. Execute runs a transaction per step and does not catch, so the order of this list is
-        // also the order of what survives.
         steps.AddRange(drapeSteps);
         skipped.AddRange(drapeSkipped);
 
@@ -209,19 +121,11 @@ public static class BundleImportPlanner
         LeaveOut(choice, steps, skipped);
         NoteAvailableButNotImported(manifest, entries, notImported);
 
-        // Every kind but the settings kinds changes the document's model, so any one of them is an
-        // import. Those are excluded because they build nothing — a bundle whose only planned steps
-        // were the survey point, the site location and a drafting view of credits would report
-        // "imported" over an empty model. The parity layers are on the creating side of that line: a
-        // bundle carrying roads and no terrain still has something to put in the document. So is the
-        // drape, which builds no geometry but does write a material, and retypes ground not already
-        // on the imagery type. Decided after the checklist has taken out what the curator left out.
         bool canImport = steps.Exists(step => ImportStepKinds.ImportsContent(step.Kind));
         if (!canImport)
         {
             steps.RemoveAll(step => step.Kind == ImportStepKind.SiteContextView);
 
-            // A 3.0 plan names every step it leaves out (ExplainThreeAbsences).
             if (three is not null)
             {
                 skipped.Add(new SkippedImport
@@ -233,15 +137,10 @@ public static class BundleImportPlanner
             }
         }
 
-        // Last, once the checklist has taken out what the curator left out: the role of what each
-        // remaining step makes, so the importer knows which to file in the ODbL container.
         foreach (ImportStep step in steps)
         {
             step.Odbl = OdblContent.RoleOf(manifest.FileEntries, step);
 
-            // An MPB 3.0 step carries its file's catalog count, which the checklist turns into an
-            // estimate. The count is the download's own, at the level chosen before it: nothing here
-            // thins a file to fit a budget.
             if (three is not null && step.EntryName.Length > 0)
             {
                 step.Cost = SlowStepNotice.CostOfCatalogCount(step.Kind, three.Contents?.Find(step.EntryName)?.Count);
@@ -263,17 +162,6 @@ public static class BundleImportPlanner
         };
     }
 
-    /// <summary>
-    /// Puts an MPB 3.x plan's absences in the bundle's terms: the step 3.0 has no file for says so, and
-    /// a step whose file the bundle lacks names the file, with the manifest's reason, verbatim, where it
-    /// lists the file as not held (<c>spec/format.md</c> §11).
-    /// </summary>
-    /// <remarks>
-    /// Run on the whole plan, before the checklist takes anything out, so the curator's choice still
-    /// wins over an absence the way it does for a 2.x plan. Each step that reads a file ends up planned
-    /// or skipped, the site model's link included, which a 2.x plan folds into the copy's one skip: a
-    /// 3.0 plan names every step it leaves out (the release notes for <c>revit-1.2.0</c>).
-    /// </remarks>
     private static void ExplainThreeAbsences(BundleManifest three, List<ImportStep> steps, List<SkippedImport> skipped)
     {
         foreach (ThreeLeftOutItem item in ThreeLeftOut)
@@ -303,7 +191,6 @@ public static class BundleImportPlanner
                 continue;
             }
 
-            // The terrain's DXF linked as CAD is a fallback, listed only when the TIN fails.
             if (kind != ImportStepKind.ToposurfaceFromSurfaceDxf && !steps.Exists(step => step.Kind == kind))
             {
                 skipped.Add(absent);
@@ -327,22 +214,6 @@ public static class BundleImportPlanner
                 };
     }
 
-    /// <summary>
-    /// Takes the layers the curator did not choose out of the plan, leaving one skip for each that
-    /// says so.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Planned in full first and removed after, so every decision above — which terrain tier wins,
-    /// whether the drape's extent holds — is taken exactly as it is for an import of everything. Only
-    /// the terrain's type depends on the choice, and that is decided before the terrain step exists.
-    /// </para>
-    /// <para>
-    /// A layer left out loses its skips as well as its steps: the tiers a terrain passed over are not
-    /// news once no terrain was wanted. A layer the bundle does not carry keeps the skip it has,
-    /// because "missing from the zip" is truer than "not chosen" and the window never offered it.
-    /// </para>
-    /// </remarks>
     private static void LeaveOut(ImportLayerChoice choice, List<ImportStep> steps, List<SkippedImport> skipped)
     {
         foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
@@ -363,38 +234,6 @@ public static class BundleImportPlanner
         }
     }
 
-    /// <summary>
-    /// Three tiers, and only ever one of them: the surface DXF's TIN vertices, then the points file,
-    /// then the same DXF as a linked CAD instance the user converts by hand. Running two would build
-    /// the same surface twice.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// ⛔ <b>The TIN is preferred over the points file, and it is not a fidelity-for-time trade.</b>
-    /// Both describe the same ground, cut by the same emitter, and on the bundle this was measured
-    /// against the TIN is the <em>cheaper</em> of the two: 75,203 vertices against the grid's 80,940,
-    /// and 73,537 against 80,372 once both are cleaned. What differs is where the vertices are. The
-    /// points file is a perfectly regular lattice — 285 × 284 at exactly 5.000 m, its distinct X and
-    /// Y counts multiplying to the point count exactly — so every cell's four corners are cocircular,
-    /// Delaunay triangulation is degenerate, and the triangulator picks slivers and fans arbitrarily.
-    /// That is what makes the terrain read as faceted no matter how well the imagery is draped. TIN
-    /// vertices are adaptive, dense on slopes and sparse on flats, and therefore in general position.
-    /// </para>
-    /// <para>
-    /// The points file keeps its place as tier 2 rather than being retired: it is <c>local_enu</c>
-    /// already, so it needs no origin, and it is the only topo path a bundle with no publishable
-    /// georeference has. The DXF is <c>absolute_projected</c> — eastings and northings around
-    /// 500 000 m, where Revit's precision warnings start — so tier 1 needs a
-    /// <see cref="SiteFrame"/> to subtract the published origin, and falls through when there is
-    /// none rather than dropping the site 500 km from the project origin.
-    /// </para>
-    /// <para>
-    /// ⛔ Tier 3 is the same file as tier 1 under a different kind, and that is deliberate rather
-    /// than a duplicate: a DXF this plugin cannot parse into a TIN can still be linked for the user
-    /// to convert, and the two kinds have different extraction lifetimes because Revit keeps a path
-    /// to a link and no path to a toposolid.
-    /// </para>
-    /// </remarks>
     private static void PlanToposurface(
         BundleManifest manifest,
         BundleEntryIndex entries,
@@ -403,9 +242,6 @@ public static class BundleImportPlanner
         TerrainToposolidType toposolidType,
         FidelityLevel level)
     {
-        // The crop rides on the step, so the shim never has to work out what the area of interest was
-        // — and so the case that matters, a bundle whose frame cannot project one, is a null a
-        // headless test can assert rather than a branch inside Revit (HPS-02).
         SiteFrame? frame = SiteFrame.For(manifest);
         SurfaceCropWindow? crop = SurfaceCrop.For(manifest, frame);
 
@@ -434,9 +270,6 @@ public static class BundleImportPlanner
             return;
         }
 
-        // An unreadable unit is a statement about the BUNDLE, not about one file. Falling back to
-        // the surface DXF here would turn the fail-closed check into a detour: the DXF carries the
-        // same terrain, cut by the same emitter, at the same suspect scale. Stop instead.
         if (pointsUnitUnreadable)
         {
             skipped.Add(tinSkip!);
@@ -479,25 +312,6 @@ public static class BundleImportPlanner
         skipped.Add(dxfSkip!);
     }
 
-    /// <summary>
-    /// Tier 1: the toposolid built from the surface DXF's TIN vertices, when the bundle publishes
-    /// everything needed to place them.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Two gates on top of the usual artifact checks, both about the frame. The file is
-    /// <c>absolute_projected</c>, so it needs an origin to be measured against and that origin's CRS
-    /// has to be the one the coordinates are in. Neither is derived: the frame token and the CRS are
-    /// both published, and <see cref="SiteFrame"/> only ever subtracts (<c>HPS-33</c>).
-    /// </para>
-    /// <para>
-    /// ⛔ An unreadable unit here falls through to the points file rather than suppressing it. That
-    /// is not a hole in the rule two tiers below — that rule refuses to fall back from a suspect file
-    /// onto <em>the same terrain from the same emitter at the same suspect scale</em>. The points
-    /// file is a different deliverable carrying its own unit declaration, and if that one is also
-    /// unreadable the rule fires there, where it always did.
-    /// </para>
-    /// </remarks>
     private static bool TryPlanTin(
         BundleManifest manifest,
         BundleEntryIndex entries,
@@ -531,8 +345,6 @@ public static class BundleImportPlanner
             return false;
         }
 
-        // An MPB 3.x bundle has no points file to fall back on (ThreeLeftOut), so its terrain DXF is
-        // linked for the curator instead.
         bool three = manifest.SurfaceDxf?.Family is not null;
         string instead = three
             ? "so the terrain's DXF was linked instead."
@@ -597,26 +409,6 @@ public static class BundleImportPlanner
         return true;
     }
 
-    /// <summary>
-    /// The site model, two ways: its buildings copied into the project, and the site model linked.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Both are planned, as every layer is, and the checklist decides which run. The copy's row starts
-    /// checked and the link's does not (<see cref="ImportLayers.OnByDefault"/>): a link as well as the
-    /// copies shows every building twice, once selectable and once not.
-    /// </para>
-    /// <para>
-    /// An absent site model is one skip, under the kind that runs by default. Two lines for one
-    /// missing file would read as two problems.
-    /// </para>
-    /// <para>
-    /// Both read the site model through a Revit conversion of the IFC, one of the slowest things an
-    /// import does, and each used to make its own. When the curator keeps both, the copy, which runs
-    /// first, saves its conversion where the link looks for one
-    /// (<see cref="ImportStep.SavesLinkCompanion"/>), and the link converts nothing.
-    /// </para>
-    /// </remarks>
     private static void PlanSiteIfc(
         BundleManifest manifest,
         BundleEntryIndex entries,
@@ -650,21 +442,11 @@ public static class BundleImportPlanner
             ExpectedSha256 = copy.ExpectedSha256,
             HeightDatum = HeightDatums.For(ImportStepKind.LinkSiteIfc, manifest.SiteIfc, manifest),
 
-            // The same file, so the same levels, applied once: a level the copy refused never reaches
-            // here, and only MAX, or a level naming it, reaches a site model step
-            // (FidelityCuts.CanTake), so the link is the file in full at whichever its row shows.
             Levels = copy.Levels,
             Level = copy.Level,
         });
     }
 
-    /// <summary>
-    /// Shared coordinates are published only from values the manifest pre-derived. This host does
-    /// not compute a survey point, and it does not read one out of another host's block to get one
-    /// (HPS-33) — but it DOES read its own, so a v19 bundle on any tier is placed
-    /// from <c>revit.georeference.origin.projected</c> and only a bundle that publishes no origin
-    /// at all yields the named skip.
-    /// </summary>
     private static void PlanSharedCoordinates(
         BundleManifest manifest,
         List<ImportStep> steps,
@@ -679,12 +461,6 @@ public static class BundleImportPlanner
                 {
                     Origin = origin,
 
-                    // An unstated rotation is an axis-aligned grid. That is not HPS-20's "unknown
-                    // is not zero" being waived — it is the only tier that omits the field
-                    // (`delivery.local_origin`, which has no rotation to state), and the block that
-                    // does state one says zero by construction: the emitters reproject per-vertex,
-                    // so meridian convergence is already absorbed into the coordinates. A published
-                    // non-zero value is still applied verbatim rather than assumed away.
                     AngleRadians = (manifest.Georeference.GridRotationDeg ?? 0.0) * Math.PI / 180.0,
                 },
             });
@@ -701,23 +477,6 @@ public static class BundleImportPlanner
         });
     }
 
-    /// <summary>
-    /// The project's latitude and longitude, read from <c>hosts.revit.georeference.origin</c> and
-    /// applied verbatim (<c>HPS-33</c>), with the time zone from <c>location.time_zone</c> when the
-    /// bundle publishes one.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The own block only. <c>delivery.local_origin</c> also carries a lon/lat, and the survey point
-    /// falls back to it; the site location does not, because nothing asked this host to read one
-    /// there, and a sun placed from an unaudited field is wrong in every renderer with no way to tell.
-    /// </para>
-    /// <para>
-    /// A pair off the globe is refused here rather than handed on: Revit throws on a latitude past a
-    /// pole, which would cost only this step, but it silently wraps a longitude past the
-    /// antimeridian, which would put the sun over somewhere else.
-    /// </para>
-    /// </remarks>
     private static void PlanSiteLocation(
         BundleManifest manifest,
         List<ImportStep> steps,
@@ -765,30 +524,6 @@ public static class BundleImportPlanner
         });
     }
 
-    /// <summary>
-    /// The road centrelines, the two layers cut as subdivisions — the water bodies and the road
-    /// surfaces, in that order — and the trees. The land use and land cover are drawn on land plans,
-    /// planned with the hazard plan (<see cref="PlanLandPlan"/>).
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// All three carry coordinates that are absolute — lon/lat for the vector layers, the delivery
-    /// CRS for the tree points — where every artifact this host imported before them was either
-    /// already local (the toposurface points) or placed by Revit's own link machinery (the DXF, the
-    /// IFC). So they share a gate the older kinds do not have: without the manifest's pre-derived
-    /// origin there is no frame to place them in, and this host does not work one out for itself
-    /// (<c>HPS-33</c>).
-    /// </para>
-    /// <para>
-    /// They are planned independently of the terrain. A road centreline carries its own draped Z, so
-    /// it is correct with or without a toposolid under it, and coupling the two would mean a bundle
-    /// whose points file was superseded silently lost its roads as well.
-    /// </para>
-    /// </remarks>
-    /// <param name="drapePlanned">
-    /// Whether the plan's drape will run, handed to the two subdivision steps
-    /// (<see cref="ImportStep.DrapePlanned"/>).
-    /// </param>
     private static void PlanSiteContext(
         BundleManifest manifest,
         BundleEntryIndex entries,
@@ -838,17 +573,6 @@ public static class BundleImportPlanner
             level: choice.LevelOf(ImportLayer.Planting));
     }
 
-    /// <summary>
-    /// The road surfaces, or the one absence this host may not report as "no roads".
-    /// </summary>
-    /// <remarks>
-    /// <c>road_polygons</c> is derived from <c>road</c> and is best-effort: it can be absent from a
-    /// bundle whose area is full of roads (<c>spec/format.md</c> §6.3). So when the base layer is
-    /// there and the surfaces are not, the skip says the surfaces were not derived rather than
-    /// offering the re-download that <see cref="PlanPlacedArtifact"/>'s absence suggests — there is
-    /// nothing in the vault to re-download. A bundle with neither keeps the ordinary absence: the
-    /// area really may have no roads.
-    /// </remarks>
     private static void PlanRoadPolygons(
         BundleManifest manifest,
         SiteFrame? frame,
@@ -886,15 +610,6 @@ public static class BundleImportPlanner
             level: level);
     }
 
-    /// <summary>
-    /// One land layer on its build's land plan, or why it is not in this bundle in a form this host
-    /// can draw (<c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>).
-    /// </summary>
-    /// <remarks>
-    /// Placed exactly as every polygon layer is, refusals and all (<see cref="PlanPlacedArtifact"/>),
-    /// from this host's own copy first; its absence is the vector set's (<see cref="VectorAbsence"/>).
-    /// Not draped and needing no terrain: a filled region belongs to its plan, not to the ground.
-    /// </remarks>
     private static void PlanLandPlan(
         BundleManifest manifest,
         BundleEntryIndex entries,
@@ -919,33 +634,9 @@ public static class BundleImportPlanner
             level: level);
     }
 
-    /// <summary>
-    /// What the land and hazard plans' build token is made from: the job id, and the order id when the
-    /// manifest has none. A 3.0 manifest states no job, only its order (§9.3), so without this every
-    /// 3.0 plan would be named <c>unidentified</c> and two orders in one project would share one.
-    /// </summary>
     private static string BuildIdentity(BundleManifest manifest) =>
         string.IsNullOrWhiteSpace(manifest.JobId) ? manifest.OrderId : manifest.JobId;
 
-    /// <summary>
-    /// One hazard layer on the hazard plan, or why it is not in this bundle in a form this host can
-    /// draw.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Placed exactly as every own-block layer is, refusals and all (<see cref="PlanPlacedArtifact"/>):
-    /// a hazard layer is only ever read from this host's own copy.
-    /// </para>
-    /// <para>
-    /// An absent layer is explained by its own readiness verdict (MPB 1.4.0), and never read as a
-    /// statement about the site. The area being outside the flood map's coverage, or having no such
-    /// ground, is the bundle saying there is none — said in the log and not listed as unavailable,
-    /// since no vault can change it. Not yet picked in the vault keeps the vault's remedy. A bundle from
-    /// before 1.4.0 has no verdict: one that carries the layer's GeoPackage was cut before this host
-    /// had a copy and is listed for a re-download, and one that carries nothing of it is silent,
-    /// because a bundle that old carried a flood block wherever the flood map had one.
-    /// </para>
-    /// </remarks>
     private static void PlanHazard(
         BundleManifest manifest,
         BundleEntryIndex entries,
@@ -1009,24 +700,6 @@ public static class BundleImportPlanner
             : (SkipReasonCode.DeclaredAbsent, $"No {label} in this bundle.");
     }
 
-    /// <summary>
-    /// Resolves one artifact whose coordinates have to be brought into the bundle's frame, or
-    /// explains why they cannot be.
-    /// </summary>
-    /// <remarks>
-    /// The CRS check is the point of this method. A bundle cut on a State-Plane foot tier publishes
-    /// its origin in that CRS, while the GeoJSON stays lon/lat — so the frame genuinely cannot place
-    /// it. The tree points pass because they follow the delivery CRS, and the check reads the CRS
-    /// they state rather than trusting that they do: subtracting one CRS's easting from another's
-    /// yields a number that looks like a coordinate and is ~2000 km wrong. Failing closed here is
-    /// the same rule <c>HPS-35</c> applies to an unreadable unit one level up.
-    /// </remarks>
-    /// <param name="absence">
-    /// What to say when <paramref name="artifact"/> is <c>null</c> because the bundle declares the
-    /// layer absent (<see cref="SkipReasonCode.DeclaredAbsent"/>), or <c>null</c> for the vault's remedy.
-    /// </param>
-    /// <param name="hazard">What a hazard step carries beyond its file; <c>null</c> for every other kind.</param>
-    /// <param name="landPlan">What a land plan step carries beyond its file; <c>null</c> for every other kind.</param>
     private static void PlanPlacedArtifact(
         BundleManifest manifest,
         BundleArtifact? artifact,
@@ -1056,9 +729,6 @@ public static class BundleImportPlanner
             return;
         }
 
-        // The level first, so a pointer level's file meets every refusal below exactly as the entry's
-        // own would: it states its own frame, and is placed only once the block shows it is this
-        // host's (HPS-53). The step keeps the entry's levels for the window, whichever file it reads.
         FidelityLevels? published = artifact.Levels;
         LevelApplication leveled = FidelityCuts.Apply(artifact, kind, level, label);
         if (leveled.File is not { } file)
@@ -1073,7 +743,6 @@ public static class BundleImportPlanner
         string? entry = entries.Resolve(artifact.Path);
         if (entry is null)
         {
-            // A carrier the archive lacks does not take the layer with it when its GeoJSON file is there.
             if (artifact.IsGeoPackage && artifact.GeoJsonFallback is { } sibling)
             {
                 PlanPlacedArtifact(
@@ -1105,9 +774,6 @@ public static class BundleImportPlanner
             return;
         }
 
-        // Three routes into the frame, and each has its own refusal. This host's own copy is in its
-        // own frame by declaration, and is placed once the block shows that it is (HPS-53). A shared
-        // lon/lat layer takes the one projection HPS-45 permits. The tree points name their CRS.
         LinearUnit units = LinearUnit.Unspecified;
         LayerFrame? layer = null;
         (SkipReasonCode Code, string Reason)? refusal;
@@ -1115,11 +781,6 @@ public static class BundleImportPlanner
         ImportStep? geoJsonFallback = null;
         if (artifact.Family is { } family)
         {
-            // An MPB 3.x file is in the frame its family settles (spec/format.md §4), so there is no
-            // fallback to read and nothing to resolve: a host-ready file is offsets from the site origin
-            // in metres, and a georeferenced one is absolute in the order's CRS and units, which the
-            // origin is stated in too. A georeferenced file is placed against the origin only when the
-            // two units agree; this host converts neither.
             refusal = family == FileFamily.HostReady ? null : ThreeUnitRefusal(artifact, frame, label, out units);
             if (family == FileFamily.HostReady)
             {
@@ -1133,10 +794,6 @@ public static class BundleImportPlanner
         }
         else if (artifact.IsGeoPackage)
         {
-            // The carrier is absolute in the origin's own unit, so an origin that states none leaves
-            // nothing to subtract in: this host does not derive a unit (CLAUDE.md, no placement values
-            // here), it refuses the carrier and reads the layer from the GeoJSON file where the
-            // bundle holds one.
             if (frame.Origin.LinearUnit == LinearUnit.Unspecified)
             {
                 if (artifact.GeoJsonFallback is { } sibling)
@@ -1158,9 +815,6 @@ public static class BundleImportPlanner
                 return;
             }
 
-            // The shared carrier states its frame in the file, not in the manifest: absolute, in the
-            // origin's own CRS and unit. The origin is what it is placed against; its CRS is checked
-            // against the origin's when the table is read.
             refusal = null;
             layer = CarrierLayer(frame);
             units = layer.Value.Unit;
@@ -1181,9 +835,6 @@ public static class BundleImportPlanner
         }
         else
         {
-            // A projected file names its CRS, and its units are resolved the way the terrain's are
-            // (TryResolveUnits) — which is what stands a foot delivery's trees on the ground rather
-            // than at 3.28 times its height.
             refusal = frame.CanPlaceProjected(GeoProjection.TryParseEpsg(artifact.HorizontalFrame) ?? 0)
                 ? UnplaceableUnits(artifact, manifest, frame, label, out units)
                 : CrsRefusal(artifact, frame, label);
@@ -1208,10 +859,6 @@ public static class BundleImportPlanner
             VerticalUnits = verticalUnits,
             DrapePlanned = drapePlanned,
 
-            // Carried for every placed artifact rather than branched on the one kind that has it:
-            // only `landcover.tree_points` publishes a foliage vocabulary, so this is null for the
-            // rest by the manifest's own shape, and a branch here would be a second place to keep
-            // in step with it.
             FoliageTypeVocabulary = artifact.FoliageTypeVocabulary,
             Hazard = hazard,
             LandPlan = landPlan,
@@ -1226,19 +873,9 @@ public static class BundleImportPlanner
         });
     }
 
-    /// <summary>
-    /// The frame the shared vector carrier is placed in: absolute eastings and northings in the origin's
-    /// own unit, whatever tier the bundle was cut on (<c>revit/docs/vector-carrier.md</c>). The caller
-    /// has refused an origin that states no unit, so none is assumed here.
-    /// </summary>
     private static LayerFrame CarrierLayer(SiteFrame frame)
         => new(LayerCoordinates.AbsoluteProjected, frame.Origin.LinearUnit);
 
-    /// <summary>
-    /// The step a carrier layer reads instead when the carrier cannot serve it: the same layer planned
-    /// from its own GeoJSON file, refusals and all, or <c>null</c> where the bundle lists none or this
-    /// host cannot place it.
-    /// </summary>
     private static ImportStep? PlanGeoJsonFallback(
         BundleManifest manifest,
         BundleArtifact carrier,
@@ -1266,28 +903,6 @@ public static class BundleImportPlanner
         return alternative.FirstOrDefault();
     }
 
-    /// <summary>
-    /// The satellite drape — Forma's last parity row, and the only artifact this host stretches over
-    /// ground rather than placing point by point.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// It reuses the whole placement path: the extent goes through <see cref="SiteFrame"/>, so a
-    /// bundle with no origin yields <see cref="SkipReasonCode.NoSiteFrame"/> and a bundle on a State
-    /// Plane delivery whose only drape is on the metric UTM grid yields
-    /// <see cref="SkipReasonCode.CoordinateSystemNotSupported"/>, both without a line of arithmetic
-    /// written for this row.
-    /// </para>
-    /// <para>
-    /// The extent comes from the most specific source the bundle carries. This host's own
-    /// <c>hosts.revit.drape</c> (MPB 1.3.0) is on the origin's grid on every delivery and is taken
-    /// first (<c>HPS-52</c>); its extent is declared, and is refused rather than corroborated when its
-    /// CRS or unit is not the origin's (<c>HPS-53</c>). Without it, the host-neutral
-    /// <c>imagery.drape</c> declares its own extent on the metric UTM grid. Only a bundle carrying
-    /// neither falls back to <c>elevation.dem.bounds_target_crs</c>, which the published schema does
-    /// not declare, and that is used only when the image's own pixel grid agrees with it.
-    /// </para>
-    /// </remarks>
     private static void PlanImageryDrape(
         BundleManifest manifest,
         BundleEntryIndex entries,
@@ -1309,8 +924,6 @@ public static class BundleImportPlanner
             return;
         }
 
-        // The producer's own "there is no imagery" beats anything this host could infer from a
-        // missing pointer, and it is the one absence a re-download cannot fix.
         if (manifest.ImageryAbsentByDeclaration)
         {
             Skip(
@@ -1321,9 +934,6 @@ public static class BundleImportPlanner
             return;
         }
 
-        // This host's own drape first, on its own grid (HPS-52). When it is present the shared one
-        // is never a fallback: on a State Plane delivery it is on the UTM grid, and where the grids
-        // agree the own pointer already names the same file.
         bool own = manifest.RevitDrape is not null;
         if ((manifest.RevitDrape ?? manifest.ImageryDrape) is not { } entryDrape)
         {
@@ -1334,8 +944,6 @@ public static class BundleImportPlanner
             return;
         }
 
-        // A pointer level is a smaller image of the same ground, and states that ground itself: its
-        // extent and CRS are its own, read and refused exactly as the entry's are.
         LevelApplication leveled = FidelityCuts.Apply(entryDrape, ImportStepKind.ImageryDrape, level, "satellite imagery");
         if (leveled.File is not { } drape)
         {
@@ -1365,8 +973,6 @@ public static class BundleImportPlanner
             return;
         }
 
-        // An own drape's extent is declared, and so is the shared drape block's; only the DEM's
-        // bounds are inferred and have to be corroborated against the image.
         bool fromDrapeBlock = own || pointer || manifest.ImageryDrapeExtent is { IsUsable: true };
         GroundExtent? declared = pointer ? pointerExtent : own ? manifest.RevitDrapeExtent : manifest.ImageryDrapeExtent;
         if ((fromDrapeBlock ? declared : manifest.DemBounds) is not { IsUsable: true } extent)
@@ -1379,8 +985,6 @@ public static class BundleImportPlanner
             return;
         }
 
-        // The own drape states its extent's unit, and it has to be the origin's: the edges are
-        // subtracted in that unit (HPS-53). The shared drape states none; its CRS is metric UTM.
         LinearUnit extentUnit = LinearUnit.Unspecified;
         if (own && !TryReadUnitToken(drape.Units ?? string.Empty, out extentUnit))
         {
@@ -1403,8 +1007,6 @@ public static class BundleImportPlanner
             return;
         }
 
-        // Both paths, not just the corroborated one: an extent this host trusts is still no use if
-        // the file it belongs to is not an image Revit can decode.
         if (probeImageSize(entry) is not { IsUsable: true } pixels)
         {
             Skip(
@@ -1451,16 +1053,6 @@ public static class BundleImportPlanner
         });
     }
 
-    /// <summary>
-    /// The drape of an MPB 3.x bundle: <c>Imagery/Imagery.png</c>, laid over the rectangle its catalog
-    /// entry states in the local site frame, in metres from the site origin (<c>spec/format.md</c> §9.5).
-    /// </summary>
-    /// <remarks>
-    /// The rectangle is a contract and is placed verbatim (<c>HPS-33</c>); what is checked is that it
-    /// belongs to this image, by the catalog's pixel width and height against the file's own. A raster
-    /// whose catalog states no local rectangle has no ground this host may read for it, and is skipped
-    /// rather than placed from anything worked out. There are no levels: a 3.0 download holds one.
-    /// </remarks>
     private static void PlanThreeDrape(
         BundleManifest manifest,
         BundleArtifact drape,
@@ -1536,23 +1128,6 @@ public static class BundleImportPlanner
         });
     }
 
-    /// <summary>
-    /// Why an inferred extent cannot be trusted, or <c>null</c> when the image's own grid backs it up.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The check is <c>pixels × gsd ≈ metres</c> on both axes, and it is run ONLY on the inferred
-    /// extent. A drape block that states its own extent is a contract, and re-deriving a contract to
-    /// see whether this host agrees with it is the habit <c>HPS-33</c> exists to stop.
-    /// </para>
-    /// <para>
-    /// Be honest about what this proves: it corroborates the extent's SIZE, not its POSITION. It
-    /// catches the divergence that is actually plausible here — a drape cut to the imagery footprint
-    /// instead of the DEM grid, which changes the size — and it would not catch an extent of the
-    /// right size in the wrong place. It is the strongest host-neutral check available from the
-    /// declared fields, which is a different claim from proof.
-    /// </para>
-    /// </remarks>
     private static string? Uncorroborated(
         BundleManifest manifest,
         GroundExtent extent,
@@ -1595,8 +1170,6 @@ public static class BundleImportPlanner
                 $"{manifest.LandXml.Path} — a LandXML TIN surface; the Civil 3D path (Insert ▸ LandXML), not imported here.");
         }
 
-        // Only where this host has no pointer of its own to draw them from: a bundle that has one
-        // plans them, or says in its skips why it could not (ADR 0013).
         if (manifest.RevitContours is null
             && manifest.ContoursDxf is not null
             && entries.Resolve(manifest.ContoursDxf.Path) is not null)
@@ -1607,15 +1180,6 @@ public static class BundleImportPlanner
         }
     }
 
-    /// <summary>
-    /// Why a bundle's contours are not drawn as published contours, when its block has no pointer.
-    /// </summary>
-    /// <remarks>
-    /// No verdict at all is a bundle cut before MPB 1.4.0 gave this host a pointer. <c>not_produced</c>
-    /// is the platform's word for that case AND for a bundle with no site origin to be local to, so its
-    /// sentence names both rather than asserting the one it cannot tell apart. Any other reason is the
-    /// bundle's, in the readiness wording the rest of the plan uses.
-    /// </remarks>
     private static string WhyContoursAreNotDrawn(ReadinessPath readiness)
     {
         const string Predates = "This bundle predates Revit's own contour support, so they are not drawn here.";
@@ -1638,22 +1202,6 @@ public static class BundleImportPlanner
 
     private const string NotProducedReason = "not_produced";
 
-    /// <summary>
-    /// The published contours, from this host's own pointer only (<c>HPS-52</c>, <c>HPS-53</c>).
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A bundle without the pointer plans nothing and lists nothing as unavailable: its contours are
-    /// still in the bundle, and the "Also in this bundle" line says where and why
-    /// (<see cref="NoteAvailableButNotImported"/>). The host-neutral <c>elevation.contours</c> states no
-    /// frame, and is never placed.
-    /// </para>
-    /// <para>
-    /// The pointer states its X/Y and Z units apart, because on a local grid they have differed. Each
-    /// is checked against the block's <c>file_frame</c>, and a disagreement is refused, never resolved
-    /// in either's favour. The crop window is the terrain's, so the contours end where it ends.
-    /// </para>
-    /// </remarks>
     private static void PlanPublishedContours(
         BundleManifest manifest,
         BundleEntryIndex entries,
@@ -1692,14 +1240,6 @@ public static class BundleImportPlanner
             level: level);
     }
 
-    /// <summary>
-    /// Why the contours pointer's own unit statements stop it being placed, or <c>null</c> with the
-    /// vertical unit resolved.
-    /// </summary>
-    /// <remarks>
-    /// Only what <see cref="OwnFrameRefusal"/> does not already ask: that the X/Y unit agrees with the
-    /// file's, and that the Z unit is one this plugin knows and the one the block declares.
-    /// </remarks>
     private static (SkipReasonCode Code, string Reason)? ContourUnitRefusal(
         BundleArtifact contours,
         BundleManifest manifest,
@@ -1723,9 +1263,6 @@ public static class BundleImportPlanner
                 + $"\"{contours.Units}\"." + LeftOut);
         }
 
-        // Fails closed like the X/Y check: a block with a frame that states no height unit this plugin
-        // knows cannot show the contours' heights are in its frame. A block with no frame at all is
-        // OwnFrameRefusal's to refuse, in its own words.
         if (manifest.FileFrame is { } frame && frame.VerticalUnit is null)
         {
             return (SkipReasonCode.CoordinateSystemNotSupported,
@@ -1743,12 +1280,6 @@ public static class BundleImportPlanner
         return null;
     }
 
-    /// <summary>
-    /// Resolves one artifact into a step, or explains its absence. Fails closed on units: an
-    /// artifact whose declared unit this host does not understand is skipped rather than imported
-    /// at a guessed scale, because a silently-wrong scale is a site that looks imported and is
-    /// 3.28× the wrong size (HPS-35).
-    /// </summary>
     private static bool TryPlanArtifact(
         BundleArtifact? artifact,
         BundleManifest manifest,
@@ -1780,8 +1311,6 @@ public static class BundleImportPlanner
             return false;
         }
 
-        // The terrain and the site model take MAX, and a level naming it, and nothing else
-        // (FidelityCuts.CanTake), so the file planned is always the entry's own.
         LevelApplication leveled = FidelityCuts.Apply(artifact, kind, level, label);
         if (leveled.File is null)
         {
@@ -1827,8 +1356,6 @@ public static class BundleImportPlanner
             ToposolidType = toposolidType,
             HeightDatum = HeightDatums.For(kind, artifact, manifest),
 
-            // An MPB 3.x file's heights are in the georeferenced frame's vertical unit, stated apart
-            // from its X/Y (spec/format.md §4); a 2.x pointer here states none.
             VerticalUnits = artifact.Family is not null
                 && TryReadUnitToken(artifact.VerticalUnits ?? string.Empty, out LinearUnit vertical)
                     ? vertical
@@ -1840,24 +1367,14 @@ public static class BundleImportPlanner
         return true;
     }
 
-    /// <summary>
-    /// Why a step that crops to the area of interest has no window, or <c>null</c> — for a kind that
-    /// never crops, or a window that exists.
-    /// </summary>
     private static string? CropUnavailable(ImportStepKind kind, SurfaceCropWindow? crop, BundleManifest manifest)
         => crop is null
             && (kind is ImportStepKind.ToposurfaceFromPointsFile
                 or ImportStepKind.ToposurfaceFromSurfaceTin
                 or ImportStepKind.PublishedContours)
-            // A clause, not a sentence: the notice that reports it ends it (SurfaceCrop.NoWindowNotice).
             ? RevitThreeView.IsThree(manifest) ? ThreeNoCrop.TrimEnd('.') : SurfaceCrop.Unavailable(manifest, SiteFrame.For(manifest))
             : null;
 
-    /// <summary>
-    /// Why an MPB 3.x georeferenced file cannot be placed against the site origin, or <c>null</c> with
-    /// its <paramref name="units"/>: its coordinates are subtracted from the origin, so the two have to
-    /// be in one unit, and this host converts neither (<c>HPS-35</c>, <c>HPS-53</c>).
-    /// </summary>
     private static (SkipReasonCode Code, string Reason)? ThreeUnitRefusal(
         BundleArtifact artifact,
         SiteFrame frame,
@@ -1885,24 +1402,6 @@ public static class BundleImportPlanner
             + $"project's coordinate system (EPSG:{frame.Epsg}). Importing them anyway would put them a long "
             + "way from the site, so they were left out.");
 
-    /// <summary>
-    /// Why a file this host's own block points at cannot be placed, or <c>null</c> with the
-    /// <paramref name="layer"/> frame it is placed in.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A pointer sitting in this host's block is not itself the showing <c>HPS-53</c> asks for. The
-    /// block has to declare a <c>file_frame</c>, and it has to be this host's frame
-    /// (<see cref="SiteFrame.Holds"/>); the file has to be in that frame's unit; and an absolute file
-    /// has to be in the origin's unit (<see cref="SiteFrame.IsInOriginUnit"/>), since that is the unit
-    /// it is subtracted in. Each failure is a producer defect, and each is refused by name; none is
-    /// converted.
-    /// </para>
-    /// <para>
-    /// A <c>horizontal_frame</c> or <c>vertical_reference</c> this plugin does not know fails closed,
-    /// as the schema instructs: a Z that might be an offset cannot be placed as a height.
-    /// </para>
-    /// </remarks>
     private static (SkipReasonCode Code, string Reason)? OwnFrameRefusal(
         BundleArtifact artifact,
         BundleManifest manifest,
@@ -1974,17 +1473,6 @@ public static class BundleImportPlanner
         return null;
     }
 
-    /// <summary>
-    /// What to say about a vector layer this host has no pointer for.
-    /// </summary>
-    /// <remarks>
-    /// On a bundle that carries this host's own copy, a layer the copy lacks had no features in the
-    /// area, and the vault has nothing more to give (<c>spec/format.md</c> §6.5). Without the copy the
-    /// shared set is read, and its absence keeps the vault's remedy — except where the shared layer
-    /// is listed, split by geometry family (MPB 1.7.0), with no file of the geometry this step draws
-    /// from (<see cref="SiteVectorLayers"/>): the bundle has said what it holds, and the vault has
-    /// nothing more to give either. The curator reads the step's words, never the layer's manifest key.
-    /// </remarks>
     private static string? VectorAbsence(BundleManifest manifest, ImportStepKind kind)
     {
         SiteVectorLayer layer = SiteVectorLayers.For(kind);
@@ -2003,19 +1491,6 @@ public static class BundleImportPlanner
         return null;
     }
 
-    /// <summary>
-    /// Why a projected artifact's units stop it being placed, or <c>null</c> with the resolved
-    /// <paramref name="units"/> when they do not.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <c>units</c> is the file's own, resolved with the terrain's rule. A stated
-    /// <c>horizontal_units</c> — the tree points', since MPB 1.3.0 — is checked, not used: the plan
-    /// coordinates are subtracted from the origin in the ORIGIN's unit (<see cref="SiteFrame"/>), so
-    /// a file stating another has contradicted its own CRS and is refused rather than reconciled
-    /// (<c>HPS-35</c>, <c>HPS-53</c>).
-    /// </para>
-    /// </remarks>
     private static (SkipReasonCode Code, string Reason)? UnplaceableUnits(
         BundleArtifact artifact,
         BundleManifest manifest,
@@ -2051,10 +1526,6 @@ public static class BundleImportPlanner
                 + "placed against is not in this host's frame, so they were left out.");
     }
 
-    /// <summary>
-    /// Per-artifact <c>units</c> wins; the <c>delivery</c> block is the fallback; a bundle that
-    /// states neither is metric, which is what every pre-<c>delivery</c> bundle was.
-    /// </summary>
     private static bool TryResolveUnits(BundleArtifact artifact, BundleManifest manifest, out LinearUnit units)
     {
         if (artifact.Units is null)
@@ -2068,7 +1539,6 @@ public static class BundleImportPlanner
         return TryReadUnitToken(artifact.Units, out units);
     }
 
-    /// <summary>The three linear units the ETL delivers in, by their manifest token.</summary>
     private static bool TryReadUnitToken(string token, out LinearUnit units)
     {
         switch (token)
@@ -2088,14 +1558,6 @@ public static class BundleImportPlanner
         }
     }
 
-    /// <summary>
-    /// Explains an absent artifact, preferring the manifest's own reason where it stated one.
-    /// </summary>
-    /// <remarks>
-    /// The reason is TRANSLATED, not interpolated. <c>hosts.&lt;hostId&gt;.readiness</c> reasons are an open
-    /// vocabulary until v19 and include <c>emit_threw:&lt;stage&gt;</c>, so splicing the raw token
-    /// into this sentence showed curators internal stage identifiers (<see cref="ReadinessReasons"/>).
-    /// </remarks>
     private static string DescribeMissingArtifact(string label, ReadinessPath readiness)
     {
         if (readiness.Declared && !readiness.Present

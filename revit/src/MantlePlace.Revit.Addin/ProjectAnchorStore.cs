@@ -4,22 +4,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-/// <summary>
-/// Reads and writes what a project holds for <see cref="AdjacentBundle"/>: the shared coordinates
-/// it was given and the EPSG code they were given in.
-/// </summary>
-/// <remarks>
-/// The position itself is read live from the project, so a curator who moves the survey point on
-/// purpose moves the anchor with it; only the code, which Revit has nowhere to keep, is stored
-/// (<see cref="ProjectAnchorStorage"/>).
-/// </remarks>
 internal static class ProjectAnchorStore
 {
-    /// <summary>
-    /// The project's anchor, or <c>null</c> when it holds no Mantle Place import. A project with a
-    /// provenance record but no code (one imported into before the code was recorded) is an anchor
-    /// whose <see cref="ProjectAnchor.Epsg"/> is <c>null</c>.
-    /// </summary>
     internal static ProjectAnchor? Read(Document document)
     {
         Entity recorded = document.ProjectInformation.GetEntity(AnchorSchema());
@@ -42,7 +28,6 @@ internal static class ProjectAnchorStore
             position.Angle);
     }
 
-    /// <summary>Records the code the project's position was set from. Inside the caller's transaction.</summary>
     internal static void Write(Document document, int epsg)
     {
         Entity entity = new(AnchorSchema());

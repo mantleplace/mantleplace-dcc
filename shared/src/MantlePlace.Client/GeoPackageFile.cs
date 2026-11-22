@@ -3,32 +3,9 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Client;
 
-/// <summary>
-/// Opens a GeoPackage and hands back one of its feature tables as <see cref="GeoPackageTable"/>: the rows
-/// and the CRS the file registers for them. Read-only.
-/// </summary>
-/// <remarks>
-/// Everything that decides what a row means — the geometry decoder, the frame, the attributes — is
-/// <see cref="SiteGeoPackageReader"/> in the pure core. This is only the SQLite half, so that half can be
-/// tested on every runner and this one on Windows, where it runs.
-/// </remarks>
 [SupportedOSPlatform("windows")]
 public static class GeoPackageFile
 {
-    /// <summary>
-    /// Reads <paramref name="tableName"/> of the GeoPackage at <paramref name="path"/>.
-    /// </summary>
-    /// <param name="path">The extracted file.</param>
-    /// <param name="tableName">The table, matched without regard to case as SQLite matches names.</param>
-    /// <param name="label">What to call the layer in a failure message, in the user's words.</param>
-    /// <param name="table">The table; <c>null</c> on failure.</param>
-    /// <param name="soleTable">
-    /// True where the file holds this layer alone (<see cref="BundleArtifact.SoleTable"/>): a file that has
-    /// no table of that name but exactly one table is read as that one, because the producer names it in
-    /// CamelCase (<c>RoadSplines</c>) and not as the layer (<c>road_splines</c>). A file of several tables
-    /// is never read as its only one.
-    /// </param>
-    /// <returns><c>null</c> on success, or a user-facing reason the table could not be read.</returns>
     public static string? TryReadTable(string path, string tableName, string label, out GeoPackageTable? table, bool soleTable = false)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
@@ -57,7 +34,6 @@ public static class GeoPackageFile
 
             if (geometryColumn is null && soleTable)
             {
-                // The file has no table of that name: it is the layer's only table if it holds exactly one.
                 int tables = 0;
                 string only = string.Empty;
                 string onlyColumn = string.Empty;

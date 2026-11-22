@@ -2,15 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Which elements of the site model are context buildings: every building proxy, by its GlobalId,
-/// in file order — and never the context terrain, whatever Revit's IFC import would call it.
-/// </summary>
-/// <remarks>
-/// The fixtures are synthetic, shaped like the IfcOpenShell output the platform publishes (one
-/// <c>IfcBuildingElementProxy</c> with its own extrusion per building, one
-/// <c>IfcGeographicElement</c> for the terrain). No bundle's own site model is committed.
-/// </remarks>
 internal static class SiteModelReaderTests
 {
     private const string Header = """
@@ -187,12 +178,6 @@ internal static class SiteModelReaderTests
         return run.Report("site model reader");
     }
 
-    /// <summary>A whole site model around <paramref name="records"/>.</summary>
-    /// <remarks>
-    /// STEP names each instance with a hash and a number, which is exactly the shape the
-    /// public-hygiene gate refuses as a tracker citation. The fixtures therefore write a tilde where
-    /// STEP has the hash, and it is put back here.
-    /// </remarks>
     private static string Model(string records)
         => Header + "\n" + records.Replace('~', '#') + "\n" + Footer;
 }

@@ -1,42 +1,4 @@
 # Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
-"""
-Stream a Mantle Place ETL bundle into Cesium for Unreal.
-
-Calls the C++ UMantlePlaceImporterLibrary.stream_bundle_into_cesium(zip) -- which extracts the bundle's
-own Cesium-ready quantized-mesh terrain + imagery and hosts them on a local loopback server -- then
-spawns an ACesium3DTileset (from the served layer.json URL) and a single-tile imagery raster overlay
-under the level's CesiumGeoreference -- whose origin this module SETS from the bundle manifest, see
-_ensure_georeference -- alongside Cesium World Terrain for apples-to-apples QA.
-
-This is the "stream locally into Unreal via Cesium" capability that complements the native-asset import.
-Keep, not stream: nothing is streamed from the platform, only from the user's local copy of the bundle.
-
-Usage (Python console, or an Editor Utility Widget "Stream into Cesium" button via Execute Python):
-    import mantleplace_cesium_stream as mp
-    mp.stream_into_cesium()                             # newest cached vault bundle (the one just imported)
-    mp.stream_into_cesium(r"C:/path/to/bundle.zip")     # or an explicit bundle .zip
-    mp.ground_truth_overlay(r"C:/path/to/bundle.zip")   # Cesium World Terrain + imagery, for QA
-
-NOTE: the exact Cesium-for-Unreal Python property/enum names below are validated against v2.22.1 during
-the editor step; risky calls are wrapped so a name mismatch degrades to a warning rather than aborting.
-
-THE FRAME (Mantle Place world convention: North -> +X, East -> +Y, Up -> +Z)
---------------------------------------------------------------------------------
-Cesium places content in an **East-South-Up** frame: +X East, +Y South, so north is -Y. That is
-deliberate -- ENU is right-handed and Unreal is left-handed, so exactly one horizontal axis has to
-flip or the result is a mirror. Mantle Place flips the other way round, to **North-East-Up**: +X
-North, +Y East. Both are left-handed; they differ by a clean +90 deg yaw and nothing else.
-
-Cesium offers no knob for this: ACesiumGeoreference hardcodes East/South/Up
-(UCesiumEllipsoid::CreateCoordinateSystem) and derives the tileset transform from the georeference
-alone, ignoring the georeference actor's own rotation. What DOES work is rotating the tileset actor:
-its primitives are positioned with SetRelativeTransform, so the actor's transform composes. Hence
-CESIUM_TO_WORLD_YAW below, applied to every tileset this module spawns.
-
-Getting the sign wrong mirrors rather than rotates, which is the whole class of bug this convention exists
-to prevent -- so a residual ROTATION here means this yaw is wrong, while a residual FLIP means
-something upstream is.
-"""
 import glob
 import json
 import os
@@ -48,17 +10,10 @@ _TILESET_LABEL = "MP_CesiumStream_Terrain"
 _QA_TERRAIN_LABEL = "MP_CesiumQA_WorldTerrain"
 _CLIP_LABEL = "MP_CesiumStream_AoiClip"
 
-#: The World Outliner folder these actors are filed into. Streaming has no bundle identity to key
-#: a per-import folder on -- it imports no assets and spawns at most one set of actors at a time --
-#: so it gets one fixed folder beside the importer's per-order ones. The alternative, leaving them
-#: at the outliner root while every imported actor gains a folder, would read as less organised
-#: than before. The labels are unchanged: they are already correct under the scheme in
-#: unreal/CLAUDE.md, where MP_ is the permitted marker on an outliner-visible label.
 _OUTLINER_FOLDER = "MantlePlace/Stream"
 
 
 def _file_in_outliner(actor):
-    """Put a spawned actor in the Mantle Place folder. Never fatal: a failure here costs tidiness."""
     try:
         actor.set_folder_path(_OUTLINER_FOLDER)
     except Exception as exc:  # noqa: BLE001 - older Cesium/UE actor types may not expose it
@@ -66,17 +21,13 @@ def _file_in_outliner(actor):
             "[MantlePlace] could not file {} in the outliner: {}".format(
                 actor.get_actor_label(), exc))
 
-#: Cesium's East-South-Up -> our North-East-Up. East(+X) -> +Y and South(+Y) -> -X, which is yaw +90.
 CESIUM_TO_WORLD_YAW = 90.0
 
-#: Cesium World Terrain and Bing Maps Aerial. Both need a signed-in Cesium ion account
-#: (Window -> Cesium -> "Connect to Cesium ion").
 ION_ASSET_WORLD_TERRAIN = 1
 ION_ASSET_BING_AERIAL = 2
 
 
 def _find_georeference():
-    """Return the level's CesiumGeoreference (the existing CES_Georeference), or None."""
     for actor in unreal.EditorActorSubsystem().get_all_level_actors():
         if isinstance(actor, unreal.CesiumGeoreference):
             return actor
@@ -84,22 +35,6 @@ def _find_georeference():
 
 
 def _ensure_georeference(zip_path, geoid_separation_m=0.0, origin=None):
-    """Find or spawn the level's CesiumGeoreference and set its origin from the bundle manifest.
-
-    The +90 yaw in _orient_into_world_frame pivots on the tileset actor's origin at UE (0,0,0),
-    which is wherever the georeference origin says it is. That is the right pivot only when the
-    georeference origin IS the bundle's AOI origin: a hand-set or leftover origin parks the streamed
-    patch away from (0,0,0), and the yaw then swings it around the globe instead of spinning it in
-    place -- the streamed patch renders sideways at globe scale. So this module owns the origin --
-    applied from the manifest, never trusted from the level.
-
-    `origin` is the (lon, lat) the C++ stream reports for an MPB 3.x bundle, whose manifest states the
-    site origin elsewhere than a 2.x one does; it is applied as given. Without it the origin is read from
-    the 2.x manifest, as it always was.
-
-    If the manifest origin cannot be read, the existing georeference is left untouched -- correct
-    only if it was already set to the bundle origin by hand.
-    """
     georef = _find_georeference()
     if georef is None:
         unreal.log_warning("[MantlePlace] No CesiumGeoreference in the level; spawning a default one.")
@@ -112,13 +47,6 @@ def _ensure_georeference(zip_path, geoid_separation_m=0.0, origin=None):
         origin = _manifest_origin(zip_path) if zip_path else None
     if origin is not None:
         lon, lat, _ground_h = origin
-        # Height: the ELLIPSOID (0), not the ground. The level's frame carries true orthometric Z
-        # -- the imported landscape's location_z_offset_cm puts the ground at ~ground_h * 100 UE-cm
-        # -- and the bundle's terrain tiles carry those same orthometric metres, so an origin at
-        # height 0 lands the streamed ground on the imported ground. An origin at ground_h instead
-        # sinks every Cesium overlay by the full ground elevation: invisible on a sea-level AOI,
-        # kilometres on a mountain one. `geoid_separation_m` nudges the origin for content whose
-        # heights are TRUE ellipsoidal (Cesium World Terrain); elevation-only either way.
         try:
             georef.set_editor_property("origin_placement", unreal.OriginPlacement.CARTOGRAPHIC_ORIGIN)
             georef.set_editor_property("origin_longitude", lon)
@@ -139,12 +67,6 @@ def _remove_existing(label):
 
 
 def _add_raster_overlay(actor, overlay_class, name):
-    """Add a UCesiumRasterOverlay component to a level-actor *instance*.
-
-    UE 5.8 does not expose AActor.add_component_by_class to Python, so we use the SubobjectDataSubsystem
-    -- the same path the editor's own "Add Component" button uses. Returns the new component, or None on
-    failure (the caller degrades to terrain-without-imagery rather than aborting the whole stream).
-    """
     sds = unreal.get_engine_subsystem(unreal.SubobjectDataSubsystem)
     if sds is None:
         return None
@@ -166,22 +88,6 @@ def _add_raster_overlay(actor, overlay_class, name):
 
 
 def _orient_into_world_frame(tileset):
-    """Yaw a Cesium tileset out of Cesium's East-South-Up and into our North-East-Up world.
-
-    Pivots on the actor origin, which sits at UE (0,0,0) == the georeference origin == the AOI
-    centroid, so this is a rotation about the right point and nothing translates. It lands on the
-    tiles because Cesium positions its primitives with SetRelativeTransform under the tileset root,
-    so the actor's own transform composes -- unlike the georeference's, which Cesium ignores.
-
-    CAVEAT: in a `-run=pythonscript` commandlet this silently no-ops. That is not a Cesium quirk --
-    set_actor_rotation returns True and leaves yaw at 0 for a plain StaticMeshActor there too,
-    because components are never fully registered. Verify this yaw in a real editor session, not
-    headlessly.
-    """
-    # unreal.Rotator's POSITIONAL argument order is (roll, pitch, yaw) -- NOT C++ FRotator's
-    # (pitch, yaw, roll). A positional 90 in the middle slot is a PITCH, which tips the whole
-    # globe onto its side about the actor origin -- the tileset-sideways-at-globe-scale bug.
-    # Keywords only, here and anywhere else a Rotator is built.
     tileset.set_actor_rotation(
         unreal.Rotator(roll=0.0, pitch=0.0, yaw=CESIUM_TO_WORLD_YAW), False)
     unreal.log("[MantlePlace] {} yawed {:+.0f} deg: Cesium East-South-Up -> world North-East-Up."
@@ -189,33 +95,6 @@ def _orient_into_world_frame(tileset):
 
 
 def _clip_to_aoi(tileset, georef, info):
-    """Cut everything outside the bundle's AOI out of the streamed tileset.
-
-    WHY this is not cosmetic. `ctb-tile -C` writes "cesium-friendly" root tiles at zoom 0-1 that
-    span the whole planet at a FLAT ZERO height (measured: 0/0/0.terrain and 0/1/0.terrain both
-    carry minimumHeight == maximumHeight == 0). Cesium loads them like any other tile, so an
-    unclipped stream renders a white sea-level shell out to the horizon, and the AOI's real terrain
-    -- Jackson sits at ~1900 m -- stands on it as a mesa whose tile skirts fall the full 1.9 km to
-    the shell. Beside the imported landscape, which is correct, that reads as the STREAM being
-    broken. It is not: the geometry outside the AOI simply has no business being drawn, because the
-    bundle only ever covered the AOI.
-
-    So the AOI rectangle becomes an ACesiumCartographicPolygon and a UCesiumPolygonRasterOverlay
-    clips to it: `invert_selection` keeps the inside and discards the outside, and
-    `exclude_selected_tiles` stops the outside tiles being fetched at all rather than fetching and
-    hiding them.
-
-    THE FRAME, which is the one thing here that is easy to get subtly wrong. Cesium builds the
-    polygon by taking each spline point's WORLD position, pushing it through the tileset's INVERSE
-    transform and asking the georeference for its lon/lat (CesiumCartographicPolygon.cpp:62-72 --
-    "the spline points should be located in the tileset exactly where they appear to be"). Our
-    tileset carries the +90 world-frame yaw, so world points have to be the georeferenced positions
-    ALREADY YAWED, or the inverse un-yaws them into a rectangle 90 degrees round the globe from the
-    AOI and the clip erases everything. Rather than pre-rotating the maths, the polygon actor is
-    given the SAME yaw as the tileset and its points are added in LOCAL space: world = yaw * local
-    then makes the round trip exact by construction, and stays exact if CESIUM_TO_WORLD_YAW ever
-    changes.
-    """
     if not info.has_bbox:
         unreal.log_warning(
             "[MantlePlace] the stream reports no AOI bbox; leaving the tileset unclipped "
@@ -247,7 +126,6 @@ def _clip_to_aoi(tileset, georef, info):
         spline.add_spline_point(local, unreal.SplineCoordinateSpace.LOCAL, False)
     spline.set_closed_loop(True, False)
     for index in range(spline.get_number_of_spline_points()):
-        # Linear, or the spline bulges its Bezier handles outside the AOI it is meant to bound.
         spline.set_spline_point_type(index, unreal.SplinePointType.LINEAR, False)
     spline.update_spline()
 
@@ -256,17 +134,10 @@ def _clip_to_aoi(tileset, georef, info):
         unreal.log_warning("[MantlePlace] could not create the AOI clip overlay; tileset left unclipped.")
         return None
     clip.set_editor_property("polygons", [polygon])
-    clip.set_editor_property("invert_selection", True)   # keep the INSIDE, discard the outside
+    clip.set_editor_property("invert_selection", True)
     clip.set_editor_property("exclude_selected_tiles", True)
-    # Same reason as the imagery overlay: the component activated with empty properties at creation,
-    # so it has to be re-added to the tileset to pick up the polygon list just set.
     clip.refresh()
 
-    # And get the spline out of shot. A CesiumCartographicPolygon draws its spline as a white
-    # wireframe in the editor viewport, and this one sits at the ELLIPSOID -- about 1.9 km directly
-    # below a Jackson AOI -- so it films as a mystery rectangle hanging under the terrain. The
-    # overlay has already read the polygon by this point and re-reads it from the actor, not from
-    # its visibility, so hiding it costs the clip nothing.
     try:
         polygon.set_is_temporarily_hidden_in_editor(True)
     except Exception as exc:  # noqa: BLE001 - a visible spline is untidy, not broken
@@ -283,15 +154,6 @@ _MANIFEST_MEMBER = "Metadata/manifest.json"
 
 
 def _find_member(archive, name):
-    """The archive's own spelling of `name`, matched regardless of case.
-
-    A reader matches a manifest path to an archive entry regardless of case (MPB 2.0, format.md
-    10.3 rule 6), and the engine's zip reader the C++ importer uses already does. Python's
-    `zipfile` matches the exact string, so a bundle whose entry is `metadata/MANIFEST.json` would
-    read as having no manifest here while the importer reads it. The exact name is tried first;
-    a bundle never holds two entries that differ only by case, so the fold is never ambiguous.
-    Raises KeyError, as `ZipFile.read` does, when nothing matches.
-    """
     names = archive.namelist()
     if name in names:
         return name
@@ -303,19 +165,11 @@ def _find_member(archive, name):
 
 
 def _read_manifest(zip_path):
-    """The bundle's manifest as parsed JSON. Raises if the zip, the entry or the JSON is unreadable."""
     with zipfile.ZipFile(zip_path) as archive:
         return json.loads(archive.read(_find_member(archive, _MANIFEST_MEMBER)))
 
 
 def _manifest_origin(zip_path):
-    """(lon, lat, ground_orthometric_h_m) from the bundle manifest, or None.
-
-    MPB 1.0.0 moved everything host-specific under `hosts.<hostId>`, so the origin lives at
-    `hosts.unreal.georeference.origin`. The retired top-level `unreal` block is deliberately NOT
-    consulted -- same clean break as the C++ manifest reader; a fallback is how a clean break
-    quietly becomes dual-parsing. A 1.x and a 2.0 bundle state it the same way.
-    """
     try:
         manifest = _read_manifest(zip_path)
         origin = manifest["hosts"]["unreal"]["georeference"]["origin"]
@@ -326,12 +180,6 @@ def _manifest_origin(zip_path):
 
 
 def _newest_vault_cache_bundle():
-    """The most recently cached vault bundle .zip, or None.
-
-    The importer's cache (<Project>/Saved/MantlePlace/VaultCache/<orderId>/bundle.zip)
-    holds exactly the file the last import read — so "stream what I just
-    imported", the overwhelmingly common case, needs no path at all.
-    """
     cache = os.path.join(unreal.Paths.project_saved_dir(), "MantlePlace", "VaultCache")
     candidates = glob.glob(os.path.join(cache, "*", "bundle.zip"))
     if not candidates:
@@ -339,19 +187,14 @@ def _newest_vault_cache_bundle():
     return max(candidates, key=os.path.getmtime)
 
 
-#: The fetcher a 3.x stream is waiting on. Held here so it is not collected while the download runs.
 _pending_fetch = None
 
 
 def _info_origin(info):
-    """(lon, lat) the stream reported for a 3.x bundle, or None (a 2.x bundle reports none)."""
     return (info.origin_longitude_deg, info.origin_latitude_deg) if info.has_origin else None
 
 
 def _fetch_terrain_tiles_then_stream(zip_path, geoid_separation_m):
-    """Fetch an MPB 3.0 order's terrain tiles (the platform lists them as an Extra beside the bundle), then
-    stream again. The fetch is asynchronous: this returns at once, and the stream follows when the tiles
-    arrive. A refusal -- no tiles listed, not signed in, a failed download -- is logged with its reason."""
     global _pending_fetch
     fetcher = unreal.MantlePlaceTerrainTilesFetcher()
 
@@ -373,24 +216,6 @@ def _fetch_terrain_tiles_then_stream(zip_path, geoid_separation_m):
 
 
 def stream_into_cesium(zip_path=None, geoid_separation_m=0.0):
-    """Start the local server (C++) and wire up the Cesium tileset + imagery overlay. Returns the tileset.
-
-    A 2.x bundle streams its own terrain tiles. An MPB 3.0 bundle holds none: they are an Extra the
-    platform lists, fetched here the first time you ask and kept beside the bundle, so a second ask
-    reuses them. That first ask returns None and streams when the download completes (the log says so);
-    it needs a signed-in session, and an order the platform lists no terrain tiles for, or a zip on disk
-    with none beside it, is refused with the reason.
-
-    With no `zip_path`, streams the newest bundle in the importer's vault cache
-    — the file the last vault import read — so the console form is simply
-    `mp.stream_into_cesium()` after an import.
-
-    Owns the CesiumGeoreference origin: sets it to the bundle manifest's AOI origin (spawning a
-    georeference if the level has none), so the streamed patch lands over UE (0,0,0) -- coincident
-    with the imported copy -- and the world-frame yaw spins it in place. The bundle's terrain tiles
-    carry orthometric metres like the level does, so leave `geoid_separation_m` at 0 for an exact
-    overlay; it exists for symmetry with ground_truth_overlay and is elevation-only either way.
-    """
     if zip_path is None:
         zip_path = _newest_vault_cache_bundle()
         if zip_path is None:
@@ -410,7 +235,6 @@ def stream_into_cesium(zip_path=None, geoid_separation_m=0.0):
 
     georef = _ensure_georeference(zip_path, geoid_separation_m, _info_origin(info))
 
-    # Spawn (replace) the bundle's terrain tileset, pointed at the local server's layer.json.
     _remove_existing(_TILESET_LABEL)
     tileset = unreal.EditorActorSubsystem().spawn_actor_from_class(
         unreal.Cesium3DTileset, unreal.Vector(0, 0, 0))
@@ -423,10 +247,6 @@ def stream_into_cesium(zip_path=None, geoid_separation_m=0.0):
     tileset.set_editor_property("url", info.cesium_terrain_url)
     tileset.set_editor_property("georeference", georef)
 
-    # Single-tile imagery raster overlay over the AOI bbox (Geographic / EPSG:4326). The AOI PNG is
-    # stretched across the bbox rectangle -- sub-pixel skew over a few-km AOI, fine for visual QA. A
-    # single tile (1x1 custom tiling scheme, level 0 only) maps the whole image to the bbox; Cesium
-    # downsamples it to MaximumTextureSize (lifted to 4096 for sharper QA than the 2048 default).
     if info.imagery_url and info.has_bbox:
         overlay = _add_raster_overlay(
             tileset, unreal.CesiumUrlTemplateRasterOverlay, "MP_ImageryOverlay")
@@ -446,19 +266,10 @@ def stream_into_cesium(zip_path=None, geoid_separation_m=0.0):
             overlay.set_editor_property("minimum_level", 0)
             overlay.set_editor_property("maximum_level", 0)
             overlay.set_maximum_texture_size(4096)
-            # The component auto-activated at creation with default (empty) properties; Refresh() re-adds
-            # it to the tileset so it picks up the URL/projection/rectangle just set. Without this the
-            # terrain streams untextured -- the exact failure we hit before this fix.
             overlay.refresh()
 
-    # The streamed terrain is Cesium-framed like any other tileset, so it needs the same yaw as the
-    # ion assets do. Without it the bundle's own terrain sits 90 deg off its natively-imported twin --
-    # the two would disagree about north while both being "correct" in their own frame.
     _orient_into_world_frame(tileset)
 
-    # AFTER the yaw, never before: the clip reads the tileset's transform when the overlay is
-    # created (CesiumPolygonRasterOverlay.cpp:24) and bakes the inverse into the polygon it builds.
-    # Clipping first would bake an identity and put the kept region 90 degrees off the AOI.
     _clip_to_aoi(tileset, georef, info)
 
     unreal.log("[MantlePlace] Cesium stream wired -> {}".format(info.cesium_terrain_url))
@@ -466,24 +277,6 @@ def stream_into_cesium(zip_path=None, geoid_separation_m=0.0):
 
 
 def ground_truth_overlay(zip_path, geoid_separation_m=0.0):
-    """Drop Cesium World Terrain + Bing aerial over the AOI, in OUR frame, for visual QA.
-
-    This is the external check on a native import: real-world terrain and imagery, georeferenced from
-    the bundle's own manifest origin and yawed into the world frame, sitting on top of the imported
-    landscape. A coastline that coincides is the acceptance evidence; one that is rotated means
-    CESIUM_TO_WORLD_YAW is wrong, and one that is MIRRORED means an importer bug.
-
-    Requires a signed-in Cesium ion account: Window -> Cesium -> "Connect to Cesium ion". (The
-    sign-in lives on the "Cesium" tab, which a saved layout can leave stacked behind "Cesium ion
-    Assets" -- if you cannot see the button, that is why.)
-
-    The georeference origin sits at the ellipsoid (see _ensure_georeference), so level content at
-    true orthometric Z meets ion terrain at true ellipsoidal Z. `geoid_separation_m` is the local
-    geoid height (signed; about -32 m around San Francisco Bay): pass it to cancel the resulting
-    orthometric-vs-ellipsoidal offset, or leave it 0 and expect roughly that offset. Either way it
-    is elevation-only and cannot affect the horizontal comparison this function exists for -- do
-    not "fix" it by rotating or mirroring anything.
-    """
     georef = _ensure_georeference(zip_path, geoid_separation_m)
 
     _remove_existing(_QA_TERRAIN_LABEL)
@@ -516,12 +309,6 @@ def ground_truth_overlay(zip_path, geoid_separation_m=0.0):
 
 
 def stop_stream():
-    """Stop the local bundle server and take the streamed actors out of the level.
-
-    Removing them is the point on camera: what was streamed is gone, what was imported is still
-    there. Leaving the clip polygon behind would also leave a stray spline in the Outliner for the
-    next take to inherit.
-    """
     unreal.MantlePlaceImporterLibrary.stop_bundle_stream()
     for label in (_TILESET_LABEL, _CLIP_LABEL):
         _remove_existing(label)

@@ -1,27 +1,7 @@
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Which committed PNG each ribbon button is handed — the render size, the theme, and whether the
-/// file that name asks for is actually there.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The last of those is the one that could not be checked any other way. The glyph PNGs are written
-/// by <c>revit/tools/Render-RibbonIcons.ps1</c>, which is run BY HAND and never by CI — so a stem
-/// renamed on one side and not the other, or a render deleted in a tidy-up, is a defect whose only
-/// other detector is a blank button noticed in Revit by whoever happened to be verifying something
-/// else. Reading the directory costs a millisecond and turns that into a failing build.
-/// </para>
-/// <para>
-/// Both directions are read: a name this assembly can ask for with no file behind it, and a file in
-/// <c>Resources</c> that nothing here can ask for. The second is what catches a render added and
-/// never wired up, which looks exactly like a render that IS wired up until somebody deletes it as
-/// dead weight.
-/// </para>
-/// </remarks>
 internal static class RibbonImageryTests
 {
-    /// <summary>Where the renders live, relative to the repository root.</summary>
     private const string ResourcesRelativePath = "revit/src/MantlePlace.Revit.Addin/Resources";
 
     internal static int Run()
@@ -36,8 +16,6 @@ internal static class RibbonImageryTests
 
         run.Case("the documented display scales land on the documented renders", () =>
         {
-            // Resources/src/README.md, the three rows that stop the 24, 48 and 64 px renders from
-            // looking like dead weight.
             run.Equal(MarkRenders.SizeFor(16, 1.5), 24, "150%, small");
             run.Equal(MarkRenders.SizeFor(32, 1.5), 48, "150%, large");
             run.Equal(MarkRenders.SizeFor(16, 2.0), 32, "200%, small");
@@ -46,7 +24,6 @@ internal static class RibbonImageryTests
 
         run.Case("a scale between the steps takes the next render up", () =>
         {
-            // 125% wants 40 px, which nothing is. Scaling 48 down costs less than scaling 32 up.
             run.Equal(MarkRenders.SizeFor(32, 1.25), 48, "125%, large");
             run.Equal(MarkRenders.SizeFor(16, 1.25), 24, "125%, small");
         });
@@ -59,8 +36,6 @@ internal static class RibbonImageryTests
 
         run.Case("a scale Windows cannot report is treated as 100%", () =>
         {
-            // The scale comes off a Win32 call or a visual that may not be in a tree yet. A zero or
-            // a NaN there must not pick a render by accident, and must not throw on Revit's thread.
             run.Equal(MarkRenders.SizeFor(32, 0), 32, "zero");
             run.Equal(MarkRenders.SizeFor(32, -2), 32, "negative");
             run.Equal(MarkRenders.SizeFor(32, double.NaN), 32, "NaN");
@@ -97,8 +72,6 @@ internal static class RibbonImageryTests
 
         run.Case("a scaled display takes the large glyph into the small slot rather than magnifying", () =>
         {
-            // The whole point of picking at all: at 150% the 16 px slot is 24 device pixels, and
-            // there is no 24 px glyph, so the 32 px render goes in and Revit scales it DOWN.
             run.Equal(
                 RibbonGlyphs.FileNameFor(RibbonGlyph.ProbeTerrain, RibbonTheme.Light, 16, 1.5),
                 "ProbeTerrainLight_32.png",
@@ -124,8 +97,6 @@ internal static class RibbonImageryTests
 
         run.Case("every command and every theme is listed", () =>
         {
-            // An enum member added without a row in All would never be drawn, and the omission is
-            // invisible: the button simply keeps whatever image it was built with, which is none.
             run.Equal(RibbonGlyphs.All.Count, Enum.GetValues<RibbonGlyph>().Length, "commands");
             run.Equal(RibbonGlyphs.Themes.Count, Enum.GetValues<RibbonTheme>().Length, "themes");
         });
@@ -152,7 +123,6 @@ internal static class RibbonImageryTests
         {
             if (FindResourcesDirectory() is not { } resources)
             {
-                // Already reported by the case above; failing twice for one cause reads as two bugs.
                 return;
             }
 
@@ -167,9 +137,6 @@ internal static class RibbonImageryTests
 
         run.Case("every render that is there draws something", () =>
         {
-            // A file can be present, correctly named and the right size and still be a blank button:
-            // a render written by a rasteriser that drew nothing is a valid PNG whose every pixel is
-            // zero, and the Prepare for Handover glyphs shipped that way. Nothing else here can see it.
             if (FindResourcesDirectory() is not { } resources)
             {
                 return;
@@ -196,8 +163,6 @@ internal static class RibbonImageryTests
                 "ImportBundleVignetteDark.png",
                 "the local import, dark");
 
-            // The absence of a size is load-bearing, not an oversight: there is no ladder to pick
-            // from, and a name shaped like the glyphs' would invite a size that nothing would read.
             foreach (Vignette vignette in Vignettes.All)
             {
                 foreach (RibbonTheme theme in Vignettes.Themes)
@@ -217,8 +182,6 @@ internal static class RibbonImageryTests
 
         run.Case("the declared vignette size is inside the cap Revit enforces", () =>
         {
-            // Checked here as well as against the files, because this is the pair the render script
-            // is written to and a change to them is where an over-large render would start.
             run.True(Vignettes.Width <= Vignettes.MaxPixels, $"width {Vignettes.Width}");
             run.True(Vignettes.Height <= Vignettes.MaxPixels, $"height {Vignettes.Height}");
             run.Equal(Vignettes.MaxPixels, 355, "the API's own number, in 2025, 2026 and 2027 alike");
@@ -226,10 +189,6 @@ internal static class RibbonImageryTests
 
         run.Case("every committed vignette is exactly the size that was declared", () =>
         {
-            // The only detector there can be. Revit clips or drops an over-large tooltip image
-            // SILENTLY, on a surface that appears after a hover delay -- so a render regenerated at
-            // the wrong size is a picture that is simply not there, found by eye or not at all.
-            // Reading the IHDR of a committed file turns that into a failing build.
             if (FindResourcesDirectory() is not { } resources)
             {
                 return;
@@ -243,7 +202,6 @@ internal static class RibbonImageryTests
                     string path = Path.Combine(resources, name);
                     if (!File.Exists(path))
                     {
-                        // Reported by the case that walks every name; failing twice reads as two bugs.
                         continue;
                     }
 
@@ -271,14 +229,6 @@ internal static class RibbonImageryTests
         return run.Report("ribbon imagery");
     }
 
-    /// <summary>
-    /// Every file name the ribbon can ask <c>Resources</c> for, with what regenerates it.
-    /// </summary>
-    /// <remarks>
-    /// The script travels with the name because three different things write into that one folder
-    /// and only one of them is even in this repository. A message naming the wrong one sends whoever
-    /// hits it to a script that cannot produce the missing file.
-    /// </remarks>
     private static IEnumerable<(string Name, string Script)> EveryName()
     {
         foreach (int size in MarkRenders.Sizes)
@@ -310,18 +260,8 @@ internal static class RibbonImageryTests
         }
     }
 
-    /// <summary>Locates the add-in's <c>Resources</c> directory, or <c>null</c>.</summary>
     private static string? FindResourcesDirectory() => RepoTree.Find(ResourcesRelativePath);
 
-    /// <summary>
-    /// Whether any pixel of a PNG is not zero, read from its inflated image data.
-    /// </summary>
-    /// <remarks>
-    /// The rows need no unfiltering for this one question. Every PNG filter predicts a byte from
-    /// bytes before it, so an image whose bytes are all zero filters to zeros, and the first non-zero
-    /// byte of any other image is predicted from zeros and so survives filtering as itself. The one
-    /// byte per row that names the filter is skipped.
-    /// </remarks>
     private static bool DrawsSomething(string path)
     {
         byte[] png = File.ReadAllBytes(path);

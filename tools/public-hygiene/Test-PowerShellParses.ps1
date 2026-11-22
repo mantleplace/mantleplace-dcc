@@ -1,15 +1,3 @@
-<#
-.SYNOPSIS
-  Fails when a tracked PowerShell script does not parse.
-
-.DESCRIPTION
-  Runs the PowerShell parser over every `git ls-files '*.ps1'` and prints each error as
-  file:line:column and its message. It executes nothing. The deliberately broken case under
-  tools/public-hygiene/cases/ is excluded from the sweep and is checked by -Case.
-
-  -Path   parse exactly these files instead of the tracked set.
-  -Case   expect the parser to refuse every given file, naming a line; fail if one parses.
-#>
 [CmdletBinding()]
 param(
     [string[]]$Path,

@@ -62,31 +62,23 @@ from check_docs_integrity import tracked_markdown, without_code
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# The glossary, and the heading its banned-term table sits under.
 GLOSSARY = "CONTEXT.md"
 AVOID_HEADING = re.compile(r"(?m)^##[ \t]+Avoid list[ \t]*$")
 ANY_H2 = re.compile(r"(?m)^##[ \t]+\S")
 
-# Dated records keep the wording they were written in: an accepted decision record is append-only
-# and the changelog is a dated log. A word retired later is not a reason to rewrite either.
 RECORD_PREFIXES = ("docs/adr/", "spec/changelog.md")
 
-# Where host strings live. Production code only; the scan skips any path with a test component.
 HOST_ROOTS = ("unreal/", "revit/", "blender/", "shared/")
 HOST_SUFFIXES = (".cs", ".cpp", ".h", ".py", ".uplugin")
 TEST_PATH = re.compile(r"(?i)(^|/)[^/]*tests?[^/]*(/|\.[a-z]+$)|(^|/)test_[^/]*$")
 
-# A quoted term in the table's first column, and the optional "said about X" after the last one.
 QUOTED = re.compile(r'"([^"]+)"|“([^”]+)”')
 SAID_ABOUT = re.compile(r"(?i)\bsaid about\s+(?:the\s+)?([a-z][a-z-]*)")
 
-# The word "own" after one of these is the adjective ("its own", "a host's own").
 POSSESSIVE_BEFORE = re.compile(r"(?i)(?:\b(?:my|our|your|his|her|its|their|whose)|['’]s?)\s+[*_]*$")
 
-# A string with none of these is an identifier, a key or a path rather than prose.
 PROSE_MARK = re.compile(r"[\s-]")
 
-# A mention in quotation marks inside the glossary.
 QUOTED_SPAN = re.compile(r'"[^"\n]*"|“[^”\n]*”')
 
 LINK_TARGET = re.compile(r"\]\(\s*(?:[^()\s]|\([^()]*\))*|^[ \t]{0,3}\[[^\]]+\]:[ \t]*\S+|https?://\S+", re.M)
@@ -98,7 +90,7 @@ class Rule:
     """One row of the Avoid list."""
 
     terms: tuple[str, ...]
-    scope: str | None  # the stem a unit must mention for the terms to count, or None
+    scope: str | None
     replacement: str
     pattern: re.Pattern[str]
     scope_pattern: re.Pattern[str] | None
@@ -154,8 +146,6 @@ def parse_rules(glossary: str) -> list[Rule]:
         terms = tuple(a or b for a, b in QUOTED.findall(banned))
         if not terms:
             continue
-        # Only the text after the last quoted term is the qualifier, so a quoted term can never
-        # be mistaken for one.
         last = list(QUOTED.finditer(banned))[-1]
         said = SAID_ABOUT.search(banned[last.end() :])
         scope = said.group(1).lower() if said else None
@@ -315,7 +305,6 @@ def string_literals(path: str, source: str) -> list[tuple[int, str]]:
             i = j + 1
             continue
         if char == "'" and not python and not (i > 0 and source[i - 1].isalnum()):
-            # A character literal, which is never prose; step over it so '"' is not a string.
             j = i + 1
             while j < n and source[j] != "'" and source[j] != "\n":
                 j += 2 if source[j] == "\\" else 1
@@ -358,8 +347,6 @@ def run(root: Path) -> int:
         return 1
     rules = parse_rules(glossary_path.read_text(encoding="utf-8"))
     if not rules:
-        # A list that parses to nothing would pass everything: the failure to refuse here is the
-        # one a reformatted table would otherwise cause in silence.
         print(
             f"Refused: no banned term could be read from the '## Avoid list' table in {GLOSSARY}. "
             'A row is | "term", "another term" | the wording to use instead |.'

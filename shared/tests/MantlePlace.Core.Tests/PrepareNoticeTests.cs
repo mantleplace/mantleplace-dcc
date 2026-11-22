@@ -2,16 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// What the curator is told when a Prepare they stopped watching ends, and when they are told
-/// nothing.
-/// </summary>
-/// <remarks>
-/// The notice exists for a job nobody is looking at. So the vault being open silences it — the vault
-/// already says what happened — and so does being signed out, because the curator chose that and a
-/// failure it caused is not news. What is left is one notice per ending the curator would otherwise
-/// have to reopen the vault to discover.
-/// </remarks>
 internal static class PrepareNoticeTests
 {
     private const string Order = "order-1";

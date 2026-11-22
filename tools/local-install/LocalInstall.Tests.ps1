@@ -1,15 +1,3 @@
-# The verdict a host's Check-<Host>Install.ps1 prints, tested over facts rather than over git.
-#
-# The host scripts gather facts (a stamp, a submodule checkout, a few rev-list counts) and hand
-# them to Get-LocalInstallVerdict; this file pins what that function says for each shape of fact.
-# The scripts themselves need a Revit add-ins folder or a consuming project's checkout and are
-# proven by running them, the same way the deploy script is.
-#
-#   pwsh -NoProfile -Command "Invoke-Pester tools/local-install/LocalInstall.Tests.ps1"
-#
-# Pester 5+ syntax; the module under test stays Windows PowerShell 5.1 compatible and is loaded
-# into 5.1 by the host scripts, so a construct that only pwsh accepts belongs here, never there.
-
 BeforeAll {
     Import-Module (Join-Path $PSScriptRoot 'LocalInstall.psm1') -Force
 }
@@ -128,9 +116,6 @@ Describe 'Get-LocalInstallVerdict' {
         }
 
         It 'is stale when the branch is gone from origin and main moved under the host: the squash-merge case' {
-            # A squash merge puts a NEW commit on main and deletes the branch, so the installed
-            # commit is never on main and origin/<branch> no longer resolves. That is the normal
-            # end of every pull request here, and it must not read as a healthy preview forever.
             $v = Get-LocalInstallVerdict -HostName Revit -Installed $true -HasStamp $true `
                 -Sha 'abc1234def' -ShaKnown $true -Branch 'feat/ribbon' -Dirty $false `
                 -OnMain $false -BehindMain 3 -BranchExists $false -BranchMerged $false `
@@ -167,8 +152,6 @@ Describe 'Get-LocalInstallVerdict' {
         }
 
         It 'is stale from a detached head once main has moved under the host' {
-            # The consuming project's normal state is a detached checkout at its pin; when that pin
-            # is behind, the editor compiles old code, and the line has to say so.
             $v = Get-LocalInstallVerdict -HostName Unreal -Installed $true -HasStamp $true `
                 -Sha 'abc1234def' -ShaKnown $true -Branch $null -Dirty $false `
                 -OnMain $false -BehindMain 3 -HostPath 'unreal/' -Remedy 'unreal/tools/Refresh-UnrealInstall.ps1'

@@ -2,10 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// How a step that creates many elements splits them into transactions: every element exactly once,
-/// in order, never more than <see cref="ImportChunking.ElementsPerTransaction"/> to a commit.
-/// </summary>
 internal static class ImportChunkingTests
 {
     internal static int Run()
@@ -35,7 +31,6 @@ internal static class ImportChunkingTests
 
         run.Case("every element lands in exactly one chunk", () =>
         {
-            // The largest tree file in the local cache is in the tens of thousands of rows.
             const int count = 48_311;
             int next = 0;
             foreach (ImportChunk chunk in ImportChunking.Chunks(count))
@@ -50,9 +45,6 @@ internal static class ImportChunkingTests
 
         run.Case("the chunk size keeps Cancel prompt without cutting a step into a slice per element", () =>
         {
-            // The size is for Cancel: a commit is what Cancel and the import window wait on, so a chunk
-            // must stay a moment. A few elements per chunk would turn a large layer into tens of
-            // thousands of transactions, raises and log lines for no gain in how soon Cancel lands.
             run.True(ImportChunking.ElementsPerTransaction >= 50, "not a slice per handful of elements");
             run.True(ImportChunking.ElementsPerTransaction <= 1_000, "small enough that a chunk is a moment");
         });

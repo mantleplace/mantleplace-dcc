@@ -1,28 +1,3 @@
-<#
-.SYNOPSIS
-    Says whether the Revit plugin installed on this machine is current with origin/main, a preview
-    of a branch, or stale -- one line, one exit code.
-
-.DESCRIPTION
-    Reads the stamp Deploy-MantlePlaceRevit.ps1 wrote beside the manifest in each per-version
-    add-ins folder, and compares the commit it names against origin/main, counting only commits
-    that touch revit/. The verdict contract is tools/local-install/README.md; the sentences come
-    from LocalInstall.psm1 and nowhere else.
-
-    All three add-ins folders are read. The deploy script writes them identically, so one line
-    covers them; if they ever disagree, one line per version says which is which.
-
-    Windows PowerShell 5.1 compatible, like the deploy script and for the same reason.
-
-.PARAMETER RevitVersions
-    Which per-user add-in folders to read. Defaults to every supported host.
-
-.PARAMETER NoFetch
-    Compare against the origin/main this clone already has, without fetching first.
-
-.EXAMPLE
-    ./Check-RevitInstall.ps1
-#>
 [CmdletBinding()]
 param(
     [string[]]$RevitVersions = @('2025', '2026', '2027'),
@@ -39,7 +14,6 @@ Import-Module (Join-Path $repoRoot 'tools/local-install/LocalInstall.psm1') -For
 $remedy = 'revit/tools/Deploy-MantlePlaceRevit.ps1'
 $addinsRoot = Join-Path $env:APPDATA 'Autodesk/Revit/Addins'
 
-# One verdict per distinct install, keyed by what the stamp says. Normally one.
 $buckets = [ordered]@{}
 
 function Add-ToBucket {

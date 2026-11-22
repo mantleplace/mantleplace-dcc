@@ -1,19 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""What a validation run found, and the verdict and exit code that follow from it."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-#: The checks, in the order a run makes them and a report lists them.
 CHECKS = ("archive", "manifest", "schema", "pointers", "sha256", "frames", "roles", "geopackage", "names",
           "level", "catalog", "zip")
 
 SEVERITIES = ("error", "warning", "info")
 
-#: Exit codes. 0 conformant, 1 not conformant, 2 could not check (an unreadable input, an
-#: unreachable or untrustworthy schema): the same three the repository's conformance gate uses.
 EXIT_PASS, EXIT_FAIL, EXIT_ERROR = 0, 1, 2
 
 
@@ -43,7 +39,6 @@ class Report:
     findings: list[Finding] = field(default_factory=list)
     hashes: dict[str, int] = field(default_factory=lambda: {"verified": 0, "mismatched": 0,
                                                              "unknown": 0})
-    #: Set when a check could not be made at all; the verdict is then "error", never "pass".
     incomplete: bool = False
     ran: list[str] = field(default_factory=list)
 

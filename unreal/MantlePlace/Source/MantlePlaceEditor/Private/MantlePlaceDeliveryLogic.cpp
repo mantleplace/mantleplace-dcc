@@ -6,7 +6,6 @@
 
 namespace
 {
-/** A published value in the standard's words (HPS-51), or verbatim when it has none. */
 FString InStandardWords(const FString& Published, const TCHAR* const (*Table)[2], int32 Count)
 {
 	if (Published.IsEmpty())
@@ -33,7 +32,7 @@ const TCHAR* const LinearUnitWords[][2] = {
 	{ TEXT("ftUS"), TEXT("US survey feet") },
 	{ TEXT("ft"), TEXT("international feet") },
 };
-} // namespace
+}
 
 TArray<FString> FMantlePlaceDeliveryLogic::DescribeDelivery(const FMantlePlaceDeliveryFacts& Delivery)
 {
@@ -43,8 +42,6 @@ TArray<FString> FMantlePlaceDeliveryLogic::DescribeDelivery(const FMantlePlaceDe
 		return Lines;
 	}
 
-	// The published label wins; before 1.3.0 there is none, and the code stands in for it rather
-	// than a name looked up here.
 	const FString Crs = !Delivery.Label.IsEmpty() ? Delivery.Label
 		: Delivery.bHasHorizontalEpsg ? FString::Printf(TEXT("EPSG:%d"), Delivery.HorizontalEpsg)
 		: FString(TEXT("no delivery CRS"));
@@ -53,8 +50,6 @@ TArray<FString> FMantlePlaceDeliveryLogic::DescribeDelivery(const FMantlePlaceDe
 		*InStandardWords(Delivery.LinearUnit, LinearUnitWords, UE_ARRAY_COUNT(LinearUnitWords)),
 		*Crs));
 
-	// Keyed on the files' unit, not the order's unit system: the unit system is what the customer
-	// asked for and does not by itself say what any file is in (CONTEXT.md).
 	if (Delivery.LinearUnit.Equals(TEXT("ftUS"), ESearchCase::CaseSensitive)
 		|| Delivery.LinearUnit.Equals(TEXT("ft"), ESearchCase::CaseSensitive))
 	{

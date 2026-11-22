@@ -6,16 +6,9 @@
 
 #include "MantlePlaceBundleCacheLogic.h"
 #include "MantlePlaceBundleCacheTypes.h"
-#include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion
+#include "MantlePlaceVaultTypes.h"
 #include "Tests/MantlePlaceConformanceCorpus.h"
 #include "Dom/JsonObject.h"
-
-// The cache-validity truth table, the cache-key sanitisation vectors and the SHA-256 known answers
-// come from the shared conformance corpus (HPS-40): tools/manifest-conformance/corpus/{cache,digest}/.
-//
-// The validity table is the one every host gets subtly wrong. `null` sha256 means UNKNOWN, not
-// absent and not zero — a host that treats it as a mismatch makes every legacy bundle un-openable,
-// and a host that reports bIntegrityChecked=true for it claims a verification it never did.
 
 namespace
 {
@@ -43,14 +36,13 @@ FString CacheStateName(EMantlePlaceCacheState State)
 	}
 }
 
-/** Lowercase-hex SHA-256 of a string's UTF-8 bytes, through the logic layer under test. */
 FString Sha256OfUtf8(const FString& Text)
 {
 	const FTCHARToUTF8 Utf8(*Text);
 	return FMantlePlaceBundleCacheLogic::Sha256Hex(
 		reinterpret_cast<const uint8*>(Utf8.Get()), Utf8.Length());
 }
-} // namespace
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceBundleCacheLogicTest,
@@ -67,9 +59,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 	using FLogic = FMantlePlaceBundleCacheLogic;
 	const FString Root = TEXT("C:/Cache");
 
-	// ========================================================================================
-	// digest group — the FIPS 180-4 known answers, plus streaming == one-shot
-	// ========================================================================================
 	{
 		TArray<FCase> Cases;
 		FString LoadError;
@@ -95,8 +84,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 					RowString(Row, TEXT("sha256")));
 			}
 
-			// The streaming path must agree with the one-shot path across a chunk boundary that is
-			// NOT block-aligned — the classic place a hand-rolled SHA-256 diverges.
 			const TArray<TSharedPtr<FJsonObject>> Streaming = Rows(*Case, TEXT("streamingEquivalence"));
 			TestTrue(Case->What(TEXT("has streamingEquivalence rows")), Streaming.Num() > 0);
 			for (const TSharedPtr<FJsonObject>& Row : Streaming)
@@ -117,9 +104,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 					Sha256OfUtf8(Whole));
 			}
 
-			// The corpus states the comparison rule as prose ("trim both ends, compare
-			// case-insensitively"); it is applied here rather than parsed, so the assertion is
-			// pinned to the sentence a second host author reads.
 			const FString Comparison = RowString(Case->PayloadObject, TEXT("comparison"));
 			TestTrue(Case->What(TEXT("states a comparison rule")), !Comparison.IsEmpty());
 			TestTrue(Case->What(TEXT("comparison ignores case")),
@@ -129,8 +113,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 			TestFalse(Case->What(TEXT("different digests are not equal")),
 				FLogic::Sha256Equal(TEXT("abcd"), TEXT("abce")));
 
-			// A zero-length buffer arrives as a null pointer from the shim's empty-file path; the
-			// corpus states sha256("") but not how the caller passes "nothing".
 			TestEqual(Case->What(TEXT("sha256 of a null/zero-length buffer")),
 				FLogic::Sha256Hex(nullptr, 0), Sha256OfUtf8(FString()));
 		}
@@ -143,9 +125,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// ========================================================================================
-	// cache group — key sanitisation and the validity truth table
-	// ========================================================================================
 	TArray<FCase> Cases;
 	FString LoadError;
 	if (!LoadGroup(TEXT("cache"), Cases, LoadError))
@@ -155,7 +134,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 	}
 	TSet<FString> Driven;
 
-	// --- cache.keySanitisation --------------------------------------------------------------
 	if (const FCase* Case = FindCase(Cases, TEXT("cache.keySanitisation")))
 	{
 		Driven.Add(Case->Id);
@@ -168,12 +146,11 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 			const bool bLossy = RowBool(Row, TEXT("lossy"));
 			const bool bSuffixed = RowBool(Row, TEXT("suffixed"));
 
-			// A row is either one id or a pair that must collide under sanitisation but not on disk.
 			TArray<FString> Ids = RowStrings(Row, TEXT("orderIdPair"));
 			if (Ids.Num() == 0)
 			{
 				FString Single;
-				Row->TryGetStringField(TEXT("orderId"), Single); // "" is a real vector, not an absence
+				Row->TryGetStringField(TEXT("orderId"), Single);
 				Ids.Add(Single);
 			}
 
@@ -186,8 +163,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 				const FString Unsuffixed = Root / Sanitised;
 				if (bSuffixed)
 				{
-					// '_' + the first 8 hex chars of sha256(utf8(rawOrderId)) — recomputed here, so a
-					// host that invents a different suffix scheme diverges immediately.
 					const FString Expected = Unsuffixed + TEXT("_") + Sha256OfUtf8(OrderId).Left(8);
 					TestEqual(Where + TEXT(" lossy dir carries the raw-id hash suffix"), Dir, Expected);
 				}
@@ -195,8 +170,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 				{
 					TestEqual(Where + TEXT(" lossless dir is unsuffixed"), Dir, Unsuffixed);
 				}
-				// ".." surviving as literal characters is fine — what must not survive is a path
-				// SEPARATOR, which is what would turn the segment into an escape from the root.
 				const FString Segment = Dir.RightChop(Root.Len() + 1);
 				TestTrue(Where + TEXT(" stays under the cache root"), Dir.StartsWith(Root + TEXT("/")));
 				TestFalse(Where + TEXT(" segment has no forward slash"), Segment.Contains(TEXT("/")));
@@ -212,8 +185,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 			}
 		}
 
-		// The three file names the corpus fixes, so a second host lands on the same layout and a
-		// half-written download is never mistaken for a complete one (HPS-26).
 		const TSharedPtr<FJsonObject>* FileNames = nullptr;
 		if (Case->PayloadObject.IsValid()
 			&& Case->PayloadObject->TryGetObjectField(TEXT("fileNames"), FileNames)
@@ -234,37 +205,23 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- HPS-30, hand-written: the surrogate rows ---------------------------------------------
-	// The two astral rows are corpus vectors above and are asserted again here against literal
-	// expected strings. Both failing together is a real regression; only the vector-driven one
-	// failing localises it to the reader instead of to the sanitiser. The unpaired-surrogate row
-	// is host-local because a lone surrogate has no portable spelling in a JSON corpus file.
 	{
-		// One code point in, exactly ONE underscore out. The pre-fix walk consumed UTF-16 code
-		// UNITS and emitted two, so this host derived a different cache directory than Revit for
-		// the same order and neither could notice.
-		const FString Astral = TEXT("\U0001D7CE"); // MATHEMATICAL BOLD DIGIT ZERO, category Nd
+		const FString Astral = TEXT("\U0001D7CE");
 		TestEqual(TEXT("[HPS-30] an astral alphanumeric is BMP-bounded to one underscore"),
 			FLogic::SanitizeKeySegment(Astral), FString(TEXT("_")));
 		TestEqual(TEXT("[HPS-30] an astral non-alphanumeric is one underscore"),
 			FLogic::SanitizeKeySegment(TEXT("a\U0001F600b")), FString(TEXT("a_b")));
 
-		// An unpaired surrogate is not a code point at all, so it is never alphanumeric — and the
-		// decoder must not run off the end of the string looking for the half that is missing.
-		// Built a code unit at a time because a lone surrogate is not a legal string literal.
 		FString LoneHigh;
 		LoneHigh.AppendChar(static_cast<TCHAR>(0xD835));
 		TestEqual(TEXT("[HPS-30] an unpaired surrogate is one underscore"),
 			FLogic::SanitizeKeySegment(LoneHigh), FString(TEXT("_")));
 
-		// Lossy, so suffixed — over the RAW id, which is what keeps two distinct astral ids in
-		// distinct directories under a rule that maps both their stems to the same underscore.
 		TestEqual(TEXT("[HPS-30] the astral dir carries the raw-id hash suffix"),
 			FLogic::DeriveBundleDir(Root, Astral),
 			(Root / TEXT("_")) + TEXT("_") + Sha256OfUtf8(Astral).Left(8));
 	}
 
-	// --- cache.validityTruthTable -----------------------------------------------------------
 	if (const FCase* Case = FindCase(Cases, TEXT("cache.validityTruthTable")))
 	{
 		Driven.Add(Case->Id);
@@ -274,8 +231,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 		{
 			Case->PayloadObject->TryGetStringField(TEXT("minSupportedManifestVersion"), MinVersion);
 		}
-		// The table's rows are written relative to this floor (the "too old" row sits exactly one
-		// below it). If the corpus and this host disagree, every row below is meaningless.
 		TestEqual(Case->What(TEXT("corpus floor == this host's MinSupportedManifestVersion")),
 			MinVersion, MantlePlaceMinSupportedManifestVersion);
 
@@ -286,16 +241,10 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 			const FString Name = RowString(Row, TEXT("name"));
 			const FString Where = FString::Printf(TEXT("[%s] \"%s\""), *Case->Id, *Name);
 
-			// `null` is UNKNOWN and `absent` is the same thing here; both leave the bHas* flag false.
-			// TryGet*Field returns false for a JSON null, which is exactly that distinction.
 			FString ExpectedSha;
 			const bool bHasExpectedSha = Row->TryGetStringField(TEXT("expectedSha256"), ExpectedSha);
 			double ExpectedSize = 0.0;
 			const bool bHasExpectedSize = Row->TryGetNumberField(TEXT("expectedSizeBytes"), ExpectedSize);
-			// The truth table deliberately SPANS the era break: rows at the floor carry the semver
-			// string "1.0.0", and the "too old" rows carry the integer 19 — the pre-history's top,
-			// which is the neighbour immediately below a semver floor in the total order. So both
-			// JSON shapes are read here, and reading only one would silently skip half the table.
 			FString Version;
 			bool bHasVersion = Row->TryGetStringField(TEXT("manifestVersion"), Version);
 			if (!bHasVersion)
@@ -326,7 +275,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 				Validity.bIntegrityChecked == RowBool(Row, TEXT("integrityChecked")));
 		}
 
-		// (file present?, validity) -> the list-row state the panel renders.
 		const FMantlePlaceCacheValidity Valid = FLogic::DecideValidity(
 			true, 1024, TEXT("ab"), true, TEXT("ab"), true, 1024, true, MinVersion, MinVersion);
 		const FMantlePlaceCacheValidity Stale = FLogic::DecideValidity(
@@ -356,11 +304,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 			TEXT("corpus case '%s' is in the cache group but nothing here drives it (HPS-41)"), *Missing));
 	}
 
-	// ========================================================================================
-	// Host-local: presigned-URL expiry math + the cache.json sidecar
-	// ========================================================================================
-	// The sidecar is this plugin's own on-disk format (no other host reads it) and the expiry
-	// helper is engine FDateTime plumbing, so neither belongs in a cross-host corpus.
 	{
 		FDateTime Expiry;
 		TestTrue(TEXT("ParseExpiry parses ISO-8601"),
@@ -369,7 +312,7 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 
 		const FDateTime DayBefore(2026, 6, 19, 0, 0, 0);
 		const FDateTime AtExpiry(2026, 6, 20, 0, 0, 0);
-		const FDateTime JustInsideSkew(2026, 6, 19, 23, 59, 30); // 30s before expiry, skew 60s
+		const FDateTime JustInsideSkew(2026, 6, 19, 23, 59, 30);
 		TestFalse(TEXT("Not expired a day before"), FLogic::IsExpired(DayBefore, Expiry));
 		TestTrue(TEXT("Expired at the expiry instant"), FLogic::IsExpired(AtExpiry, Expiry));
 		TestTrue(TEXT("Expired within the skew window"), FLogic::IsExpired(JustInsideSkew, Expiry));
@@ -401,9 +344,7 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("Missing orderId fails closed"), FLogic::ParseMeta(TEXT("{\"format\":\"glb\"}"), Bad, Error));
 	}
 
-	// --- A view is held against its own record, never the listing's whole-archive facts ---------
 	{
-		// A cached view: the listing states the whole archive (huge), the record states the view.
 		const FMantlePlaceCacheExpectation HeldView = FLogic::ExpectationForHeld(
 			true, TEXT("beef"), 4194304, true, TEXT("cafe"), true, 480000000);
 		TestTrue(TEXT("A cached view is held against its recorded digest"), HeldView.bHasSha256 && HeldView.Sha256 == TEXT("beef"));
@@ -419,7 +360,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("A view with no recorded digest is unverified, not held to the listing"), HeldNoRecord.bHasSha256);
 		TestFalse(TEXT("A view with no recorded size is unverified, not held to the listing"), HeldNoRecord.bHasSizeBytes);
 
-		// The decision the cache then makes: the view passes against its record where the listing would refuse it.
 		const FMantlePlaceCacheValidity Valid = FLogic::DecideValidity(
 			true, 4194304, TEXT("beef"), HeldView.bHasSha256, HeldView.Sha256, HeldView.bHasSizeBytes, HeldView.SizeBytes,
 			false, TEXT(""));
@@ -432,7 +372,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 			false, TEXT(""));
 		TestFalse(TEXT("A truncated view fails its own record"), Truncated.bValid);
 
-		// A re-cut moves the listing's digest from the one recorded at download time.
 		TestTrue(TEXT("A view is re-cut when the listing's digest moved"),
 			FLogic::IsViewRecut(true, TEXT("aaaa"), true, TEXT("bbbb")));
 		TestFalse(TEXT("The same listing digest is not a re-cut"),
@@ -444,7 +383,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("A whole archive is held against the listing, not this"),
 			FLogic::IsViewRecut(false, TEXT("aaaa"), true, TEXT("bbbb")));
 
-		// A download in flight: a view is checked for the length the platform stated and nothing from the listing.
 		const FMantlePlaceCacheExpectation DownView = FLogic::ExpectationForDownload(
 			true, true, 4194304, true, TEXT("cafe"), true, 480000000);
 		TestFalse(TEXT("A downloading view has no listing digest to match"), DownView.bHasSha256);
@@ -457,7 +395,6 @@ bool FMantlePlaceBundleCacheLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("A downloading whole archive is checked against the listing"),
 			DownWhole.bHasSha256 && DownWhole.Sha256 == TEXT("cafe") && DownWhole.SizeBytes == 480000000);
 
-		// The sidecar remembers which it holds; one written before views reads as a whole archive.
 		FMantlePlaceCachedBundle ViewMeta;
 		ViewMeta.OrderId = TEXT("f3c1");
 		ViewMeta.bHoldsView = true;
@@ -483,7 +420,6 @@ bool FMantlePlaceBundleCacheLevelTest::RunTest(const FString& Parameters)
 	using FLogic = FMantlePlaceBundleCacheLogic;
 	using E = EMantlePlaceCacheState;
 
-	// The same level reuses the slot; a different one is a fresh download that replaces it.
 	TestEqual(TEXT("The same level reuses the cached download"),
 		CacheStateName(FLogic::StateAtLevel(E::CachedValid, TEXT("Med"), TEXT("Med"))), FString(TEXT("CachedValid")));
 	TestEqual(TEXT("A different level is downloaded afresh"),
@@ -491,7 +427,6 @@ bool FMantlePlaceBundleCacheLevelTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("A level is spelled exactly"),
 		CacheStateName(FLogic::StateAtLevel(E::CachedValid, TEXT("MED"), TEXT("Med"))), FString(TEXT("CachedStale")));
 
-	// A 2.x download records no level and wants none: as it was.
 	TestEqual(TEXT("A 2.x slot serves a 2.x download"),
 		CacheStateName(FLogic::StateAtLevel(E::CachedValid, FString(), FString())), FString(TEXT("CachedValid")));
 	TestEqual(TEXT("A 2.x slot does not serve a 3.0 level"),
@@ -499,13 +434,11 @@ bool FMantlePlaceBundleCacheLevelTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("A 3.0 slot does not serve a 2.x download"),
 		CacheStateName(FLogic::StateAtLevel(E::CachedValid, TEXT("Min"), FString())), FString(TEXT("CachedStale")));
 
-	// The level never rescues a slot that is not valid, nor invents one.
 	TestEqual(TEXT("Nothing cached stays nothing cached"),
 		CacheStateName(FLogic::StateAtLevel(E::NotCached, FString(), TEXT("Med"))), FString(TEXT("NotCached")));
 	TestEqual(TEXT("A stale slot stays stale at its own level"),
 		CacheStateName(FLogic::StateAtLevel(E::CachedStale, TEXT("Med"), TEXT("Med"))), FString(TEXT("CachedStale")));
 
-	// The sidecar records the level; a 2.x sidecar is unchanged and reads as no level.
 	FMantlePlaceCachedBundle Meta;
 	Meta.OrderId = TEXT("order-3");
 	Meta.bHoldsView = true;
@@ -524,4 +457,4 @@ bool FMantlePlaceBundleCacheLevelTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

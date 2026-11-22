@@ -9,7 +9,6 @@
 
 namespace
 {
-/** The material_weights layer as v19 ships it: eight materials across two 4-band RGBA companions. */
 FMantlePlaceLandscapeLayer MakeLayer(int32 Width, int32 Height)
 {
 	FMantlePlaceUeReadyRaster First;
@@ -32,7 +31,6 @@ FMantlePlaceLandscapeLayer MakeLayer(int32 Width, int32 Height)
 	return Layer;
 }
 
-/** An RGBA image whose every channel encodes its own pixel position, so a mis-sample is visible. */
 FMantlePlaceRgbaImage MakeImage(const FString& Path, int32 Width, int32 Height, uint8 ChannelBase)
 {
 	FMantlePlaceRgbaImage Image;
@@ -53,7 +51,7 @@ FMantlePlaceRgbaImage MakeImage(const FString& Path, int32 Width, int32 Height, 
 	}
 	return Image;
 }
-} // namespace
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMantlePlaceLandscapeWeightsLogicTest,
@@ -62,7 +60,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 {
-	// --- The band legend resolves to (image, channel) in legend order ------------------------
 	{
 		const FMantlePlaceLandscapeLayer Layer = MakeLayer(2, 2);
 		TArray<FMantlePlaceWeightBand> Bands;
@@ -81,7 +78,6 @@ bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- Fail closed: no legend, and a material no companion carries --------------------------
 	{
 		FMantlePlaceLandscapeLayer NoLegend = MakeLayer(2, 2);
 		NoLegend.Materials.Reset();
@@ -98,7 +94,6 @@ bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 			FMantlePlaceLandscapeWeightsLogic::ResolveBands(Unbacked, Bands, Error));
 		TestTrue(TEXT("and names the material"), Error.Contains(TEXT("lava")));
 
-		// A companion in some other encoding is not a weight source, so the legend cannot resolve.
 		FMantlePlaceLandscapeLayer NotRgba = MakeLayer(2, 2);
 		for (FMantlePlaceUeReadyRaster& Raster : NotRgba.UeReady)
 		{
@@ -109,32 +104,19 @@ bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 			FMantlePlaceLandscapeWeightsLogic::ResolveBands(NotRgba, Bands, Error));
 	}
 
-	// --- SampleIndex maps corner to corner, both up- and down-sampling ------------------------
 	{
-		// 3 posts over 2 pixels: first post -> first pixel, last post -> last pixel.
 		TestEqual(TEXT("first post"), FMantlePlaceLandscapeWeightsLogic::SampleIndex(0, 3, 2), 0);
 		TestEqual(TEXT("middle post"), FMantlePlaceLandscapeWeightsLogic::SampleIndex(1, 3, 2), 1);
 		TestEqual(TEXT("last post never runs off the end"),
 			FMantlePlaceLandscapeWeightsLogic::SampleIndex(2, 3, 2), 1);
 
-		// Down-sampling: 3 posts over 143 pixels (the real bundle's weight raster width).
 		TestEqual(TEXT("first of 143"), FMantlePlaceLandscapeWeightsLogic::SampleIndex(0, 3, 143), 0);
 		TestEqual(TEXT("mid of 143"), FMantlePlaceLandscapeWeightsLogic::SampleIndex(1, 3, 143), 71);
 		TestEqual(TEXT("last of 143"), FMantlePlaceLandscapeWeightsLogic::SampleIndex(2, 3, 143), 142);
 
-		// A single post has nowhere to interpolate to; a zero-width raster has nothing to read.
 		TestEqual(TEXT("one post"), FMantlePlaceLandscapeWeightsLogic::SampleIndex(0, 1, 143), 0);
 		TestEqual(TEXT("no pixels"), FMantlePlaceLandscapeWeightsLogic::SampleIndex(2, 3, 0), 0);
 
-		// Nearest neighbour, asserted as such. A post that falls between two source pixels takes ONE
-		// of them, never a blend of both: 11 posts over 2 pixels puts posts 0-4 on pixel 0 and 5-10
-		// on pixel 1, with nothing in between and no third value anywhere.
-		//
-		// This is the decision recorded on FMantlePlaceLandscapeWeightsLogic, asserted so that a
-		// change to bilinear cannot land as a quiet edit to the arithmetic. The manifest publishes no
-		// flag saying which bands are continuous, and deciding it here would be deriving a value the
-		// contract did not publish; if it ever does publish one, this is the assertion to come back
-		// to, and it should then be a per-band choice rather than a change to every band at once.
 		for (int32 Post = 0; Post <= 10; ++Post)
 		{
 			const int32 Index = FMantlePlaceLandscapeWeightsLogic::SampleIndex(Post, 11, 2);
@@ -144,7 +126,6 @@ bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- The real shape: a 2x2 raster resampled onto a 3x3 Landscape, TRANSPOSED --------------
 	{
 		const FMantlePlaceLandscapeLayer Layer = MakeLayer(2, 2);
 		const TArray<FMantlePlaceRgbaImage> Images = {
@@ -155,7 +136,7 @@ bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 		TArray<FMantlePlaceWeightPlane> Planes;
 		FString Error;
 		TestTrue(TEXT("planes build"), FMantlePlaceLandscapeWeightsLogic::BuildWeightPlanes(
-		                                   Layer, Images, /*Size*/ 3, /*bRow0IsNorth*/ true, Planes, Error));
+		                                   Layer, Images, 3, true, Planes, Error));
 		TestEqual(TEXT("no error"), Error, FString());
 		TestEqual(TEXT("one plane per material"), Planes.Num(), 8);
 
@@ -164,22 +145,12 @@ bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("plane order follows the legend"), Planes[0].Material, FString(TEXT("water")));
 			TestEqual(TEXT("plane is Size*Size"), Planes[0].Data.Num(), 9);
 
-			// water == channel 0 of the 1_4 half, whose pixel (Row,Col) value is Row*4 + Col.
-			//
-			// The plane is indexed Data[X + Y*Size] with X = NORTH and Y = EAST, so landscape X
-			// walks the PNG's rows (flipped, since PNG row 0 is north) and landscape Y walks its
-			// columns. On the 3x3 grid that puts the four corners at:
-			//   SW = Data[0]   NW = Data[2]   SE = Data[6]   NE = Data[8]
-			// The two off-diagonal corners are what a missing transpose gets wrong — under the old
-			// East->+X reading, NW and SE held each other's values. SW and NE are invariant under a
-			// diagonal reflection, so they cannot detect it and are asserted only as a sanity check.
 			const TArray<uint8>& Water = Planes[0].Data;
 			TestEqual(TEXT("south-west post reads PNG row 1, col 0"), static_cast<int32>(Water[0]), 4);
 			TestEqual(TEXT("north-west post reads PNG row 0, col 0"), static_cast<int32>(Water[2]), 0);
 			TestEqual(TEXT("south-east post reads PNG row 1, col 1"), static_cast<int32>(Water[6]), 5);
 			TestEqual(TEXT("north-east post reads PNG row 0, col 1"), static_cast<int32>(Water[8]), 1);
 
-			// built == channel 3 of the 5_8 half: base 100 + 3*40 + Row*4 + Col.
 			const TArray<uint8>& Built = Planes[7].Data;
 			TestEqual(TEXT("built reads the second half, channel 3"), static_cast<int32>(Built[0]), 224);
 			TestEqual(TEXT("built north-west"), static_cast<int32>(Built[2]), 220);
@@ -187,12 +158,10 @@ bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("built north-east"), static_cast<int32>(Built[8]), 221);
 		}
 
-		// row0_is_north false means no flip along the north axis: landscape X=0 reads the PNG's
-		// first row. The transpose still applies — only the row direction changes.
 		TArray<FMantlePlaceWeightPlane> Unflipped;
 		Error.Reset();
 		TestTrue(TEXT("planes build unflipped"), FMantlePlaceLandscapeWeightsLogic::BuildWeightPlanes(
-		                                             Layer, Images, 3, /*bRow0IsNorth*/ false, Unflipped, Error));
+		                                             Layer, Images, 3, false, Unflipped, Error));
 		if (Unflipped.Num() == 8)
 		{
 			TestEqual(TEXT("no flip: X=0 post reads PNG row 0"), static_cast<int32>(Unflipped[0].Data[0]), 0);
@@ -201,7 +170,6 @@ bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- Fail closed on bytes that are not what the manifest advertised ----------------------
 	{
 		const FMantlePlaceLandscapeLayer Layer = MakeLayer(2, 2);
 		TArray<FMantlePlaceWeightPlane> Planes;
@@ -225,7 +193,7 @@ bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 			MakeImage(TEXT("Landcover/MaterialWeights_1_4.png"), 2, 2, 0),
 			MakeImage(TEXT("Landcover/MaterialWeights_5_8.png"), 2, 2, 100),
 		};
-		Truncated[0].Pixels.SetNum(4); // one pixel's worth of a four-pixel image
+		Truncated[0].Pixels.SetNum(4);
 		TestFalse(TEXT("a truncated companion is refused"),
 			FMantlePlaceLandscapeWeightsLogic::BuildWeightPlanes(Layer, Truncated, 3, true, Planes, Error));
 
@@ -237,4 +205,4 @@ bool FMantlePlaceLandscapeWeightsLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

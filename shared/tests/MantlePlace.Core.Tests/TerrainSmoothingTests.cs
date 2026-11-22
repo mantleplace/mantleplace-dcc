@@ -2,17 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The sentence a curator reads after the import turns on toposolid smooth shading.
-/// </summary>
-/// <remarks>
-/// Two things are held in place here, and neither is cosmetic. The first is that a plugin which
-/// flips a <em>project-wide</em> display setting must say so, must say what it costs, and must say
-/// where to reverse it — a curator whose toposolid surface patterns stop drawing has to be able to
-/// connect that to this import rather than to a corrupt project. The second is that a setting
-/// written and read back as off is a defect and has to read as one, which is the lesson the drape's
-/// texture distances taught at the price of two sessions.
-/// </remarks>
 internal static class TerrainSmoothingTests
 {
     internal static int Run()
@@ -21,8 +10,6 @@ internal static class TerrainSmoothingTests
 
         run.Case("nothing to say when it was already on", () =>
         {
-            // Null, not "". A re-import onto a project that is already smoothed has genuinely
-            // nothing to report, and an empty clause would still cost a line in the summary.
             run.True(TerrainSmoothing.Notice(wasEnabled: true, isEnabled: true, null) is null,
                 "an already-smoothed project produces no sentence");
         });
@@ -44,8 +31,6 @@ internal static class TerrainSmoothingTests
 
         run.Case("the ribbon path is Revit's own, tab and panel both", () =>
         {
-            // Named from Revit's UI rather than paraphrased: a curator following this sentence is
-            // looking at a ribbon, and "somewhere under Massing" does not find a checkbox.
             run.Contains(TerrainSmoothing.RibbonPath, "Massing & Site", "the tab");
             run.Contains(TerrainSmoothing.RibbonPath, "Model Site", "the panel");
             run.Contains(TerrainSmoothing.RibbonPath, "Toposolid Smooth Shading", "the control");
@@ -53,10 +38,6 @@ internal static class TerrainSmoothingTests
 
         run.Case("nothing is said about subdivisions, because there is nothing to say", () =>
         {
-            // ⛔ The setting is document-wide by SIGNATURE — SetSmoothedSurface is static and takes
-            // only a Document, so there is no per-toposolid state to report on. A sentence hinting
-            // that subdivisions were handled separately would describe an API that does not exist,
-            // and would send the next reader looking for a loop that must not be written.
             string? notice = TerrainSmoothing.Notice(wasEnabled: false, isEnabled: true, null);
 
             run.True(notice?.Contains("subdivision", StringComparison.Ordinal) == false,
@@ -80,8 +61,6 @@ internal static class TerrainSmoothingTests
 
         run.Case("set and read back off is reported as a defect", () =>
         {
-            // ⛔ The exact shape of the drape's texture-distance bug: the call returned without
-            // complaint and the document held something else. Only the read-back sees it.
             string? notice = TerrainSmoothing.Notice(wasEnabled: false, isEnabled: false, null);
 
             run.Contains(notice, "read it back as off", "that the value did not hold");
@@ -91,8 +70,6 @@ internal static class TerrainSmoothingTests
 
         run.Case("on before and off after is its own defect sentence", () =>
         {
-            // A different bug from one that never took the setting: something in this import took
-            // it away. Worth its own words, because the two have different causes.
             string? notice = TerrainSmoothing.Notice(wasEnabled: true, isEnabled: false, null);
 
             run.Contains(notice, "was on before this import", "that something took it away");
@@ -101,8 +78,6 @@ internal static class TerrainSmoothingTests
 
         run.Case("a refusal wins over the read-back, because it explains it", () =>
         {
-            // Both are true at once on the refusal path — Revit threw, so of course it reads off.
-            // The message is the useful half and the generic defect line would bury it.
             string? notice = TerrainSmoothing.Notice(
                 wasEnabled: false, isEnabled: false, "Cannot modify a linked document.");
 
@@ -113,8 +88,6 @@ internal static class TerrainSmoothingTests
 
         run.Case("an empty refusal string is not a refusal", () =>
         {
-            // Guards a caller that initialises the message to "" rather than null: an empty
-            // fragment must not become a sentence that trails off after "Revit said".
             string? notice = TerrainSmoothing.Notice(wasEnabled: false, isEnabled: true, string.Empty);
 
             run.Contains(notice, "smooth shading", "the success sentence, not a refusal");
@@ -122,10 +95,6 @@ internal static class TerrainSmoothingTests
 
         run.Case("a draped terrain with smoothing ON says the photograph is placed for it", () =>
         {
-            // ⛔ The case that cost two sessions. The photograph is placed for the smoothed renderer,
-            // whose offset origin is the element's corner, and the switch that changes the origin
-            // belongs to the curator — so the sentence has to say what turning it off will look
-            // like, in the shape they would recognise.
             string notice = TerrainSmoothing.DrapeNotice(isEnabled: true);
 
             run.Contains(notice, "placed for Revit's toposolid smooth shading", "which renderer");
@@ -135,23 +104,12 @@ internal static class TerrainSmoothingTests
             run.True(notice.Contains("cannot", StringComparison.Ordinal) == false,
                 "no longer claims the two cannot be had together");
 
-            // ⛔ Measured, and it is the opposite mismatch. Four quarters meeting at a cross is what
-            // an offset written for the *project origin* looks like once smoothing is on — the case
-            // this plugin never ships. An offset written for the element's corner and then read from
-            // the origin is the mosaic instead, because flat shading maps per face: 2026-09-16, a
-            // 1,086 × 1,080 m site whose subdivision offsets ran to 978 m, photographed both ways.
-            // Predicting the wrong symptom is worse than predicting none — a curator who sees a
-            // shattered mosaic and was promised quarters concludes the sentence is about something
-            // else and goes looking.
             run.False(notice.Contains("four quarters", StringComparison.Ordinal),
                 "does not predict the symptom of the opposite mismatch");
         });
 
         run.Case("a draped terrain with smoothing OFF is the loud case, and says to import again", () =>
         {
-            // Revit refused or did not hold the setting, so the photograph went in for flat shading.
-            // A curator who later flips the switch by hand would scramble it — the sentence has to
-            // hand them the way out.
             string notice = TerrainSmoothing.DrapeNotice(isEnabled: false);
 
             run.Contains(notice, "could not turn it on", "why the ground is faceted");
@@ -176,9 +134,6 @@ internal static class TerrainSmoothingTests
 
         run.Case("smoothing is settled before a polygon step's cuts exactly when the drape will write for them", () =>
         {
-            // A cut is typed for the shading the drape will write for, which has to be known before
-            // the cut exists. On a bare terrain that commit is about a second; after 405 subdivisions
-            // it was 96 s (revit/CLAUDE.md).
             run.True(TerrainSmoothing.SettleBeforeCuts(drapePlanned: true, newSubDivisions: 19), "the drape will write for them");
             run.False(TerrainSmoothing.SettleBeforeCuts(drapePlanned: false, newSubDivisions: 19),
                 "no drape: the project-wide setting is left to Finish, as before");

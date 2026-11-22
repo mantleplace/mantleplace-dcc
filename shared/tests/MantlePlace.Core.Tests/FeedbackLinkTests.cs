@@ -2,15 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The link Send Feedback and Report a problem open (<c>HPS-56</c>).
-/// </summary>
-/// <remarks>
-/// The shim only opens the string this returns and is never built in CI (<c>HPS-02</c>), so every
-/// rule the standard puts on the link is pinned here: which parameters exist, a malformed version
-/// being left out rather than sent raw, <c>order</c> being absent unless a UUID was given, and nothing
-/// else ever appearing in the query.
-/// </remarks>
 internal static class FeedbackLinkTests
 {
     private const string Site = "https://mantle.place";

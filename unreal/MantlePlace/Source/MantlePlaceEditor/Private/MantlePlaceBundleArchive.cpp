@@ -18,7 +18,7 @@ FMantlePlaceBundleRead MantlePlaceBundleArchive::Read(const FString& Path)
 		FString Root = FPaths::ConvertRelativePathToFull(Path);
 		FPaths::NormalizeDirectoryName(Root);
 		TArray<FString> Found;
-		IFileManager::Get().FindFilesRecursive(Found, *Root, TEXT("*"), /*Files*/ true, /*Directories*/ false);
+		IFileManager::Get().FindFilesRecursive(Found, *Root, TEXT("*"), true, false);
 		TArray<FString> Names;
 		Names.Reserve(Found.Num());
 		for (FString File : Found)
@@ -42,7 +42,7 @@ FMantlePlaceBundleRead MantlePlaceBundleArchive::Read(const FString& Path)
 		Failed.Error = FString::Printf(TEXT("Bundle not found: %s"), *Path);
 		return Failed;
 	}
-	const FZipArchiveReader Zip(Handle); // takes ownership of the handle
+	const FZipArchiveReader Zip(Handle);
 	if (!Zip.IsValid())
 	{
 		Failed.Error = FString::Printf(TEXT("Not a folder or a readable zip archive: %s"), *Path);

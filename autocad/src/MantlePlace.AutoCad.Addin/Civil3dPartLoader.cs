@@ -6,15 +6,6 @@ using Autodesk.AutoCAD.DatabaseServices;
 
 namespace MantlePlace.AutoCad.Addin;
 
-/// <summary>
-/// Loads the Civil 3D part, only when the presence test says Civil 3D is in the process, and calls it.
-/// </summary>
-/// <remarks>
-/// The part is never referenced by the shell, so AutoCAD never resolves a Civil 3D assembly while
-/// loading it. A wrong verdict degrades rather than crashes: loading the part under Civil 3D's
-/// "as AutoCAD" launcher threw <see cref="FileNotFoundException"/> for <c>AeccDbMgd</c> in the spike
-/// and the host carried on, so every failure to load is reported as text and the shell stays up.
-/// </remarks>
 internal static class Civil3dPartLoader
 {
     private const string PartFileName = "MantlePlace.AutoCad.Civil3d.dll";
@@ -22,10 +13,6 @@ internal static class Civil3dPartLoader
 
     private static Type? loaded;
 
-    /// <summary>
-    /// What to say about Civil 3D for <paramref name="verdict"/>: the part's own description when it
-    /// may load and does, otherwise why it is not in use.
-    /// </summary>
     internal static string Describe(PresenceVerdict verdict)
     {
         if (Load(verdict, out string? problem) is not { } part)
@@ -37,7 +24,7 @@ internal static class Civil3dPartLoader
         {
             return "The Civil 3D part is on: " + Convert.ToString(Call(part, "Describe"), System.Globalization.CultureInfo.InvariantCulture);
         }
-#pragma warning disable CA1031 // Whatever the part throws is said, never left to take AutoCAD down.
+#pragma warning disable CA1031
         catch (Exception ex)
 #pragma warning restore CA1031
         {
@@ -45,10 +32,6 @@ internal static class Civil3dPartLoader
         }
     }
 
-    /// <summary>
-    /// The part, when <paramref name="verdict"/> lets it load and it does; otherwise <c>null</c>, and
-    /// <paramref name="problem"/> says why it is off.
-    /// </summary>
     internal static Type? Load(PresenceVerdict verdict, out string problem)
     {
         problem = string.Empty;
@@ -79,19 +62,15 @@ internal static class Civil3dPartLoader
         }
     }
 
-    /// <summary>The drawing's zone code, in Civil 3D's spelling. Read only: the part never sets it.</summary>
     internal static string ReadZoneCode(Type part, Database database) =>
         Convert.ToString(Call(part, "ReadZoneCode", database), System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
 
-    /// <summary>The drawing's Civil 3D drawing units, as Civil 3D names them. Read only: the part never sets them.</summary>
     internal static string ReadDrawingUnits(Type part, Database database) =>
         Convert.ToString(Call(part, "ReadDrawingUnits", database), System.Globalization.CultureInfo.InvariantCulture) ?? string.Empty;
 
-    /// <summary>A TIN surface built from a LandXML file: the name it was given and the points Civil 3D read.</summary>
     internal static (string Name, int Points) BuildSurfaceFromLandXml(Type part, Database database, string stem, string landXmlPath, string landXmlSurface, string layer) =>
         ((string, int))Call(part, "BuildSurfaceFromLandXml", database, stem, landXmlPath, landXmlSurface, layer)!;
 
-    /// <summary>Calls the part, and rethrows what the part threw rather than the reflection wrapper.</summary>
     private static object? Call(Type part, string method, params object[] arguments)
     {
         MethodInfo target = part.GetMethod(method) ?? throw new MissingMethodException(PartTypeName, method);

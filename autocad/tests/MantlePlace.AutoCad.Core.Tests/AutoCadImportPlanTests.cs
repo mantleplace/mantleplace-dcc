@@ -4,11 +4,6 @@ using MantlePlace.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 
-/// <summary>
-/// The import plan's own decisions, over the <c>hosts.autocad</c> corpus fixtures: the drawing's
-/// geographic location against the order's frame, parts skipped with their reasons, and the fail-closed
-/// edges the corpus cases do not reach. Each fixture is read from the corpus and changed in one place.
-/// </summary>
 internal static class AutoCadImportPlanTests
 {
     private const string Complete = "manifest/autocad-complete-block.json";
@@ -39,8 +34,6 @@ internal static class AutoCadImportPlanTests
 
         AutoCadImportPlan InZone(JsonObject manifest, DrawingZone zone) =>
             AutoCadImportPlanner.Plan(manifest.ToJsonString(), DrawingGeolocation.None, zone);
-
-        // --- Civil 3D: the drawing's coordinate zone against the order's frame ---
 
         run.Case("in Civil 3D a drawing whose zone is the order's CRS places, and a notice says they agree", () =>
         {
@@ -112,8 +105,6 @@ internal static class AutoCadImportPlanTests
             run.Contains(plan.Refusal, "EPSG:26913", "the location's CRS");
         });
 
-        // --- The drawing's geographic location against the order's frame ---
-
         run.Case("a drawing with no geographic location places at the order's coordinates, and a notice says so", () =>
         {
             AutoCadImportPlan plan = Plan(Fixture(Complete), DrawingGeolocation.None);
@@ -172,8 +163,6 @@ internal static class AutoCadImportPlanTests
             run.Contains(plan.Refusal, "Nothing was imported", "and what happened");
         });
 
-        // --- Units come from the block ---
-
         run.Case("the plan's units are the block's, stated apart, and a notice names them", () =>
         {
             AutoCadImportPlan plan = Plan(Fixture(Complete), DrawingGeolocation.None);
@@ -216,8 +205,6 @@ internal static class AutoCadImportPlanTests
             run.False(contours.Place, "skipped");
             run.Contains(contours.Sentence, "local_enu", "the file's frame, named");
         });
-
-        // --- Readiness ---
 
         run.Case("an absent part is skipped with the bundle's reason, and the others are planned", () =>
         {
@@ -265,8 +252,6 @@ internal static class AutoCadImportPlanTests
             run.Contains(contours.Sentence, "names no file", "why");
         });
 
-        // --- The aerial ---
-
         run.Case("the aerial is placed at its published insertion, verbatim", () =>
         {
             PlannedPart aerial = Plan(Fixture(Complete), DrawingGeolocation.None).Part(AutoCadPart.Aerial);
@@ -298,8 +283,6 @@ internal static class AutoCadImportPlanTests
             run.Contains(aerial.Sentence, "jp2-rgb-16bit", "the format, named");
         });
 
-        // --- The surface ---
-
         run.Case("plain AutoCAD says the surface needs Civil 3D, from its own block", () =>
         {
             PlannedPart surface = Plan(Fixture(Complete), DrawingGeolocation.None, civil3d: false).Part(AutoCadPart.Surface);
@@ -329,8 +312,6 @@ internal static class AutoCadImportPlanTests
 
         run.Case("in Civil 3D's \"as AutoCAD\" mode the part is off, so the surface is unavailable, as in plain AutoCAD", () =>
         {
-            // The shell passes no zone when the presence test says the part may not load (InstalledNotLoaded),
-            // so the plan is plain AutoCAD's.
             PlannedPart surface = Plan(Fixture(Complete), DrawingGeolocation.None, civil3d: false).Part(AutoCadPart.Surface);
 
             run.False(surface.Place, "skipped");
@@ -391,8 +372,6 @@ internal static class AutoCadImportPlanTests
             run.False(surface.Place, "skipped");
             run.Contains(surface.Sentence, "infraworks", "the part, named");
         });
-
-        // --- The public-record layers and the site linework (format.md §6.10) ---
 
         run.Case("each public-record layer is placed on its own layer, from the block's pointer", () =>
         {
@@ -506,8 +485,6 @@ internal static class AutoCadImportPlanTests
             run.Contains(linework, "230 polylines", "the count");
             run.Contains(linework, "4 layers", "over the file's layers");
         });
-
-        // --- The block itself ---
 
         run.Case("a bundle with no AutoCAD block refuses and never reads another host's", () =>
         {

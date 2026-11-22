@@ -2,11 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The tree stamp and ADR 0004's table applied per row: a re-import of the same build creates only
-/// the rows that are missing — which is what makes a cancelled tree step resumable — and a later
-/// build of the same order is refused rather than stacked.
-/// </summary>
 internal static class TreeIdentityTests
 {
     private const string Stem = "order-7f3a";
@@ -76,8 +71,6 @@ internal static class TreeIdentityTests
                 "planted by the landscape architect",
                 TreeIdentity.Stamp("order-other", Rebuild, 1),
 
-                // A stem that this one is a prefix of: without the separator in the comparison, it
-                // would read as this order's earlier build and refuse the import.
                 TreeIdentity.Stamp(Stem + "def", Rebuild, 1),
             ];
             TreeDecision decision = TreeIdentity.Decide(existing, Stem, Build, 10);
@@ -97,8 +90,6 @@ internal static class TreeIdentityTests
 
         run.Case("a reused row whose family disagrees with its foliage type is counted", () =>
         {
-            // An older plugin placed this build's shrubs as trees. They are reused as they are, and
-            // counted, so the curator knows which ones to delete to rebuild them.
             SiteTreePoint[] points =
             [
                 new(0.0, 0.0, 0.0, 12.0, 3.0, FoliageType.Tree),

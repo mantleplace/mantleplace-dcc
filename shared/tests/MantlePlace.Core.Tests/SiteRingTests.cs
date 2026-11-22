@@ -2,21 +2,10 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// A published polygon ring thinned to what Revit can close (<see cref="SiteRings"/>): every vertex
-/// within the short-curve tolerance of the last one kept is skipped, the closing edge included, so
-/// the loop the shim builds is contiguous by construction.
-/// </summary>
-/// <remarks>
-/// The failure this guards against is a platform-built road polygon ring with edges of 0.1 to
-/// 0.6 mm. Dropping such an edge, rather than a vertex, left a gap Revit refused as "not contiguous",
-/// and that one ring took the whole road layer down.
-/// </remarks>
 internal static class SiteRingTests
 {
     private const double Tolerance = 0.01;
 
-    // Revit's ShortCurveTolerance is 1/384 ft; the shim hands it over in metres.
     private const double RevitToleranceM = 0.3048 / 384.0;
 
     internal static int Run()
@@ -35,7 +24,6 @@ internal static class SiteRingTests
 
         run.Case("a sub-tolerance edge that is not zero loses a vertex, not an edge, and the ring stays contiguous", () =>
         {
-            // The shape the road file carried: a 0.3 mm step inside an otherwise ordinary ring.
             SiteVertex[] ring = Ring((0, 0), (5, 0), (5.0003, 0), (10, 0), (10, 10), (0, 10));
             IReadOnlyList<SiteVertex>? thinned = SiteRings.Thin(ring, RevitToleranceM);
 
@@ -57,7 +45,6 @@ internal static class SiteRingTests
 
         run.Case("a run of short steps is measured from the last kept vertex, not the previous one", () =>
         {
-            // Each step is under tolerance, but 0.012 is past it from 0.
             SiteVertex[] ring = Ring((0, 0), (0.006, 0), (0.012, 0), (0.018, 0), (10, 0), (10, 10));
             IReadOnlyList<SiteVertex>? thinned = SiteRings.Thin(ring, Tolerance);
 
@@ -68,8 +55,6 @@ internal static class SiteRingTests
 
         run.Case("a last vertex within tolerance of the first is skipped, and the first is kept", () =>
         {
-            // A ring whose closing position missed the first by 0.3 mm survives the reader's exact
-            // check, and its closing edge is the short one.
             SiteVertex[] ring = Ring((0, 0), (10, 0), (10, 10), (0, 10), (0.0003, 0));
             IReadOnlyList<SiteVertex>? thinned = SiteRings.Thin(ring, RevitToleranceM);
 

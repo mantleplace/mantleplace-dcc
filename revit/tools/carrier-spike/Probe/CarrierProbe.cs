@@ -1,11 +1,3 @@
-// The carrier spike's in-Revit probe (README.md beside ../). Loaded only by Invoke-CarrierProbe.ps1's
-// temporary manifest, and inert unless that driver launched this Revit: it does nothing without
-// MANTLEPLACE_CARRIER_PROBE_DIR. One mode per launch, so a cold read is a cold read:
-//   geojson | gpkg | dxf   read every layer through that carrier (cold, timed), place each layer as
-//                          one DirectShape of lines in a fresh project whose survey point is set as
-//                          the plugin sets it, and read the placement back
-//   ifc                    convert and link the site IFC the way the plugin does, then ask the
-//                          converted model and both link placements where the content went
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
@@ -17,7 +9,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.CarrierSpike;
 
-/// <summary>Records every warning a transaction raises, in Revit's own words, and lets it go on.</summary>
 internal sealed class WarningRecorder(List<string> seen) : IFailuresPreprocessor
 {
     public FailureProcessingResult PreprocessFailures(FailuresAccessor failuresAccessor)
@@ -90,12 +81,8 @@ public sealed class CarrierProbe : IExternalApplication
         File.WriteAllText(Path.Combine(_dir, "done.txt"), outcome);
     }
 
-    // ---- vectors --------------------------------------------------------------------------------
-
     private static void RunVectors(Application app, CarrierComparison bundle, Carrier carrier)
     {
-        // Cold first: the first read in this process pays for loading winsqlite3.dll and for the JIT,
-        // which is what a curator's first import pays.
         Stopwatch cold = Stopwatch.StartNew();
         List<CarrierRead> reads = [.. bundle.Layers.Select(layer => bundle.Read(carrier, layer))];
         double coldMs = cold.Elapsed.TotalMilliseconds;
@@ -210,7 +197,6 @@ public sealed class CarrierProbe : IExternalApplication
     private static string SurveyFeet(XYZ p)
         => $"({F(UnitUtils.ConvertFromInternalUnits(p.X, UnitTypeId.UsSurveyFeet))}, {F(UnitUtils.ConvertFromInternalUnits(p.Y, UnitTypeId.UsSurveyFeet))})";
 
-    /// <summary>The survey point the plugin applies: the manifest's origin verbatim, elevation zero (RevitBundleImporter.SharedCoordinates).</summary>
     private static void SetSurveyPoint(Document document, SiteFrame frame)
     {
         ForgeTypeId unit = frame.Origin.LinearUnit switch
@@ -226,8 +212,6 @@ public sealed class CarrierProbe : IExternalApplication
             0.0);
         document.ActiveProjectLocation.SetProjectPosition(XYZ.Zero, position);
     }
-
-    // ---- the linked site IFC --------------------------------------------------------------------
 
     private static void RunIfc(Application app, CarrierComparison bundle)
     {
@@ -341,17 +325,12 @@ public sealed class CarrierProbe : IExternalApplication
         Say(string.Empty);
     }
 
-    /// <summary>The manifest's origin as the site location, as RevitBundleImporter.SiteLocation does.</summary>
     private static void SetSiteLocation(Document document, SiteFrame frame)
     {
         document.SiteLocation.Latitude = frame.Origin.Lat!.Value * Math.PI / 180.0;
         document.SiteLocation.Longitude = frame.Origin.Lon!.Value * Math.PI / 180.0;
     }
 
-    /// <summary>
-    /// Each linked building against the nearest GeoPackage footprint, centre to centre in plan: the
-    /// placement question asked of every building rather than of one bounding box.
-    /// </summary>
     private static void MatchBuildings(RevitLinkInstance instance, IReadOnlyList<SiteFeature> footprints)
     {
         if (instance.GetLinkDocument() is not { } linked)

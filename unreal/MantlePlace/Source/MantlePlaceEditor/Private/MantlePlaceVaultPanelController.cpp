@@ -15,7 +15,7 @@ void UMantlePlaceVaultPanelController::Initialize()
 	Orchestrator->OnImportPhase.AddUniqueDynamic(this, &UMantlePlaceVaultPanelController::HandleImportPhase);
 	Orchestrator->OnImportFinished.AddUniqueDynamic(this, &UMantlePlaceVaultPanelController::HandleImportFinished);
 	Orchestrator->OnAuthChanged.AddUniqueDynamic(this, &UMantlePlaceVaultPanelController::HandleAuthChanged);
-	Orchestrator->OnClientUpdateRequiredNative.RemoveAll(this); // a native delegate has no AddUnique: stay idempotent
+	Orchestrator->OnClientUpdateRequiredNative.RemoveAll(this);
 	Orchestrator->OnClientUpdateRequiredNative.AddUObject(this, &UMantlePlaceVaultPanelController::HandleClientUpdateRequired);
 	Orchestrator->OnImportStepsNative.RemoveAll(this);
 	Orchestrator->OnImportStepsNative.AddUObject(this, &UMantlePlaceVaultPanelController::HandleImportSteps);
@@ -33,7 +33,6 @@ void UMantlePlaceVaultPanelController::Shutdown()
 		Orchestrator->OnClientUpdateRequiredNative.RemoveAll(this);
 		Orchestrator->OnImportStepsNative.RemoveAll(this);
 		Orchestrator->OnOfferLevelChoiceNative.Unbind();
-		// Closing the tab mid-import must stop the in-flight poll/download - BeginDestroy alone does not.
 		Orchestrator->CancelImport();
 	}
 	OnVaultListed.Clear();
@@ -92,9 +91,6 @@ bool UMantlePlaceVaultPanelController::StartImport(const FMantlePlaceVaultItem& 
 	{
 		return false;
 	}
-	// Vault-row imports honor the panel's mode combo (Landscape/Mesh/Both), same as local zips; the
-	// "unreal" scope resolves to the explicit targeted-token list in FMantlePlaceVaultLogic. The
-	// orchestrator materializes first for a BASE bundle, or imports directly for a ready UNREAL bundle.
 	const bool bStarted = Orchestrator->StartVaultImport(Item, Mode, TEXT("unreal"));
 	if (bStarted)
 	{
@@ -109,8 +105,6 @@ bool UMantlePlaceVaultPanelController::StartLocalImport(const FString& ZipPath, 
 	{
 		return false;
 	}
-	// A local import is not a vault row, so no ActiveOrderId is set (progress shows in the local
-	// section + toasts, not on a list row).
 	return Orchestrator->StartLocalImport(ZipPath, Mode);
 }
 
@@ -148,9 +142,6 @@ void UMantlePlaceVaultPanelController::HandleImportFinished(bool bSuccess, const
 {
 	ActiveOrderId.Reset();
 	OnImportFinished.Broadcast(bSuccess, Result);
-	// Re-list so a freshly materialized BASE bundle flips Base -> Unreal and every row's action
-	// re-enables (mirrors the former EUW HandleImportFinished). Only when signed in - a signed-out
-	// local-zip import has no vault to refresh, and listing would just fail.
 	if (Orchestrator && Orchestrator->IsSignedIn()) { Orchestrator->RefreshVaultList(); }
 }
 

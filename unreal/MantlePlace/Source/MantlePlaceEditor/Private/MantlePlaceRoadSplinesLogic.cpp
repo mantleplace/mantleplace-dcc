@@ -2,7 +2,7 @@
 
 #include "MantlePlaceRoadSplinesLogic.h"
 
-#include "MantlePlaceImportManifest.h" // FMantlePlaceVaultManifest::ProjectedToUeCm
+#include "MantlePlaceImportManifest.h"
 
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
@@ -12,19 +12,14 @@
 
 namespace
 {
-// WGS84 ellipsoid + UTM constants (USGS Professional Paper 1395, Snyder eq. 8-9..8-15).
 constexpr double SemiMajorM = 6378137.0;
 constexpr double Flattening = 1.0 / 298.257223563;
 constexpr double K0 = 0.9996;
 constexpr double FalseEastingM = 500000.0;
 constexpr double SouthFalseNorthingM = 10000000.0;
 
-// The vertical datum of every height this host places: its landscape, its mesh and its foliage,
-// on every order. The format's own spelling of it, compared verbatim: one of the two values of the
-// schema's `$defs/verticalDatum`, and the one `foliage_points.vertical_datum` is fixed to.
 const TCHAR* const HostVerticalDatum = TEXT("EGM2008-orthometric");
 
-/** Convert one WGS84 position (lon deg, lat deg, orthometric z m) into the Local Projected Frame (UE cm). */
 bool LonLatZToUeCm(
     double LonDeg,
     double LatDeg,
@@ -39,15 +34,11 @@ bool LonLatZToUeCm(
 	{
 		return false;
 	}
-	// Same frame math as FMantlePlaceVaultManifest::GetDrapeWorldRect / GetMeshLocation, through
-	// the one helper that owns it: North -> +X, East -> +Y, orthometric metres -> +Z, all relative
-	// to the AOI-centroid origin.
 	OutUeCm = FMantlePlaceVaultManifest::ProjectedToUeCm(
 	    EastingM - OriginEastingM, NorthingM - OriginNorthingM, ZM);
 	return true;
 }
 
-/** Convert one GeoJSON position array [lon, lat, z?] into the Local Projected Frame (UE cm). */
 bool PositionToUeCm(
     const TArray<TSharedPtr<FJsonValue>>& Position,
     double OriginEastingM,
@@ -63,7 +54,6 @@ bool PositionToUeCm(
 	return LonLatZToUeCm(Position[0]->AsNumber(), Position[1]->AsNumber(), ZM, OriginEastingM, OriginNorthingM, Epsg, OutUeCm);
 }
 
-/** Append every part of a LineString/MultiLineString geometry as its own spline. */
 void AppendGeometry(
     const TSharedPtr<FJsonObject>& Geometry,
     const FMantlePlaceRoadSpline& Prototype,
@@ -86,7 +76,6 @@ void AppendGeometry(
 		return;
 	}
 
-	// Normalize both shapes to an array of line strings.
 	TArray<const TArray<TSharedPtr<FJsonValue>>*> Lines;
 	if (Type == TEXT("LineString"))
 	{
@@ -103,7 +92,6 @@ void AppendGeometry(
 			}
 		}
 	}
-	// Other geometry types (points, polygons) are not road centerlines - skip.
 
 	for (const TArray<TSharedPtr<FJsonValue>>* Line : Lines)
 	{
@@ -133,7 +121,7 @@ bool FMantlePlaceRoadSplinesLogic::CanPlaceHeights(const FMantlePlaceRoadSplines
 	{
 		if (!Datum.bRequired)
 		{
-			return true; // a bundle from before the format stated a datum: every height was EGM2008
+			return true;
 		}
 		OutReason = FString::Printf(
 		    TEXT("the road layer states no vertical datum for its heights, as a layer from manifest "
@@ -218,14 +206,13 @@ FString FMantlePlaceRoadSplinesLogic::DescribeSource(EMantlePlaceRoadSplinesSour
 
 bool FMantlePlaceRoadSplinesLogic::IsUtmEpsg(int32 Epsg)
 {
-	// UTM EPSG ranges: 32601-32660 (north) / 32701-32760 (south).
 	return (Epsg >= 32601 && Epsg <= 32660) || (Epsg >= 32701 && Epsg <= 32760);
 }
 
 bool FMantlePlaceRoadSplinesLogic::LonLatToUtm(
     double LonDeg, double LatDeg, int32 Epsg, double& OutEastingM, double& OutNorthingM)
 {
-	const bool bSouth = Epsg >= 32701; // meaningful only past the guard: IsUtmEpsg owns the ranges
+	const bool bSouth = Epsg >= 32701;
 	if (!IsUtmEpsg(Epsg) || LatDeg < -84.0 || LatDeg > 84.0 || LonDeg < -180.0 || LonDeg > 180.0)
 	{
 		return false;
@@ -248,7 +235,6 @@ bool FMantlePlaceRoadSplinesLogic::LonLatToUtm(
 	const double C = Ep2 * CosLat * CosLat;
 	const double A = (LonRad - Lon0Rad) * CosLat;
 
-	// Meridional arc (Snyder eq. 3-21).
 	const double M = SemiMajorM * ((1.0 - E2 / 4.0 - 3.0 * E2 * E2 / 64.0 - 5.0 * E2 * E2 * E2 / 256.0) * LatRad - (3.0 * E2 / 8.0 + 3.0 * E2 * E2 / 32.0 + 45.0 * E2 * E2 * E2 / 1024.0) * FMath::Sin(2.0 * LatRad) + (15.0 * E2 * E2 / 256.0 + 45.0 * E2 * E2 * E2 / 1024.0) * FMath::Sin(4.0 * LatRad) - (35.0 * E2 * E2 * E2 / 3072.0) * FMath::Sin(6.0 * LatRad));
 
 	const double A2 = A * A;
@@ -308,7 +294,7 @@ bool FMantlePlaceRoadSplinesLogic::ParseGeoJson(
 		const TSharedPtr<FJsonObject>* FeaturePtr = nullptr;
 		if (!FeatureValue.IsValid() || !FeatureValue->TryGetObject(FeaturePtr) || FeaturePtr == nullptr)
 		{
-			continue; // one malformed feature must not drop the whole layer
+			continue;
 		}
 		const TSharedPtr<FJsonObject> Feature = *FeaturePtr;
 
@@ -401,7 +387,6 @@ bool FMantlePlaceRoadSplinesLogic::ParseSiteCsv(
 		return false;
 	}
 
-	// The columns are found by name in the header (format.md section 6), never by position.
 	static const TCHAR* const Required[] = {
 		TEXT("road"), TEXT("vertex"), TEXT("x"), TEXT("y"), TEXT("z"), TEXT("class"), TEXT("width_m") };
 	TMap<FString, int32> Columns;
@@ -420,7 +405,6 @@ bool FMantlePlaceRoadSplinesLogic::ParseSiteCsv(
 	const int32 RoadCol = Columns[TEXT("road")], VertexCol = Columns[TEXT("vertex")];
 	const int32 XCol = Columns[TEXT("x")], YCol = Columns[TEXT("y")], ZCol = Columns[TEXT("z")];
 	const int32 ClassCol = Columns[TEXT("class")], WidthCol = Columns[TEXT("width_m")];
-	// `name` is optional: a 3.0 bundle's table has none, and a road with no name is left unnamed.
 	const int32* NameColPtr = Columns.Find(TEXT("name"));
 	const int32 NameCol = NameColPtr ? *NameColPtr : INDEX_NONE;
 	int32 MaxCol = 0;
@@ -440,9 +424,6 @@ bool FMantlePlaceRoadSplinesLogic::ParseSiteCsv(
 		return true;
 	};
 
-	// One row per vertex; the rows of one road share its `road` number and are in vertex order, so a
-	// road ends where the number changes. Nothing is reordered or derived: the offsets are metres in
-	// the local site frame and a height is metres above the site origin's height (format.md section 4).
 	FMantlePlaceRoadSpline Current;
 	FString CurrentRoad;
 	bool bHaveRoad = false;
@@ -465,7 +446,7 @@ bool FMantlePlaceRoadSplinesLogic::ParseSiteCsv(
 		const TArray<const TCHAR*>& Row = Rows[RowIndex];
 		if (Row.Num() == 1 && FString(Row[0]).TrimStartAndEnd().IsEmpty())
 		{
-			continue; // a blank line
+			continue;
 		}
 		double X = 0.0, Y = 0.0, Z = 0.0;
 		if (Row.Num() <= MaxCol || !ReadNumber(Row[XCol], X) || !ReadNumber(Row[YCol], Y) || !ReadNumber(Row[ZCol], Z))

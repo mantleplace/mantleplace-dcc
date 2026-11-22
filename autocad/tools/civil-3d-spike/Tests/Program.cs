@@ -1,6 +1,3 @@
-// Headless tests of the spike's pure decisions: the zone comparison the plugin will make before it
-// places anything, and the presence verdict that decides whether the Civil 3D part may load.
-// Run from this folder: dotnet run -f net8.0 (then net10.0).
 using MantlePlace.AutoCad.Civil3dSpike;
 
 int failed = 0;
@@ -58,7 +55,6 @@ Test("codes compare exactly: a case difference is a mismatch, never a guess", ()
 
 Console.WriteLine("presence");
 
-// The observations below are the ones the probe recorded on 2026-11-03 (../../../docs/api-record.md).
 Test("Civil 3D in the console: the land module is loaded while AeccDbMgd is not, and PRODUCT says AutoCAD", () =>
     Equal(PresenceVerdict.Civil3dLoaded, Presence.Decide(new PresenceObservations(
         CivilManagedLoaded: false, CivilNativeLoaded: true, AecBaseLoaded: true, Product: "AutoCAD", CivilFilesOnDisk: true)), "verdict"));

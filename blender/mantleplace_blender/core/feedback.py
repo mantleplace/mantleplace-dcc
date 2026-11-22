@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""`HPS-56`: the one link Send Feedback opens. The plugin carries no feedback form of its own."""
 
 from __future__ import annotations
 
@@ -8,9 +7,7 @@ import re
 from urllib.parse import urlencode
 
 FEEDBACK_URL = "https://mantle.place/feedback"
-#: `dcc-` plus this host's directory name.
 SOURCE = "dcc-blender"
-#: The only two values `rating` may take: the answer to "Did this import come in right?".
 RATINGS = ("up", "down")
 
 _VERSION = re.compile(r"^[0-9]+(\.[0-9]+){0,3}$")
@@ -23,9 +20,6 @@ def feedback_url(
     order_id: object = None,
     rating: object = None,
 ) -> str:
-    """The feedback link. A version that is not a plain version string is left out, never sent
-    raw; an order id is sent only by a bundle-scoped action, and only when it is a UUID; a rating
-    is sent only by the post-import prompt, and only as exactly `up` or `down`."""
     params = [("source", SOURCE)]
     if isinstance(addon_version, str) and _VERSION.match(addon_version):
         params.append(("v", addon_version))

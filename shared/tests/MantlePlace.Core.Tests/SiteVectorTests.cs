@@ -2,19 +2,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The three Forma-parity layers' readers: road centrelines and site boundaries out of GeoJSON,
-/// vegetation out of the tree-points CSV, all landing in the bundle's own AOI-centroid frame.
-/// </summary>
-/// <remarks>
-/// Host semantics rather than contract semantics, so they live here and not in the shared corpus
-/// (<c>HPS-03</c>) — what "the frame the toposolid was built in" means is Revit's
-/// question. The one contract-level piece, the lon/lat forward projection itself, is driven from
-/// the corpus by <see cref="ProjectionConformanceTests"/>.
-/// </remarks>
 internal static class SiteVectorTests
 {
-    /// <summary>The metric-tier frame: AOI centroid in UTM 13N, exactly as the fixture bundle states it.</summary>
     private static readonly SiteFrame MetricFrame = new()
     {
         Origin = new GeoOrigin
@@ -26,7 +15,6 @@ internal static class SiteVectorTests
         },
     };
 
-    /// <summary>A State-Plane foot frame — the tier where a metric UTM layer cannot be placed at all.</summary>
     private static readonly SiteFrame FootFrame = new()
     {
         Origin = new GeoOrigin
@@ -56,10 +44,6 @@ internal static class SiteVectorTests
         {
             run.True(MetricFrame.CanPlaceProjected(32613), "UTM 13N against a UTM 13N origin");
 
-            // Not a rounding question. A layer built in the AOI's metric UTM zone — the imagery drape
-            // is the one that ships that way — is a different coordinate system from a State Plane
-            // foot origin, and subtracting one from the other yields a plausible-looking number
-            // ~2000 km out.
             run.False(FootFrame.CanPlaceProjected(32613), "UTM 13N against a State Plane foot origin");
             run.False(MetricFrame.CanPlaceProjected(0), "an unstated layer CRS is not assumed to match");
         });
@@ -146,9 +130,6 @@ internal static class SiteVectorTests
             run.Equal(features[0].Classification, "service", "the class rides along");
             run.Within(features[0].WidthM ?? 0.0, 4.0, 1e-9, "the estimated width rides along");
 
-            // The manifest's own origin IS this lon/lat, so the first vertex must land on the frame
-            // origin to within the corpus tolerance. That is the assertion that catches a projection
-            // that is self-consistent and wrong.
             run.Within(features[0].Vertices[0].EastM, 0.0, 0.05, "the first vertex lands on the origin, east");
             run.Within(features[0].Vertices[0].NorthM, 0.0, 0.05, "the first vertex lands on the origin, north");
             run.Within(features[0].Vertices[0].ElevationM ?? 0.0, 2034.5, 1e-9, "Z passes through as absolute metres");
@@ -205,8 +186,6 @@ internal static class SiteVectorTests
             run.Equal(areas.Count, 1, "one ring");
             run.True(areas[0].IsClosed, "a boundary ring is closed");
 
-            // The duplicated closing position GeoJSON requires is dropped: Revit's CurveLoop closes
-            // itself, and a zero-length final segment is a curve it rejects outright.
             run.Equal(areas[0].Vertices.Count, 3, "the repeated closing position is not a fourth vertex");
 
             error = SiteVectorReader.TryParse(
@@ -217,8 +196,6 @@ internal static class SiteVectorTests
 
         run.Case("the published subtype rides along on every ring, and a hole says it is one", () =>
         {
-            // land_cover's shape: a MultiPolygon carrying `subtype` and no name. The first polygon has
-            // a clearing in it; the hole is where the forest is NOT, so it must be told apart.
             string? error = SiteVectorReader.TryParse(
                 """
                 {
@@ -264,7 +241,6 @@ internal static class SiteVectorTests
             run.False(rings[2].IsHole, "the second polygon's outer ring is not a hole");
             run.Equal(rings[3].Subtype, string.Empty, "no subtype property reads as empty, not as the class");
 
-            // Which rings belong together, for the layers that cut a polygon whole (GroundCuts).
             run.Equal(rings[0].PolygonOrdinal, 1, "the first polygon of the layer");
             run.Equal(rings[1].PolygonOrdinal, 1, "its clearing belongs to it");
             run.Equal(rings[2].PolygonOrdinal, 2, "the MultiPolygon's second polygon is the layer's second");
@@ -391,9 +367,6 @@ internal static class SiteVectorTests
 
         run.Case("ground_z is read in the unit it is published in, so a foot delivery's trees stand on the ground", () =>
         {
-            // A real sp_ftus bundle's first row: ground_z 313.56 is US survey feet, beside terrain
-            // points at ~303 ftUS. Read as metres it stands the tree ~218 m above the toposolid.
-            // height_m and crown_radius_m are metres on every delivery, as their names say.
             TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m
@@ -412,9 +385,6 @@ internal static class SiteVectorTests
 
         run.Case("a row the DEM had no ground for is dropped, not placed at zero", () =>
         {
-            // The ETL leaves ground_z empty where the DEM had no data. Reading that as 0.0 puts a
-            // tree two kilometres below the terrain it belongs to, which looks like a modelling
-            // mistake rather than a data gap (HPS-20: unknown is not zero).
             TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m
@@ -433,9 +403,6 @@ internal static class SiteVectorTests
 
         run.Case("a dropped row is counted as a DEM gap or as unreadable, never silently", () =>
         {
-            // Without the tally the step reports "Imported 1 tree(s) of 1" and the other two rows
-            // vanish. The split matters to whoever reads the log: an empty ground_z is an ordinary
-            // DEM gap, anything else that will not read is the contract drifting.
             TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m
@@ -497,8 +464,6 @@ internal static class SiteVectorTests
 
         run.Case("a row the frame cannot place is unreadable", () =>
         {
-            // An origin with no plan position places nothing. Every cell of this row reads; what
-            // failed is the placement, which is not a DEM gap.
             SiteFrame unplaceable = new() { Origin = new GeoOrigin { Epsg = 32613, LinearUnit = LinearUnit.Metre } };
 
             TreePointsParse parse = TreePointsReader.Parse(
@@ -555,9 +520,6 @@ internal static class SiteVectorTests
 
         run.Case("column ORDER comes from the header, not from position", () =>
         {
-            // The manifest publishes `columns`, so the order is contract rather than convention. A
-            // reader that indexed positionally would silently swap height for crown radius the day
-            // the ETL reorders them, and every tree would still be a tree.
             TreePointsParse parse = TreePointsReader.Parse(
                 """
                 crown_radius_m,height_m,ground_z,y,x
@@ -575,10 +537,6 @@ internal static class SiteVectorTests
 
         run.Case("a column the reader does not know is still ignored, not a drifted contract", () =>
         {
-            // §4.4: a reader MUST ignore a column it does not know. `manifest.treePointsRowCount`
-            // pins it for the host whose block it reads, and this host's own suite pins it here.
-            // `foliage_type` used to be the unknown column in this case; it is known now, so the
-            // rule needs a column that is still unknown or nothing tests it at all.
             TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m,foliage_type,canopy_cover
@@ -597,9 +555,6 @@ internal static class SiteVectorTests
 
         run.Case("the published foliage type rides on the point, mapped and never inferred", () =>
         {
-            // spec/format.md §4.4: vocabulary "1" is `tree` and `shrub`, and the platform owns the
-            // classification. The shrub here is the TALLER of the two on purpose — a reader that
-            // guessed from height_m would get this case backwards.
             TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m,foliage_type
@@ -620,8 +575,6 @@ internal static class SiteVectorTests
 
         run.Case("a foliage type this plugin does not know reads as a tree, and is counted", () =>
         {
-            // ⛔ spec/format.md §4.4: a host MUST read a value it does not know as `tree`. The
-            // vocabulary grows by adding values, never by changing what an existing one means.
             TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m,foliage_type
@@ -641,12 +594,6 @@ internal static class SiteVectorTests
 
         run.Case("an empty foliage cell reads as a tree, counted apart from an unknown value", () =>
         {
-            // The two are different failures: an empty cell is an ETL that did not classify the
-            // point, an unknown value is a vocabulary this build has not caught up with. Rolling
-            // them into one number would hide whichever is rarer.
-            // The foliage column sits in the MIDDLE here on purpose: the second row's cell is
-            // whitespace, and as a trailing cell it would be stripped by the whole-line trim before
-            // the cell reader ever saw it — the case would pass without exercising anything.
             TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,foliage_type,height_m,crown_radius_m
@@ -666,8 +613,6 @@ internal static class SiteVectorTests
 
         run.Case("a row short of the foliage column is a tree, not a dropped row", () =>
         {
-            // The five columns that make geometry are required; the sixth is not. A row that stops
-            // before it is a 1.1.0-shaped row inside a 1.2.0 file, which is a tree.
             TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m,foliage_type
@@ -687,8 +632,6 @@ internal static class SiteVectorTests
     {
         run.Case("no vocabulary and no column is the 1.1.0 shape: every point is a tree, silently", () =>
         {
-            // spec/format.md §4.4: "A manifest without `foliage_type_vocabulary` has no
-            // `foliage_type` column; read every point as a tree." Nothing is wrong, so nothing is said.
             TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m
@@ -704,9 +647,6 @@ internal static class SiteVectorTests
 
         run.Case("a vocabulary this plugin does not know still maps the values it knows", () =>
         {
-            // ⛔ spec/format.md §4.4: a vocabulary the host does not know is NO reason to ignore the
-            // column. A new value is a new vocabulary version, never a change of meaning for an
-            // existing one — so `shrub` is still a shrub under vocabulary "2".
             TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m,foliage_type
@@ -726,8 +666,6 @@ internal static class SiteVectorTests
 
         run.Case("a column with no vocabulary to read it by is ignored, and said once", () =>
         {
-            // The manifest is the authority on what the values mean. Without it they are
-            // uninterpretable — but a silent drop would hide the publisher's mistake.
             TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m,foliage_type
@@ -777,8 +715,6 @@ internal static class SiteVectorTests
 
         run.Case("the vocabulary's values are matched exactly, not by case or by prefix", () =>
         {
-            // The vocabulary is closed and the platform owns it. Accepting `Shrub` or `shrubland`
-            // would be this add-in inventing a value the platform never published.
             TreePointsParse parse = TreePointsReader.Parse(
                 """
                 x,y,ground_z,height_m,crown_radius_m,foliage_type

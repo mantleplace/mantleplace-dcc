@@ -4,23 +4,8 @@ namespace MantlePlace.Core.Tests;
 
 using CorpusCase = ConformanceCorpus.CorpusCase;
 
-/// <summary>
-/// Drives the shared corpus' <c>manifest</c> group against <see cref="BundleManifestReader"/>.
-/// </summary>
-/// <remarks>
-/// The suite iterates <c>index.json</c> at run time rather than transcribing vectors into C#
-/// literals (HPS-40). Transcribed vectors are how two hosts come to disagree about one contract
-/// while both suites stay green — editing a case here must turn this red, and it does.
-/// </remarks>
 internal static partial class ManifestConformanceTests
 {
-    /// <summary>
-    /// Expectation keys this host knows how to assert. The list no longer proves coverage by
-    /// itself — the per-case <c>AssertedKeys</c> tracking does (HPS-46) — it is kept to tell
-    /// "unknown key" apart from "known key declared with a type this host could not read" in the
-    /// failure message. Internal so the self-test suite can prove the reserved
-    /// <c>selfTest</c>-prefixed keys are reported against the REAL list, not a stand-in.
-    /// </summary>
     internal static readonly HashSet<string> ConsumedExpectationKeys =
     [
         "jobId",
@@ -63,13 +48,6 @@ internal static partial class ManifestConformanceTests
             return run.Report("manifest conformance");
         }
 
-        // The corpus is pinned at one manifest version; this parser has its own floor. Equality
-        // was the rule while every host repinned together. Hosts repin INDEPENDENTLY now --
-        // the corpus tracks the newest published contract, while a host that has not yet taken the
-        // clean break still floors lower and accepts the newer shape (the readers gate `<`, not
-        // `!=`). What must never happen is the corpus falling BELOW this floor: then every accept
-        // case below is a document this parser refuses, and a dozen derived assertions fail with
-        // confusing messages instead of this one saying it once, loudly.
         run.Case("corpus pin is at or above this host's floor (clean break, HPS-31)", () =>
             run.True(
                 !ManifestVersion.IsBelowFloor(
@@ -77,12 +55,6 @@ internal static partial class ManifestConformanceTests
                 $"corpus manifestVersion {ConformanceCorpus.PinnedManifestVersion()} "
                 + $"< MinSupportedManifestVersion {ManifestVersions.MinSupportedManifestVersion}"));
 
-        // Every case goes through DriveCase in one loop, so coverage is structural: a case added
-        // to the corpus is driven the next time this runs, with no edit here, and a case DriveCase
-        // has not been taught fails on its unsupported `expect` rather than being skipped. That is
-        // why there is no UndrivenCases check — it could never report anything, and a check that
-        // cannot fail reads as assurance it does not provide. A group whose cases each drive a
-        // DIFFERENT entry point (vault, auth) needs one; this group does not.
         foreach (CorpusCase corpusCase in cases)
         {
             run.Case(corpusCase.Id, () => DriveCase(run, corpusCase));
@@ -93,16 +65,8 @@ internal static partial class ManifestConformanceTests
         return run.Report("manifest conformance");
     }
 
-    /// <remarks>
-    /// Internal so the AutoCAD suite, which compiles these sources in, can drive the host-invariant
-    /// cases of the group it claims through the same shared reader (its own block's cases it drives itself).
-    /// </remarks>
     internal static void DriveCase(TestRun run, CorpusCase corpusCase)
     {
-        // The group's id-dispatched cases: their `expect: "vector"` rows drive one decision each —
-        // the materialization verdict (HPS-47), the published foliage type (format.md §4.4) —
-        // rather than the whole parser. A third vector case added to the corpus lands in the
-        // unsupported-expect failure below until taught, so the dispatch cannot silently skip it.
         if (string.Equals(corpusCase.Id, "manifest.materializationSignals", StringComparison.Ordinal))
         {
             DriveMaterializationSignals(run, corpusCase);
@@ -143,9 +107,6 @@ internal static partial class ManifestConformanceTests
             run.Contains(manifest.Error, corpusCase.ErrorContains, "message");
         }
 
-        // Expectations are asserted on reject cases too: the corpus pins values the parser must
-        // have read BEFORE refusing, which is how the vault join key survives an unimportable
-        // bundle (HPS-37).
         AssertExpectations(run, corpusCase, manifest);
 
         foreach (string problem in ConformanceCorpus.UnassertedExpectations(corpusCase, ConsumedExpectationKeys))
@@ -153,20 +114,12 @@ internal static partial class ManifestConformanceTests
             run.Fail($"{problem} (HPS-46).");
         }
 
-        // One level down: every leaf of a row-valued expectation is read, or the row was only reached
-        // (HPS-46b). The fidelity-level rows are the first in this group to nest.
         foreach (string problem in ConformanceCorpus.UnassertedNestedExpectations(corpusCase))
         {
             run.Fail(problem);
         }
     }
 
-    /// <summary>
-    /// Drives <c>manifest.materializationSignals</c> (HPS-47): each row is a complete v18 manifest
-    /// with an expected materialization verdict. Rows go through the public
-    /// <see cref="BundleManifestReader.Parse"/> seam rather than an internal entry point — this
-    /// host's materialization decision IS whether the not-materialized refusal fires.
-    /// </summary>
     private static void DriveMaterializationSignals(TestRun run, CorpusCase corpusCase)
     {
         using JsonDocument document = JsonDocument.Parse(corpusCase.Payload);
@@ -215,11 +168,6 @@ internal static partial class ManifestConformanceTests
         }
     }
 
-    /// <summary>
-    /// The frame the foliage vectors are placed against: UTM 13N, an origin beside the rows' own
-    /// eastings and northings. The placement is incidental here — what is under test is the sixth
-    /// column, and a row that would not place at all could not carry a foliage type to assert.
-    /// </summary>
     private static readonly SiteFrame FoliageFrame = new()
     {
         Origin = new GeoOrigin
@@ -231,17 +179,6 @@ internal static partial class ManifestConformanceTests
         },
     };
 
-    /// <summary>
-    /// Drives <c>manifest.foliageTypeUnknownValue</c>: each row is a tree-points payload and the
-    /// vocabulary its manifest named, with the foliage type a conformant reader produces for every
-    /// row of it (<c>spec/format.md</c> §4.4).
-    /// </summary>
-    /// <remarks>
-    /// Through <see cref="TreePointsReader.Parse"/>, the public seam — the same entry point the
-    /// import uses, so a reader that passes here is the reader the curator gets. The counts and the
-    /// notes the parse also produces are deliberately NOT asserted from the corpus: §4.4 states
-    /// neither, and they are this host's own, pinned in <c>SiteVectorTests</c>.
-    /// </remarks>
     private static void DriveFoliageTypeVectors(TestRun run, CorpusCase corpusCase)
     {
         using VectorDocument vectors = VectorDocument.Parse(corpusCase.Payload);
@@ -265,9 +202,6 @@ internal static partial class ManifestConformanceTests
                 continue;
             }
 
-            // An explicit JSON null is a VALUE here, and the one this rule turns on: it is the
-            // manifest naming no vocabulary, which is not the same as naming the one this build
-            // knows. `Str` records a null as read, so the row cannot be skipped for free.
             string? vocabulary = row.Str("foliageTypeVocabulary");
 
             TreePointsParse parse = TreePointsReader.Parse(csv, FoliageFrame, vocabulary, groundUnit: LinearUnit.Metre);
@@ -289,16 +223,6 @@ internal static partial class ManifestConformanceTests
         }
     }
 
-    /// <summary>
-    /// Drives <c>manifest.revitHeightDatum</c> (<c>HPS-53</c>): each row lays its members over one
-    /// embedded manifest, which is parsed and planned, and the tree step's statement is compared with
-    /// the datum the row's ground records.
-    /// </summary>
-    /// <remarks>
-    /// Through <see cref="BundleManifestReader.Parse"/>, <see cref="BundleImportPlanner.Plan"/> and
-    /// <see cref="HeightDatums.Refusal"/>, the seams the import itself goes through: the shim adds only
-    /// the ground it found in the document, which is what the row's <c>ground</c> stands for.
-    /// </remarks>
     private static void DriveHeightDatumVectors(TestRun run, CorpusCase corpusCase)
     {
         using VectorDocument vectors = VectorDocument.Parse(corpusCase.Payload);
@@ -371,7 +295,6 @@ internal static partial class ManifestConformanceTests
         }
     }
 
-    /// <summary>Lays a row's <paramref name="key"/> object over <paramref name="target"/>: a value sets, null removes.</summary>
     private static void Overlay(System.Text.Json.Nodes.JsonObject target, VectorNode row, string key)
     {
         if (row.Obj(key) is not { } overlay)
@@ -394,7 +317,6 @@ internal static partial class ManifestConformanceTests
         row.MarkConsumed(key);
     }
 
-    /// <summary>The vocabulary's own word for a foliage type — what the corpus states.</summary>
     private static string Spell(FoliageType foliage) => foliage switch
     {
         FoliageType.Shrub => "shrub",
@@ -446,23 +368,16 @@ internal static partial class ManifestConformanceTests
             run.Equal(manifest.HasRoadSplines, hasRoadSplines, "hasRoadSplines");
         }
 
-        // The pointers this host PLACES from, which HPS-52 takes from its own block first — not the
-        // host-invariant selection above, which stays the shared set's.
         if (ConformanceCorpus.WantsString(corpusCase, "revitRoadSplinesPath", out string revitRoadSplinesPath))
         {
             run.Equal(manifest.RoadSplines?.Path ?? string.Empty, revitRoadSplinesPath, "revitRoadSplinesPath");
         }
 
-        // The file the water bodies are cut from: the polygon file of a layer split by geometry
-        // family (MPB 1.7.0), wherever in the layer's rows it sits.
         if (ConformanceCorpus.WantsString(corpusCase, "revitWaterPath", out string revitWaterPath))
         {
             run.Equal(manifest.Water?.Path ?? string.Empty, revitWaterPath, "revitWaterPath");
         }
 
-        // The shared vector carrier (MPB 1.15.0, `hosts.revit.vectors.gpkg`): a layer the pointer lists
-        // is read as the table of its own name, verified by the carrier's own hash, with the layer's
-        // GeoJSON file kept as the fallback; a layer it does not list keeps its GeoJSON file above.
         if (ConformanceCorpus.WantsString(corpusCase, "revitRoadSplinesSha256", out string revitRoadSplinesSha))
         {
             run.Equal(manifest.RoadSplines?.Sha256 ?? string.Empty, revitRoadSplinesSha, "revitRoadSplinesSha256");
@@ -488,8 +403,6 @@ internal static partial class ManifestConformanceTests
 
         AssertRevitLevels(run, corpusCase, manifest);
 
-        // The published contours are placed from this pointer alone (ADR 0013), and their heights'
-        // unit is read from it, never from the drawing's one $INSUNITS.
         if (ConformanceCorpus.WantsString(corpusCase, "revitContoursPath", out string revitContoursPath))
         {
             run.Equal(manifest.RevitContours?.Path ?? string.Empty, revitContoursPath, "revitContoursPath");
@@ -500,9 +413,6 @@ internal static partial class ManifestConformanceTests
             run.Equal(manifest.RevitContours?.VerticalUnits ?? string.Empty, revitContoursVerticalUnits, "revitContoursVerticalUnits");
         }
 
-        // The three v19 `revit.*` hashes. Asserting the VALUE rather than a has-hash flag is what
-        // binds each one to its own artifact: a reader that resolved the block once and reused the
-        // hash would pass a flag check and fail here (HPS-34).
         if (ConformanceCorpus.WantsString(corpusCase, "toposurfacePointsSha256", out string pointsSha))
         {
             run.Equal(manifest.ToposurfacePoints?.Sha256, pointsSha, "toposurfacePointsSha256");
@@ -518,10 +428,6 @@ internal static partial class ManifestConformanceTests
             run.Equal(manifest.SiteIfc?.Sha256, ifcSha, "ifcSiteSha256");
         }
 
-        // The survey point, asserted through the RESOLVED value rather than through the block it
-        // came from. That is the whole point of the case: several origins are published and only
-        // one is this host's, so a reader that merged them, or that took whichever it found first,
-        // reports a different EPSG here while every other assertion stays green (HPS-33).
         if (ConformanceCorpus.WantsInt(corpusCase, "surveyPointEpsg", out int surveyEpsg))
         {
             run.Equal(manifest.SurveyPoint?.Epsg ?? 0, surveyEpsg, "surveyPointEpsg");
@@ -537,8 +443,6 @@ internal static partial class ManifestConformanceTests
             run.Within(manifest.SurveyPoint?.Northing ?? double.NaN, surveyNorthing, 1e-9, "surveyPointNorthing");
         }
 
-        // The origin's unit is NOT the artifacts' unit — they differ on the foot tiers, and reading
-        // a State-Plane-foot origin as metres places the site 3.28× out.
         if (ConformanceCorpus.WantsString(corpusCase, "surveyPointLinearUnit", out string surveyUnit))
         {
             run.Equal(
@@ -557,11 +461,6 @@ internal static partial class ManifestConformanceTests
         }
     }
 
-    /// <summary>
-    /// Assertions that are this host's own rather than the contract's, and so are deliberately not
-    /// corpus cases: the derived-prefix helper's edge cases, and the wording of the
-    /// refusal a user actually reads.
-    /// </summary>
     private static void RunHostLocalAssertions(TestRun run, List<CorpusCase> cases)
     {
         run.Case("DeriveCesiumTerrainPrefix edge cases", () =>

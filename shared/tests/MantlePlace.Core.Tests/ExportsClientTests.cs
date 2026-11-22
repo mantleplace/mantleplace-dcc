@@ -5,10 +5,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The two v1 export routes and the contract's refusal handling, driven through a canned HTTP
-/// handler and a fake bearer session, so no request leaves the machine (<c>HPS-42</c>).
-/// </summary>
 internal static class ExportsClientTests
 {
     private const string Connection = "revit-0123456789abcdef";

@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""Tests for the vocabulary gate.
-
-Each test builds a throwaway git repository with its own small glossary, so the suite says what the
-gate MEANS rather than what this repository's Avoid list holds today -- except one test, which runs
-the gate on the real tree, because "passes on main" is part of the contract.
-
-Both directions are asserted for every rule. A gate that flags a code identifier, a quoted mention
-in the glossary or "its own" is a gate somebody switches off, and then the list guards nothing.
-"""
 
 from __future__ import annotations
 
@@ -40,8 +31,6 @@ The banned-term list.
 
 
 class GateTestCase(unittest.TestCase):
-    """A temporary git repository, because the gate reads tracked files and nothing else."""
-
     def setUp(self) -> None:
         self._tmp = TemporaryDirectory()
         self.root = Path(self._tmp.name)
@@ -80,7 +69,6 @@ class BaselineTests(GateTestCase):
         self.assertClean()
 
     def test_the_real_repository_is_clean(self) -> None:
-        """The gate is a regression guard, so it starts from zero findings on this tree."""
         buffer = io.StringIO()
         with redirect_stdout(buffer):
             code = gate.run(gate.REPO_ROOT)
@@ -140,7 +128,6 @@ class DocumentTests(GateTestCase):
         self.assertClean()
 
     def test_a_dated_record_keeps_its_wording(self) -> None:
-        """An accepted decision record is append-only and the changelog is dated: neither is reworded."""
         self.write("docs/adr/0001-old.md", "# Old\n\nThe Fixture Importer was how it read then.\n")
         self.write("spec/changelog.md", "# Changelog\n\nThe Fixture Importer needed no change.\n")
         self.assertClean()

@@ -3,19 +3,11 @@ using MantlePlace.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 
-/// <summary>
-/// The Mantle Place panel: which commands it carries, and which of the ribbon's tabs it goes on (a
-/// Mantle Place tab of the plugin's own, <c>HPS-57</c>). The shell builds the panel and reads the
-/// ribbon's tabs; what can be pinned here is the content and the placement decision, over the tab
-/// identifiers a live Civil 3D 2027 and a live AutoCAD 2027 showed.
-/// </summary>
 internal static class PlugInsPanelTests
 {
-    // The tabs Civil 3D 2027 shows past its own, as read live on 2026-11-04 (autocad/docs/api-record.md).
     private static readonly string[] Civil3dTabs =
         ["CIVIL.ID_Civil3DHome", "CIVIL.ID_Civil3DOutput", "CIVIL.RBN_08112144", "CIVIL.ID_Civil3DAddins", "EXPRESS.RBN_0047", "FEATUREDAPPS.RBN_190_37149"];
 
-    // And plain AutoCAD 2027's.
     private static readonly string[] AutoCadTabs =
         ["ACAD.ID_TabHome", "ACAD.ID_TabOutput", "ACAD.RBN_00012112", "ACAD.ID_TabCollaborate", "EXPRESS.RBN_0047", "FEATUREDAPPS.RBN_190_37149"];
 
@@ -111,7 +103,6 @@ internal static class PlugInsPanelTests
         {
             List<RibbonTabSeen> ribbon = Seen(Civil3dTabs);
 
-            // What the shell does with each answer: make the tab if told to, then add the panel.
             int Press()
             {
                 if (PlugInsPanel.Place(ribbon) is not { } placement)
@@ -146,8 +137,6 @@ internal static class PlugInsPanelTests
 
         run.Case("a tab is the plugin's by its identifier, never by its title", () =>
         {
-            // The partial customization file this replaced made a tab the host read as
-            // MANTLEPLACE.RBN_00012112, a second "Add-ins" tab. That one is not ours.
             PanelPlacement? placement = PlugInsPanel.Place(Seen(["ACAD.ID_TabHome", "MANTLEPLACE.RBN_00012112"]));
 
             run.Equal(placement?.TabId, PlugInsPanel.OwnTabId, "a group's tab that shares the UID is not the plugin's");

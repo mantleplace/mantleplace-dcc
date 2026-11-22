@@ -1,23 +1,7 @@
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The links a new import layer must have before it works end to end, checked from both ends: every
-/// <see cref="ImportLayer"/> has a step kind, a window label and a <see cref="SlowStepNotice.Measured"/>
-/// row, and nothing in those tables lacks a layer to belong to.
-/// </summary>
-/// <remarks>
-/// Each failure names the layer (or the step kind) that is missing a link, so a contributor who adds or
-/// renames a layer reads what to add rather than hunting a switch for it. The prose homes a test cannot
-/// reach are listed in <c>revit/README.md</c> under "Adding or renaming an import layer".
-/// </remarks>
 internal static class ImportLayerLinksTests
 {
-    /// <summary>
-    /// The step kinds that are no layer on purpose, each for the reason <see cref="ImportLayer"/> gives:
-    /// placing the project builds nothing a curator can leave out, crediting the data is the licence's
-    /// condition, and the context view only organises what other steps made. A kind added to the planner
-    /// is a layer, or is named here with its reason.
-    /// </summary>
     private static readonly ImportStepKind[] NotLayers =
     [
         ImportStepKind.SetSharedCoordinates,
@@ -26,10 +10,6 @@ internal static class ImportLayerLinksTests
         ImportStepKind.SiteContextView,
     ];
 
-    /// <summary>
-    /// Step kinds with no <see cref="SlowStepNotice.Measured"/> row, each because it has never been timed:
-    /// the DXF terrain links a CAD file, and is the third tier of a layer whose other tiers are timed.
-    /// </summary>
     private static readonly ImportStepKind[] NeverTimed = [ImportStepKind.ToposurfaceFromSurfaceDxf];
 
     internal static int Run()

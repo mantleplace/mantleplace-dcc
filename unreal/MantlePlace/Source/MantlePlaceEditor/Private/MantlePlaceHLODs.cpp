@@ -25,13 +25,6 @@
 
 namespace
 {
-/**
- * Make the level's World Partition stream this HLOD layer. Since 5.8 an HLOD layer counts only when
- * a runtime partition's HLOD setup lists it; an actor in any other layer is built into no HLOD at
- * all. The layer joins the main partition's first HLOD setup, the one its default HLOD layer uses,
- * and a level with none gets one, made from its main partition as the engine makes the default.
- * True when the level streams the layer afterwards.
- */
 bool RegisterInWorld(UWorld* World, UHLODLayer* Layer)
 {
 	UWorldPartition* WorldPartition = World != nullptr ? World->GetWorldPartition() : nullptr;
@@ -46,8 +39,6 @@ bool RegisterInWorld(UWorld* World, UHLODLayer* Layer)
 		return true;
 	}
 
-	// The partitions are the World Settings' own property, private to the hash; edit it as the
-	// Details panel does, through reflection.
 	UWorldPartitionRuntimeHashSet* HashSet = Cast<UWorldPartitionRuntimeHashSet>(Hash);
 	const FArrayProperty* PartitionsProperty = HashSet != nullptr
 		? FindFProperty<FArrayProperty>(UWorldPartitionRuntimeHashSet::StaticClass(), TEXT("RuntimePartitions"))
@@ -92,7 +83,6 @@ UHLODLayer* MantlePlaceHLODs::FindLayer(const FString& ContentRoot, EMantlePlace
 		MantlePlaceImportNaming::ResolveContentRoot(ContentRoot), FamilyName);
 	const FString ObjectPath = MantlePlaceImportNaming::ObjectPathOf(PackageName, AssetName);
 
-	// In memory first: an earlier import this session made it and nobody has saved it yet.
 	if (UHLODLayer* Loaded = FindObject<UHLODLayer>(nullptr, *ObjectPath))
 	{
 		return Loaded;
@@ -127,12 +117,9 @@ UHLODLayer* MantlePlaceHLODs::FindOrCreateLayer(const FString& ContentRoot, EMan
 	}
 	Layer->SetLayerType(MantlePlaceHLODLogic::LayerType(Family));
 
-	// The builder settings follow the layer type; the layer makes them when its type is edited, so
-	// announce the edit exactly as the Details panel does. LayerType is private, hence the name.
 	if (FProperty* TypeProperty = FindFProperty<FProperty>(UHLODLayer::StaticClass(), TEXT("LayerType")))
 	{
 		FPropertyChangedEvent TypeChanged(TypeProperty, EPropertyChangeType::ValueSet);
-		// Through UObject: the override is private to UHLODLayer, the virtual is public.
 		static_cast<UObject*>(Layer)->PostEditChangeProperty(TypeChanged);
 	}
 
@@ -204,8 +191,6 @@ MantlePlaceHLODs::FBuildReport MantlePlaceHLODs::Build(UWorld* World)
 {
 	FBuildReport Report;
 
-	// What the engine's build would silently leave out: every actor with an HLOD layer whose package
-	// is unsaved, the same test the editor's own Build HLODs applies.
 	const bool bPartitioned = UWorld::IsPartitionedWorld(World);
 	bool bWorldSaved = false;
 	int32 Unsaved = 0;
@@ -229,8 +214,6 @@ MantlePlaceHLODs::FBuildReport MantlePlaceHLODs::Build(UWorld* World)
 		return Report;
 	}
 
-	// The engine's builder, as its in-editor Build HLODs runs it, without the dialogs: it saves
-	// nothing, and the HLOD actors it makes or rebuilds are left for the user's save.
 	UWorldPartitionHLODsBuilder* Builder = NewObject<UWorldPartitionHLODsBuilder>(GetTransientPackage());
 	Builder->SetUseSlowTask(!IsRunningCommandlet() && !FApp::IsUnattended());
 	Builder->SetSaveActors(false);

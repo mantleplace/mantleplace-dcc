@@ -1,14 +1,5 @@
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The import window's checklist: which layers a bundle import brings in, what each one needs, and
-/// what the plan does with the ones a curator leaves out.
-/// </summary>
-/// <remarks>
-/// The window only copies these answers onto check boxes, and CI never builds it, so every rule the
-/// checklist appears to enforce — a disabled prerequisite, the reason beside it, the Import button
-/// going dark — is decided here (<c>HPS-02</c>, <c>HPS-42</c>).
-/// </remarks>
 internal static class ImportLayerTests
 {
     internal static int Run()
@@ -41,10 +32,8 @@ internal static class ImportLayerTests
             run.True(ImportLayers.Of(ImportStepKind.Vegetation) == ImportLayer.Planting, "the tree points");
             run.True(ImportLayers.Of(ImportStepKind.ImageryDrape) == ImportLayer.ImageryDrape, "the drape");
 
-            // Placing the project builds nothing, so there is nothing to leave out.
             run.True(ImportLayers.Of(ImportStepKind.SetSharedCoordinates) is null, "shared coordinates is not a layer");
 
-            // Crediting the data is the licence's condition on importing any of it.
             run.True(ImportLayers.Of(ImportStepKind.AttributionAndProvenance) is null, "attribution is not a layer");
         });
 
@@ -76,9 +65,6 @@ internal static class ImportLayerTests
 
         run.Case("every layer but the site model's link is on by default", () =>
         {
-            // The reason HPS-51 asks for before a row starts unchecked: the site model's buildings are
-            // already copied in, and a link as well shows each one twice. Every other box fits the
-            // five-minute import at its default level, so none starts unticked for its time.
             foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
             {
                 run.Equal(ImportLayers.OnByDefault(layer), !StartsUnchecked(layer), $"{layer}'s box");
@@ -196,9 +182,6 @@ internal static class ImportLayerTests
 
         run.Case("a write to a disabled box does not change what the curator had chosen", () =>
         {
-            // The window listens to a box's Checked and Unchecked, which its own repaint of a disabled
-            // box raises too. The window drops those itself; this is the rule that makes a slip there
-            // harmless, rather than costing the curator what checking the terrain again gives back.
             ImportChecklist checklist = new(Enum.GetValues<ImportLayer>());
             checklist.Set(ImportLayer.Terrain, false);
             checklist.Set(ImportLayer.WaterSubdivisions, false);
@@ -209,8 +192,6 @@ internal static class ImportLayerTests
 
         run.Case("a prerequisite the bundle does not carry disables nothing", () =>
         {
-            // There is no terrain box to check, so a disabled drape would be a box nobody could ever
-            // light. The drape step finds the project's own toposolid, as it did before the checklist.
             ImportChecklist checklist = new([ImportLayer.ImageryDrape]);
 
             run.True(checklist.IsEnabled(ImportLayer.ImageryDrape), "the drape can be toggled");
@@ -361,9 +342,6 @@ internal static class ImportLayerTests
     {
         run.Case("every skip reason has a decided sentence for the window, or is decided to have none", () =>
         {
-            // Null is a decision, not a gap: the window lists what a bundle holds and cannot offer,
-            // so an absence, a choice, a tier another tier replaced and a skip that is no row's say
-            // nothing there. A code added without a line here fails, so none is shown by accident.
             Dictionary<SkipReasonCode, string?> expected = new()
             {
                 [SkipReasonCode.NoSiteFrame] = BuiltBefore,
@@ -424,8 +402,6 @@ internal static class ImportLayerTests
 
         run.Case("the window's sentences speak to the curator, and keep the planner's words out", () =>
         {
-            // The log keeps the technical register — EPSG codes, file paths, unit tokens. The window
-            // says what is missing and what to do, and says it without the glossary's avoided word.
             foreach (SkipReasonCode code in Enum.GetValues<SkipReasonCode>())
             {
                 foreach (int count in new[] { 1, 2 })
@@ -456,8 +432,6 @@ internal static class ImportLayerTests
 
         run.Case("a layer the bundle was cut without is listed, with the vault's remedy", () =>
         {
-            // The shared set cannot say whether an unlisted layer had no features or was never asked
-            // for, and the planner's own sentence sends the curator to the vault; the window agrees.
             string withoutWater = Everything.Replace(
                 """{ "name": "water", "formats": [{ "format": "geojson", "path": "Vector/Water.geojson", "sha256": "dd" }] },""",
                 string.Empty,
@@ -477,8 +451,6 @@ internal static class ImportLayerTests
 
         run.Case("a layer the bundle says it does not have is not listed as withheld", () =>
         {
-            // The producer's own "no imagery for this site" is not a thing the bundle holds and
-            // cannot offer, and no vault can change it. The planner still says so, in the log.
             string noImagery = Everything.Replace(
                 "\"imagery\": { \"present\": true, \"gsd_m\": 0.3 },",
                 "\"imagery\": { \"present\": false },",
@@ -493,9 +465,6 @@ internal static class ImportLayerTests
 
         run.Case("a State Plane bundle from before Revit had its own copies lists what it holds and cannot offer, once", () =>
         {
-            // The case the issue is about: the bundle holds the shared lon/lat set and the UTM drape,
-            // this host cannot place either on a foot origin, and the curator used to see a shorter
-            // checklist and no reason until the import had run.
             BundleImportPlan plan = PlanFor(StatePlaneBeforeOwnCopies, EverythingBundle);
             ImportChecklist checklist = ImportChecklist.For(plan);
 
@@ -515,7 +484,6 @@ internal static class ImportLayerTests
                 "This bundle was built before Revit could receive these. Download the bundle again from your vault to get them.",
                 "in the curator's register");
 
-            // The log keeps the planner's register, EPSG codes included.
             run.Contains(
                 plan.Skipped.Single(skip => skip.Kind == ImportStepKind.ImageryDrape).Reason,
                 "EPSG:2231",
@@ -541,9 +509,6 @@ internal static class ImportLayerTests
 
         run.Case("a terrain no tier could build is listed with the first reason a curator can act on", () =>
         {
-            // Three tiers, three skips, one row. The TIN's absence comes first and is the weakest
-            // reason; the suppressed fallback says nothing of its own. The unreadable unit that
-            // suppressed it is the reason.
             string chainPoints = Everything.Replace(
                 "\"elevation\": { \"dem\":",
                 "\"elevation\": { \"points_csv\": { \"units\": \"chain\" }, \"dem\":",
@@ -561,7 +526,6 @@ internal static class ImportLayerTests
 
         run.Case("a layer offered is never also listed as unavailable", () =>
         {
-            // The TIN's skip beside a points-file terrain is a tier passed over, not a row withheld.
             ImportChecklist checklist = new(
                 [ImportLayer.Terrain],
                 [new SkippedImport { Kind = ImportStepKind.ToposurfaceFromSurfaceTin, ReasonCode = SkipReasonCode.NoSiteFrame, Reason = "technical" }]);
@@ -582,11 +546,6 @@ internal static class ImportLayerTests
     private const string BuiltBefore =
         "This bundle was built before Revit could receive this. Download the bundle again from your vault to get it.";
 
-    /// <summary>
-    /// No box starts unticked for its time any more: each fits the five-minute import at its default
-    /// level. The slow-box rule stays (a row of the measurement table with a saving is a box that
-    /// starts unticked and warns), and no row has one.
-    /// </summary>
     private static void RunSlowLayerCases(TestRun run)
     {
         run.Case("the default plan leaves out only the site model's link", () =>
@@ -637,8 +596,6 @@ internal static class ImportLayerTests
 
         run.Case("a box is slow exactly when its step's row in the one measurement table has a saving", () =>
         {
-            // The step notice and the checklist read the same row: Measured. A row with a saving is a
-            // box that starts unticked and warns; a row without one is neither.
             foreach (ImportLayer layer in Enum.GetValues<ImportLayer>())
             {
                 bool rowHasSaving = Enum.GetValues<ImportStepKind>()
@@ -662,8 +619,6 @@ internal static class ImportLayerTests
 
         run.Case("no tick is carried from one window to the next", () =>
         {
-            // Nothing persists a choice: every window opens on ImportLayers.OnByDefault. A curator who
-            // ticked the link finds it unticked in the next window, and ticks it again there.
             BundleImportPlan plan = PlanFor(Everything, EverythingBundle);
             ImportChecklist first = ImportChecklist.For(plan, "2025");
             first.Set(ImportLayer.SiteModel, true);
@@ -699,11 +654,6 @@ internal static class ImportLayerTests
         });
     }
 
-    /// <summary>
-    /// <see cref="Everything"/> on a State Plane foot origin, cut before MPB 1.3.0 gave this host its
-    /// own copies: the tree points follow the delivery CRS and are placed, while the lon/lat vector
-    /// set and the UTM drape cannot be.
-    /// </summary>
     private static readonly string StatePlaneBeforeOwnCopies = Everything
         .Replace("\"crs_projected\": \"EPSG:32613\"", "\"crs_projected\": \"EPSG:2231\"", StringComparison.Ordinal)
         .Replace(
@@ -715,10 +665,8 @@ internal static class ImportLayerTests
     private static ImportLayerChoice AllBut(ImportLayer layer)
         => ImportLayerChoice.Only(Enum.GetValues<ImportLayer>().Where(candidate => candidate != layer));
 
-    /// <summary>The rows a host has stated a reason to start unchecked (<c>HPS-51</c>).</summary>
     private static bool StartsUnchecked(ImportLayer layer) => layer is ImportLayer.SiteModel;
 
-    /// <summary>A host with no Revit that runs every step it is handed and records which.</summary>
     private sealed class RecordingRunner : IImportStepRunner
     {
         internal List<ImportStepKind> Ran { get; } = [];
@@ -756,10 +704,6 @@ internal static class ImportLayerTests
         "Landcover/TreePoints.csv",
     ];
 
-    /// <summary>
-    /// A bundle carrying one of every layer: a terrain, the site model, the three parity layers, the
-    /// three other polygon layers cut as subdivisions, and a drape the image's own grid corroborates.
-    /// </summary>
     private const string Everything = """
         {
           "version": "1.0.0",
@@ -798,7 +742,6 @@ internal static class ImportLayerTests
         }
         """;
 
-    /// <summary>The fixture bundle's real drape grid, which the extent above corroborates.</summary>
     private static readonly ImageSize DrapePixels = new(4767, 4733);
 
     private static BundleImportPlan PlanFor(string manifestJson, IReadOnlyList<string> entries)

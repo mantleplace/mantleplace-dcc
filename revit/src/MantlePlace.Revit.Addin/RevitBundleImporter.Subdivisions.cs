@@ -4,35 +4,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// The subdivision steps: the surfaces a designer builds against — water bodies and road surfaces —
-// cut into the ground, stamped so a re-import finds them (ADR 0015).
 internal sealed partial class RevitBundleImporter
 {
-    /// <summary>
-    /// A published polygon layer as toposolid subdivisions: the water bodies of <c>water</c> and the
-    /// road surfaces of <c>road_polygons</c>. Land use and land cover are drawn on land plans instead
-    /// (<see cref="ImportLandPlan"/>, <c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>).
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A subdivision rather than a model line because the polygons are 2-D: the GeoJSON carries no
-    /// third ordinate, so there is no honest elevation to draw them at. A subdivision is projected
-    /// onto the toposolid and follows the relief, which is both what Forma produces and the only
-    /// reading that does not need an elevation nobody published. With no toposolid in the document
-    /// there is nothing to project onto, and that is said rather than worked around. A road surface
-    /// therefore comes in flat, at the terrain's own surface, rather than recessed into it.
-    /// </para>
-    /// <para>
-    /// What each layer's rings become is <see cref="GroundCuts"/>'s: a water body or a road network is
-    /// cut whole, with its islands and city blocks left out of it. Nothing is clipped against another
-    /// layer and no layer takes precedence — the published polygons overlap because the ground they
-    /// describe does, and Revit keeps them all (<see cref="ImportFailurePolicy"/>).
-    /// </para>
-    /// <para>
-    /// The word each cut's drape material carries is its layer's (<see cref="GroundLayerWords.MaterialWord"/>),
-    /// read off the stamp when the drape runs, so nothing about a cut is remembered here for it.
-    /// </para>
-    /// </remarks>
     private void CutSubdivisions(ImportStep step, GroundLayer layer)
     {
         GroundLayerWords words = GroundLayerWords.For(layer);
@@ -60,8 +33,6 @@ internal sealed partial class RevitBundleImporter
             return;
         }
 
-        // Which cuts are already on the terrain is decided in the pure core from the stamps the
-        // existing subdivisions carry, so a re-import creates nothing twice.
         IReadOnlyList<string?> names = GroundCuts.Names(cuts);
         string stem = _archive.Layout.Key.Stem;
         IReadOnlyList<NewSiteBoundary> missing = SiteBoundaryIdentity.NewFeatures(
@@ -70,9 +41,6 @@ internal sealed partial class RevitBundleImporter
             names,
             stem);
 
-        // A field cut is applied only now, after every cut is named over the whole layer, so a
-        // subdivision's stamp is the same at every level and a later import at a higher level cuts
-        // only the rest. Nothing an earlier import cut is deleted, whatever level this one is.
         LevelCutSubdivisions leveled = FidelityCuts.Subdivisions(
             [.. cuts.Select(cut => cut.Outer.LowestLevel)],
             missing,
@@ -85,43 +53,27 @@ internal sealed partial class RevitBundleImporter
         int unclosed = 0;
         int unstamped = 0;
 
-        // A hole that is not cut is ground the subdivision covers and the bundle says it does not,
-        // so both ways of losing one are counted and said.
         int holesUncut = 0;
 
-        // Which cut each new subdivision came from, so an error Revit posts at commit — which names
-        // elements, not rings — can be traced back to the published feature it refused. With it,
-        // what that cut had added to the counts above, which a refusal at commit takes back.
         Dictionary<ElementId, int> cutIndexOf = [];
         Dictionary<ElementId, (int HolesUncut, bool Unstamped)> countedFor = [];
 
-        // How many cuts took the drape's type as they were cut, and what that cost, for the log.
         int typedForDrape = 0;
         TimeSpan typingTime = TimeSpan.Zero;
 
-        // ⛔ Before the transaction, because the commit's whole cost is inside it and nothing can be
-        // written while that runs. This line is the commit's only warning; the typing before it is
-        // announced at the first cut that takes a type (SlowStepNotice.ForTypesAtCut).
         if (SlowStepNotice.For(step.Kind, _terrainVertexCount, newBoundaries.Count) is { } notice)
         {
             Announce(notice);
         }
 
-        // ⛔ Settled before the first cut when Core says so (TerrainSmoothing.SettleBeforeCuts), so a
-        // cut's type is named for the shading the drape will actually write for (ADR 0008).
         bool smoothed = TerrainSmoothing.SettleBeforeCuts(step.DrapePlanned, newBoundaries.Count)
             && EnsureSmoothedSurface();
 
-        // Said at the first cut that shows it takes a type, which nothing can say before one exists:
-        // Revit 2025's typeless cuts hear nothing, and a cut whose route could not be read leaves it
-        // to the next.
         bool typingAnnounced = false;
 
         ImportFailureSwallower swallower = new($"Importing the {label}");
         using Transaction transaction = BeginTransaction($"Mantle Place: {label}", swallower);
 
-        // Counted as it goes, for the window: the cuts are inside the step's one transaction, which
-        // cannot yield, and where each is typed for the drape as it is cut that is seconds a cut.
         int handled = 0;
         foreach (NewSiteBoundary boundary in newBoundaries)
         {
@@ -129,14 +81,10 @@ internal sealed partial class RevitBundleImporter
             GroundCut cut = cuts[boundary.Ordinal - 1];
             if (Loop(cut.Outer) is not { } outer)
             {
-                // One polygon lost, and said: its holes go with it, as with a ring Revit declines.
                 unclosed++;
                 continue;
             }
 
-            // The outer loop first and the holes after it, which is the order Revit reads them in:
-            // an outer loop with its inner loops comes back as one subdivision with the holes left
-            // out of it, in Revit 2025, 2026 and 2027 alike, whichever way round a ring is wound.
             List<CurveLoop> loops = [outer];
             int uncut = 0;
             foreach (SiteFeature hole in cut.Holes)
@@ -158,17 +106,10 @@ internal sealed partial class RevitBundleImporter
                 created++;
                 cutIndexOf[subdivision.Id] = boundary.Ordinal - 1;
 
-                // Counted only now: there is no subdivision for a hole to be missing from until
-                // this call returns.
                 holesUncut += uncut;
 
-                // Remembered for the drape, which prefers the stamp below but cannot use it for a
-                // subdivision that fails to take one.
                 _createdSubDivisionIds.Add(subdivision.Id);
 
-                // The plugin's first parameter write. Comments is the subdivision's identity for the
-                // NEXT import — a subdivision it could not stamp is kept (the boundary is real), it
-                // just cannot be recognised later, and that is said in the log rather than hidden.
                 Parameter? comments = subdivision.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS);
                 bool stampRefused = comments is null || comments.IsReadOnly || !comments.Set(boundary.Stamp);
                 if (stampRefused)
@@ -178,16 +119,11 @@ internal sealed partial class RevitBundleImporter
 
                 countedFor[subdivision.Id] = (uncut, stampRefused);
 
-                // What names its type and material even if Comments refused the stamp, so a later
-                // import that cuts this feature again reuses them (SiteBoundaryIdentity.NamingStamp).
                 _stampsCutWith[subdivision.Id] = boundary.Stamp;
                 made = subdivision;
             }
             catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
             {
-                // A ring that self-intersects, or falls outside the terrain, is one boundary lost —
-                // not a reason to abandon the other two. Its holes go with it and are not counted
-                // above: there is no subdivision left for them to be holes in.
                 declined++;
             }
 
@@ -196,10 +132,6 @@ internal sealed partial class RevitBundleImporter
                 continue;
             }
 
-            // ⛔ Outside the cut's try, and contained in itself: whatever typing the cut for the drape
-            // does, it never turns a created cut into a declined one. The element is asked what it is,
-            // and Core decides with the plan's own answer (SubDivisionMaterial.TakesTypeAtCut), in the
-            // cut's own transaction, so the drape has no retype left to do.
             long before = Stopwatch.GetTimestamp();
             SubDivisionMaterialRoute route = RouteAtCut(made, out ToposolidType? typeAsCut);
             if (!typingAnnounced
@@ -221,9 +153,6 @@ internal sealed partial class RevitBundleImporter
 
         Count(newBoundaries.Count, newBoundaries.Count);
 
-        // A subdivision Revit cannot make is refused only at commit, where the catch above never
-        // sees it. Declaring this run's cuts lets the swallower delete the one it names instead of
-        // rolling the whole layer back (ImportFailurePolicy).
         swallower.OwnNewElements.UnionWith(cutIndexOf.Keys);
 
         if (typedForDrape > 0)
@@ -234,14 +163,10 @@ internal sealed partial class RevitBundleImporter
 
         if (!CommitAndReport(transaction, swallower))
         {
-            // The swallower already said why. Reporting the work below as done would be a lie:
-            // the rollback took all of it.
             ReportRefusedCuts(swallower, cuts, cutIndexOf);
             return;
         }
 
-        // Each refused cut is undone in every count it joined, then said by name: it is one
-        // published feature lost, the same as a cut the catch above declined.
         foreach (PostedError refusal in swallower.Deleted)
         {
             foreach (ElementId id in refusal.FailingElementIds)
@@ -300,10 +225,6 @@ internal sealed partial class RevitBundleImporter
         Say(summary + ".");
     }
 
-    /// <summary>
-    /// Names the published features an error posted at commit was about, and the elements it named
-    /// that are not one of this run's cuts.
-    /// </summary>
     private void ReportRefusedCuts(ImportFailureSwallower swallower, IReadOnlyList<GroundCut> cuts, Dictionary<ElementId, int> cutIndexOf)
     {
         foreach (PostedError error in swallower.Errors)
@@ -323,27 +244,6 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>
-    /// One published ring as a closed Revit loop, or <c>null</c> when it cannot be closed: too few of
-    /// its vertices lie further apart than the short-curve tolerance, or Revit refused the loop.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Which vertices survive the tolerance is <see cref="SiteRings.Thin"/>'s: a vertex too close to
-    /// the last one kept is skipped, so the edges meet end to end and the loop closes by
-    /// construction. Dropping the short edge instead left a gap Revit refused as not contiguous.
-    /// </para>
-    /// <para>
-    /// ⛔ This never throws. Every caller builds its loops outside the one polygon's failure handling,
-    /// so a refusal here would cost the whole layer rather than the ring; it comes back as
-    /// <c>null</c>, and each caller counts that as it counts a ring too short to close.
-    /// </para>
-    /// <para>
-    /// Flat by construction: a subdivision profile is projected onto the toposolid, so the loop's own
-    /// elevation is irrelevant and zero keeps it well inside Revit's tolerance. A filled region's loop
-    /// is drawn at its plan's level instead (<paramref name="z"/>), in the view's own plane.
-    /// </para>
-    /// </remarks>
     private CurveLoop? Loop(SiteFeature ring, double z = 0.0)
     {
         if (SiteRings.Thin(ring.Vertices, ShortCurveToleranceM) is not { } vertices)
@@ -372,10 +272,6 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>
-    /// The stamps this plugin wrote onto the terrain's existing subdivisions — anything else in the
-    /// Comments parameter, including nothing at all, is a curator's and is not an identity here.
-    /// </summary>
     private HashSet<string> ExistingBoundaryStamps(Toposolid terrain)
     {
         HashSet<string> stamps = new(StringComparer.Ordinal);

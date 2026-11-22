@@ -34,38 +34,6 @@
 #include "Rendering/NaniteResources.h"
 #include "StaticMeshResources.h"
 
-// Terrain collision after a real import, measured the way a game asks for it: a world query, not a
-// property read. A whole bundle is imported in each mode (Landscape, Mesh, Both) into a fresh plain level
-// and into a fresh partitioned World Partition level, and at a grid of points across the terrain:
-//
-//  - a line trace down (the Visibility channel, simple collision, as a default query is) must hit a
-//    terrain actor at the rendered ground, within one heightmap sample's relief of it;
-//  - a sphere swept down (the Pawn channel: where a dropped body comes to rest) must hit it too, so
-//    nothing falls through;
-//  - exactly one terrain representation may block: in Both mode the mesh overlay must not collide on
-//    top of the Landscape;
-//  - in the World Partition level every streaming proxy carries collision once loaded, and traces on
-//    the proxies' shared borders hit;
-//  - the building massing collides as its roofs: at every grid point over the buildings where a
-//    complex (per-triangle) trace finds a roof, a default trace hits the buildings at that roof, not at
-//    a hull or box above it. Where the drawn ground lies over the roof (a building levelled to its lowest
-//    ground, on ground that rises across it by more than its height), the trace must hit that ground
-//    instead, and the terrain must collide where it is drawn there: FMantlePlaceRoofTraceLogic judges each
-//    point, and at most a small share of a level's roof points may lie under the drawn ground.
-//
-// The rendered ground is the Landscape's own height data (the heights its components draw), read back
-// from the first Landscape the run imports, so the Mesh cases are held to the same ground. The terrain
-// mesh is a Nanite mesh (Interchange builds Nanite by default in 5.8), so its collision is the Nanite
-// case: whatever it carries, the table names it. In the World Partition level the Landscape is split one
-// component per proxy, the smallest grid the plugin's setting takes, so even a small bundle has borders
-// between proxies to trace across.
-//
-// The bundle is MP_LIVETEST_BUNDLE (the sealed archive of a bundle), as for MantlePlace.Import.LiveFreeTier:
-// a missing bundle, or one with no heightmap, warns and passes locally and fails where CI is set. A bundle
-// older than 3.0 with no Terrain.glb is measured in Landscape mode only, with a warning naming the modes left
-// out; a 3.x bundle with no Terrain.glb fails, because the 3.0 file table holds the terrain mesh.
-// Each case opens a new unsaved map, and the run reopens the map it started on.
-
 namespace MantlePlaceTerrainCollisionLiveTest
 {
 constexpr int32 GridPerAxis = 24;
@@ -75,7 +43,6 @@ constexpr int32 RoofGridPerAxis = 64;
 
 bool IsCi() { return !FPlatformMisc::GetEnvironmentVariable(TEXT("CI")).IsEmpty(); }
 
-/** The rendered ground: the first imported Landscape's own height data, kept past its world. */
 struct FGround
 {
 	bool bValid = false;
@@ -121,7 +88,6 @@ struct FGround
 		return true;
 	}
 
-	/** The rendered height under a world point, and one heightmap sample's relief around it. */
 	void At(const FVector2D& World, double& OutZ, double& OutRelief) const
 	{
 		const FVector Local = ActorToWorld.InverseTransformPosition(FVector(World, 0.0));
@@ -146,7 +112,6 @@ struct FGround
 		OutRelief = Hi - Lo;
 	}
 
-	/** World XY at a fraction across the Landscape's extent. */
 	FVector2D Point(double U, double V) const
 	{
 		const FVector Local(FMath::Lerp(double(MinX), double(MaxX), U), FMath::Lerp(double(MinY), double(MaxY), V), 0.0);
@@ -251,10 +216,6 @@ FString DescribeMeshCollision(const AStaticMeshActor* Actor)
 		NaniteTriangles);
 }
 
-/**
- * The terrain actors of the level: every Landscape proxy, and the terrain mesh (the label the importer gives
- * it). The building massing (its label) is also listed in OutBuildings; for the terrain it is one of the rest.
- */
 void FindTerrain(UWorld* World, TArray<AActor*>& OutLandscape, TArray<AActor*>& OutMesh, TArray<AActor*>& OutOther,
 	TArray<AActor*>& OutBuildings, const FString& MeshLabelPrefix, const FString& BuildingsLabelPrefix)
 {
@@ -282,7 +243,7 @@ void FindTerrain(UWorld* World, TArray<AActor*>& OutLandscape, TArray<AActor*>& 
 
 bool TraceDown(UWorld* World, const FVector2D& XY, const FGround& Ground, const TArray<AActor*>& Ignore, FHitResult& Hit)
 {
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(MantlePlaceTerrainCollisionTrace), /*bTraceComplex*/ false);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MantlePlaceTerrainCollisionTrace), false);
 	Params.AddIgnoredActors(Ignore);
 	return World->LineTraceSingleByChannel(Hit, FVector(XY, Ground.MaxZ + 10000.0), FVector(XY, Ground.MinZ - 10000.0),
 		ECC_Visibility, Params);
@@ -290,20 +251,12 @@ bool TraceDown(UWorld* World, const FVector2D& XY, const FGround& Ground, const 
 
 bool SweepDown(UWorld* World, const FVector2D& XY, const FGround& Ground, const TArray<AActor*>& Ignore, FHitResult& Hit)
 {
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(MantlePlaceTerrainCollisionSweep), /*bTraceComplex*/ false);
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MantlePlaceTerrainCollisionSweep), false);
 	Params.AddIgnoredActors(Ignore);
 	return World->SweepSingleByChannel(Hit, FVector(XY, Ground.MaxZ + 10000.0), FVector(XY, Ground.MinZ - 10000.0),
 		FQuat::Identity, ECC_Pawn, FCollisionShape::MakeSphere(SweepRadiusCm), Params);
 }
 
-/**
- * The building massing, traced onto its roofs. A roof point is where a complex trace (the mesh's own
- * triangles, whatever its simple collision is) going down onto the buildings alone meets an upward-facing
- * surface. A default trace through the whole level (simple collision) must then meet the first surface drawn
- * there: the buildings at the roof where the roof is open, or the ground where the drawn ground lies over the
- * roof (a building on ground that rises across it by more than its height). FMantlePlaceRoofTraceLogic judges
- * each point; every one is judged, and each that fails is described.
- */
 void MeasureRoofs(UWorld* World, const FGround& Ground, const TArray<AActor*>& Landscape, const TArray<AActor*>& Mesh,
 	const TArray<AActor*>& Other, const TArray<AActor*>& Buildings, FCollisionCase& Out)
 {
@@ -320,9 +273,9 @@ void MeasureRoofs(UWorld* World, const FGround& Ground, const TArray<AActor*>& L
 		const FBox Box = Component->Bounds.GetBox();
 		const double Top = FMath::Max(Box.Max.Z, Ground.MaxZ) + 10000.0;
 		const double Bottom = FMath::Min(Box.Min.Z, Ground.MinZ) - 10000.0;
-		const FCollisionQueryParams Complex(SCENE_QUERY_STAT(MantlePlaceRoofComplexTrace), /*bTraceComplex*/ true);
-		const FCollisionQueryParams Simple(SCENE_QUERY_STAT(MantlePlaceRoofTrace), /*bTraceComplex*/ false);
-		FCollisionQueryParams TerrainOnly(SCENE_QUERY_STAT(MantlePlaceRoofTerrainTrace), /*bTraceComplex*/ false);
+		const FCollisionQueryParams Complex(SCENE_QUERY_STAT(MantlePlaceRoofComplexTrace), true);
+		const FCollisionQueryParams Simple(SCENE_QUERY_STAT(MantlePlaceRoofTrace), false);
+		FCollisionQueryParams TerrainOnly(SCENE_QUERY_STAT(MantlePlaceRoofTerrainTrace), false);
 		TerrainOnly.AddIgnoredActors(Other);
 		for (int32 J = 0; J < RoofGridPerAxis; ++J)
 		{
@@ -386,7 +339,6 @@ void FinishCompiling()
 	FlushRenderingCommands();
 }
 
-/** Measure the level as it stands, against the ground. Mesh actors outside `Mesh` are ignored with the rest. */
 void Measure(UWorld* World, const FGround& Ground, const TArray<AActor*>& Landscape, const TArray<AActor*>& Mesh,
 	const TArray<AActor*>& Other, FCollisionCase& Out)
 {
@@ -424,7 +376,6 @@ void Measure(UWorld* World, const FGround& Ground, const TArray<AActor*>& Landsc
 		}
 	}
 
-	// World Partition: each streaming proxy, loaded, carries collision, and its centre and its borders are hit.
 	for (AActor* Actor : Landscape)
 	{
 		ALandscapeStreamingProxy* Proxy = Cast<ALandscapeStreamingProxy>(Actor);
@@ -441,7 +392,7 @@ void Measure(UWorld* World, const FGround& Ground, const TArray<AActor*>& Landsc
 		}
 		Out.ProxiesWithCollision += (Live > 0 && Live == Proxy->CollisionComponents.Num()) ? 1 : 0;
 
-		const FBox Box = Proxy->GetComponentsBoundingBox(/*bNonColliding*/ true);
+		const FBox Box = Proxy->GetComponentsBoundingBox(true);
 		FHitResult Hit;
 		const FVector2D Centre(Box.GetCenter().X, Box.GetCenter().Y);
 		Out.ProxyCentreHits += (TraceDown(World, Centre, Ground, IgnoreOtherAndMesh, Hit) && Hit.GetActor() == Proxy) ? 1 : 0;
@@ -457,7 +408,6 @@ void Measure(UWorld* World, const FGround& Ground, const TArray<AActor*>& Landsc
 			};
 			for (const FVector2D& Edge : Edges)
 			{
-				// Only the borders shared with another proxy: the Landscape's own outer edge is not a seam.
 				if (!Ground.Inside(Edge, 1.0))
 				{
 					continue;
@@ -512,11 +462,6 @@ bool FMantlePlaceTerrainCollisionLiveTest::RunTest(const FString& Parameters)
 	{
 		return SkipOrFail(FString::Printf(TEXT("The bundle's manifest could not be read (%s)."), *ReadError));
 	}
-	// The ground every case is held to is read back from a Landscape, so a bundle with no heightmap has nothing
-	// to measure. The terrain mesh is a member of the 3.0 file table (spec/format.md section 6,
-	// `Elevation/Terrain.glb`), so a 3.x bundle without it fails. Before 3.0 the pointers decided whether a
-	// bundle held one, so an older bundle with no Terrain.glb is measured in Landscape mode only: the Mesh and
-	// Both modes need the mesh, and the warning names what was not measured.
 	if (!Manifest.Heightmap.bPresent)
 	{
 		return SkipOrFail(TEXT("The bundle holds no heightmap, so there is no Landscape to measure the terrain against."));
@@ -665,13 +610,13 @@ bool FMantlePlaceTerrainCollisionLiveTest::RunTest(const FString& Parameters)
 
 	if (!StartMap.IsEmpty() && FPackageName::DoesPackageExist(StartMap))
 	{
-		FEditorFileUtils::LoadMap(StartMap, /*LoadAsTemplate*/ false, /*bShowProgress*/ false);
+		FEditorFileUtils::LoadMap(StartMap, false, false);
 	}
 	else
 	{
-		GEditor->NewMap(/*bIsPartitionedWorld*/ true);
+		GEditor->NewMap(true);
 	}
 	return true;
 }
 
-#endif // WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
+#endif

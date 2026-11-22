@@ -3,54 +3,36 @@
 #include "MantlePlaceImportManifest.h"
 
 #include "MantlePlaceArtifactHandler.h"
-#include "MantlePlaceBundleReaderLogic.h" // the version messages, one text for both readers
+#include "MantlePlaceBundleReaderLogic.h"
 #include "MantlePlaceManifestJson.h"
-#include "MantlePlaceRoadSplinesLogic.h"    // FMantlePlaceRoadSplinesDatum
-#include "MantlePlaceTreePointsLogic.h"     // FMantlePlaceTreePointsFrame
-#include "MantlePlaceVaultTypes.h" // MantlePlaceMinSupportedManifestVersion (the MPB clean-break floor)
+#include "MantlePlaceRoadSplinesLogic.h"
+#include "MantlePlaceTreePointsLogic.h"
+#include "MantlePlaceVaultTypes.h"
 
 #include "Dom/JsonObject.h"
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
-// ── Placement helpers ──────────────────────────────────────────────────────
-
 FVector FMantlePlaceVaultManifest::ProjectedToUeCm(double DeltaEastingM, double DeltaNorthingM, double UpM)
 {
-	// The single legal home for the projected->UE axis mapping. Unreal's world is
-	// LEFT-handed with X forward/North and Y right/East, so a right-handed map frame maps
-	// North -> +X, East -> +Y, Up -> +Z. Writing East -> +X instead swaps two axes, which is a
-	// reflection (determinant -1), not a rotation -- it mirrors the whole scene across the NE
-	// diagonal and reads, on a near-square AOI, as a 90 degree rotation. Every projected
-	// coordinate in this plugin goes through here so that mistake cannot be made twice.
 	return FVector(DeltaNorthingM * 100.0, DeltaEastingM * 100.0, UpM * 100.0);
 }
 
 FVector2D FMantlePlaceVaultManifest::GetAoiSizeUeCm() const
 {
-	// The manifest names its grid axes the ETL's way: `scale_x_percent` / `component_count_x`
-	// describe the EASTING axis and `*_y` the NORTHING axis. UE X is North, so the X component
-	// here takes the *_y values and vice versa. The scale is genuinely anisotropic (the corpus
-	// ships 141.369 vs 138.988), so a half-done swap survives as a quiet aspect-ratio error
-	// rather than an obvious one -- hence one accessor rather than the arithmetic inline.
 	return FVector2D(
-		Heightmap.ComponentCountY * GetQuadsPerComponent() * Heightmap.ScaleYPercent,   // North span
-		Heightmap.ComponentCountX * GetQuadsPerComponent() * Heightmap.ScaleXPercent);  // East span
+		Heightmap.ComponentCountY * GetQuadsPerComponent() * Heightmap.ScaleYPercent,
+		Heightmap.ComponentCountX * GetQuadsPerComponent() * Heightmap.ScaleXPercent);
 }
 
 FRotator FMantlePlaceVaultManifest::GetMeshRotation()
 {
-	// mesh(East, South) -> world(North, East) is (x, y) -> (-y, x), i.e. yaw +90. A rotation, not
-	// a mirror — see the header for the measurement this is derived from.
 	return FRotator(0.0, 90.0, 0.0);
 }
 
 FVector FMantlePlaceVaultManifest::GetLandscapeScale() const
 {
-	// The *_percent values ARE the DrawScale3D (100 == 1 m/quad, 512 m full uint16 range),
-	// swapped into UE axis order: landscape-local X indexes the heightmap's ROWS (northing) and
-	// local Y its COLUMNS (easting), per the transpose in MantlePlaceLandscapeImporter.
 	return FVector(Heightmap.ScaleYPercent, Heightmap.ScaleXPercent, Heightmap.ScaleZPercent);
 }
 
@@ -67,21 +49,12 @@ bool FMantlePlaceVaultManifest::HasLevelOffset() const
 
 FVector FMantlePlaceVaultManifest::ToLevelFrame(const FVector& FrameLocalUeCm) const
 {
-	// Horizontal only: every height this host places is already absolute (the Landscape's
-	// location_z_offset_cm, the mesh's ground_orthometric_h_m), so a vertical offset would count it twice.
-	// The offset is two published numbers' difference, turned into cm by the one axis-mapping helper.
 	const FVector Offset = ProjectedToUeCm(LevelOffsetEastM, LevelOffsetNorthM, 0.0);
 	return FrameLocalUeCm + Offset;
 }
 
 FVector FMantlePlaceVaultManifest::GetLandscapeSpawnLocation() const
 {
-	// Mirror the engine's New-Landscape centring: the actor location is the corner; offset it
-	// by half the (scaled) quad span so the AOI centre lands on world (0,0). Identity rotation,
-	// so TransformVector(scale) is a component-wise multiply. In a level that already holds another
-	// import the AOI centre lands on that import's offset instead (ToLevelFrame).
-	// A 3.x heightmap states the rectangle it covers, whose centre need not be the origin; a 2.x grid is
-	// centred on it, and its centre is zero.
 	const FVector2D AoiSize = GetAoiSizeUeCm();
 	const FVector Centre = ProjectedToUeCm(Heightmap.GridCentreEastM, Heightmap.GridCentreNorthM, 0.0);
 	return ToLevelFrame(FVector(Centre.X - AoiSize.X / 2.0, Centre.Y - AoiSize.Y / 2.0, Heightmap.LocationZOffsetCm));
@@ -89,15 +62,11 @@ FVector FMantlePlaceVaultManifest::GetLandscapeSpawnLocation() const
 
 FVector FMantlePlaceVaultManifest::GetMeshLocation() const
 {
-	// The glb is centroid-local with z=0 at centroid ground; place that at true elevation so it
-	// overlays the Landscape (which encodes true orthometric Z too). XY centroid -> world (0,0), or
-	// the level offset in a level that already holds another import (ToLevelFrame).
 	return ToLevelFrame(FVector(0.0, 0.0, Georef.GroundOrthometricHM * 100.0));
 }
 
 void FMantlePlaceVaultManifest::GetDrapeWorldRect(FVector2D& OutMin, FVector2D& OutSize) const
 {
-	// UTM -> UE world cm relative to the georeference origin (North -> +X, East -> +Y).
 	const FVector Min = ProjectedToUeCm(Drape.LeftM - Georef.OriginEastingM, Drape.BottomM - Georef.OriginNorthingM, 0.0);
 	const FVector Size = ProjectedToUeCm(Drape.RightM - Drape.LeftM, Drape.TopM - Drape.BottomM, 0.0);
 	OutMin = FVector2D(Min.X, Min.Y);
@@ -106,22 +75,6 @@ void FMantlePlaceVaultManifest::GetDrapeWorldRect(FVector2D& OutMin, FVector2D& 
 
 void FMantlePlaceVaultManifest::GetDrapeUvTransform(FVector2D& OutScale, FVector2D& OutOffset) const
 {
-	// The geometry-local drape samples imagery from a grid-normalised [0,1] coordinate (gridUV) that
-	// spans the AOI grid, with U->+X/North and V->+Y/East. NOTE the ordering contract with
-	// M_MantlePlace_Drape: the material applies these values in landscape-grid order FIRST, then
-	// swizzles AND flips into imagery order LAST -- `t = gridUV*DrapeUvScale + DrapeUvOffset;
-	// sample(t.y, 1 - t.x)` -- because the imagery PNG is north-up, so its U is East and its V grows
-	// southward, while landscape-local U is now North and grows northward. The flip belongs after the
-	// scale/offset: those place the grid inside the drape rect, and only then does `1 -` convert a
-	// north-position into a texture coordinate.
-	// The level offset (ToLevelFrame) moves the AOI and the drape alike, so it cancels from every term
-	// below and none of them is shifted: they stay in the bundle's own frame.
-	// Everything below therefore stays in UE (X=North, Y=East) order. The AOI is centred on world (0,0), so its
-	// world rect is AoiMin = (-AoiSize/2), spanning AoiSize; the imagery spans GetDrapeWorldRect(). The
-	// legacy world projection sampled imageryUV = (worldXY - DrapeMin)/DrapeSize. Substituting
-	// worldXY = AoiMin + gridUV*AoiSize gives imageryUV = gridUV*(AoiSize/DrapeSize) + (AoiMin-DrapeMin)/DrapeSize.
-	// Hence scale = AoiSize/DrapeSize, offset = (AoiMin-DrapeMin)/DrapeSize. For v8 (imagery == AOI) this
-	// is the identity. Falls back to identity if the drape rect is degenerate.
 	OutScale = FVector2D(1.0, 1.0);
 	OutOffset = FVector2D(0.0, 0.0);
 
@@ -133,7 +86,6 @@ void FMantlePlaceVaultManifest::GetDrapeUvTransform(FVector2D& OutScale, FVector
 	}
 
 	const FVector2D AoiSize = GetAoiSizeUeCm();
-	// The grid centred on world (0,0) for 2.x, on its stated centre for 3.x (GetLandscapeSpawnLocation).
 	const FVector Centre = ProjectedToUeCm(Heightmap.GridCentreEastM, Heightmap.GridCentreNorthM, 0.0);
 	const FVector2D AoiMin(Centre.X - AoiSize.X / 2.0, Centre.Y - AoiSize.Y / 2.0);
 
@@ -151,9 +103,6 @@ const FMantlePlaceLandscapeLayer* FMantlePlaceVaultManifest::FindLandscapeLayer(
 
 FMantlePlaceTreePointsFrame FMantlePlaceVaultManifest::GetFoliagePointsFrame() const
 {
-	// The first MPB version whose `foliage_points` must state its frame. A version below it is a
-	// bundle built before the format could say, and only there is the extent substitute the whole
-	// of the check (HPS-53).
 	static const FString FirstVersionStatingTreePointsFrame = TEXT("1.3.0");
 
 	FMantlePlaceTreePointsFrame Frame;
@@ -167,8 +116,6 @@ FMantlePlaceTreePointsFrame FMantlePlaceVaultManifest::GetFoliagePointsFrame() c
 
 FMantlePlaceRoadSplinesDatum FMantlePlaceVaultManifest::GetRoadSplinesDatum() const
 {
-	// The first MPB version whose layers state the datum of their heights. Below it, every height a
-	// bundle carried was EGM2008, and a road layer that states none is one of those.
 	static const FString FirstVersionStatingHeightDatum = TEXT("1.8.0");
 
 	FMantlePlaceRoadSplinesDatum Datum;
@@ -184,8 +131,6 @@ TArray<FMantlePlaceRoadSplinesCandidate> FMantlePlaceVaultManifest::GetRoadSplin
 	    RoadSplines.bPresent || RoadSplines.bGpkgPresent, GetRoadSplinesDatum());
 }
 
-// ── Parsing ────────────────────────────────────────────────────────────────
-
 using MantlePlaceManifestJson::GetInt;
 using MantlePlaceManifestJson::GetNumber;
 using MantlePlaceManifestJson::GetObject;
@@ -193,7 +138,6 @@ using MantlePlaceManifestJson::GetString;
 
 int32 MantlePlaceImportManifest::ParseEpsg(const FString& CrsString)
 {
-	// Accept "EPSG:32613" (any case) or a bare number.
 	FString Digits;
 	for (const TCHAR Ch : CrsString)
 	{
@@ -218,16 +162,6 @@ bool MantlePlaceImportManifest::IsBundleMaterialized(const TSharedPtr<FJsonObjec
 		return false;
 	}
 
-	// HPS-47: any one of the neutral signals means the ETL has built DCC formats for SOMEBODY.
-	//
-	// At MPB 1.0.0 this is ONE signal where the integer era had three. Everything host-specific now
-	// lives under `hosts.<hostId>` — payloads and readiness alike — so the question is whether that
-	// object has ANY key, never which keys it has. No host roster is consulted at all, which is
-	// what makes roster staleness structurally unable to matter: a bundle materialized only for a
-	// host this plugin has never heard of still answers true.
-	//
-	// A key, not mere existence: an empty `hosts` object is base-tier scaffolding exactly as an
-	// empty `vector.layers` array is.
 	if (const TSharedPtr<FJsonObject>* HostsPtr = GetObject(Root, TEXT("hosts")))
 	{
 		if ((*HostsPtr)->Values.Num() > 0)
@@ -236,7 +170,6 @@ bool MantlePlaceImportManifest::IsBundleMaterialized(const TSharedPtr<FJsonObjec
 		}
 	}
 
-	// Non-empty layers only: an empty `vector.layers` array is base-tier scaffolding, not a signal.
 	if (const TSharedPtr<FJsonObject>* VectorPtr = GetObject(Root, TEXT("vector")))
 	{
 		const TArray<TSharedPtr<FJsonValue>>* Layers = nullptr;
@@ -251,7 +184,6 @@ bool MantlePlaceImportManifest::IsBundleMaterialized(const TSharedPtr<FJsonObjec
 
 namespace
 {
-/** `hosts.unreal.georeference`: this host's frame. Not an artifact, so Parse reads it itself. */
 bool ParseGeoreference(const TSharedPtr<FJsonObject>& Unreal, FMantlePlaceGeoreferenceBlock& Georef, FString& OutError)
 {
 	const TSharedPtr<FJsonObject>* GeoPtr = GetObject(Unreal, TEXT("georeference"));
@@ -260,9 +192,6 @@ bool ParseGeoreference(const TSharedPtr<FJsonObject>& Unreal, FMantlePlaceGeoref
 		return true;
 	}
 	const TSharedPtr<FJsonObject> Geo = *GeoPtr;
-	// EPSG is provenance-only on the consumer side: the contract places the AOI in a flat frame at world
-	// origin and deliberately instantiates no AGeoReferencingSystem / no LWC in v1, so "EPSG parsed
-	// but otherwise unused" is by design, not a bug.
 	Georef.CrsProjected = GetString(Geo, TEXT("crs_projected"));
 	Georef.Epsg = MantlePlaceImportManifest::ParseEpsg(Georef.CrsProjected);
 	if (const TSharedPtr<FJsonObject>* OriginPtr = GetObject(Geo, TEXT("origin")))
@@ -282,8 +211,6 @@ bool ParseGeoreference(const TSharedPtr<FJsonObject>& Unreal, FMantlePlaceGeoref
 		}
 	}
 
-	// Enforce the v1 contract: the importer supports only the flat planet shape. Reject any
-	// other declared value fail-closed (absent => legacy bundle, defaults to Flat).
 	Georef.PlanetShape = GetString(Geo, TEXT("planet_shape"));
 	if (!Georef.PlanetShape.IsEmpty() && !Georef.PlanetShape.Equals(TEXT("Flat")))
 	{
@@ -295,9 +222,6 @@ bool ParseGeoreference(const TSharedPtr<FJsonObject>& Unreal, FMantlePlaceGeoref
 	return true;
 }
 
-/** The bundle's native Cesium artifacts + AOI bbox (top-level siblings of `hosts`). The bundle ships a
- *  Cesium-ready quantized-mesh tileset (layout.cesium_terrain); the local tile server hosts it so
- *  Cesium for Unreal can stream the bundle. Optional — absent on bundles that predate the stage. */
 void ParseCesium(const TSharedPtr<FJsonObject>& Root, FMantlePlaceCesiumBlock& Cesium)
 {
 	if (const TSharedPtr<FJsonObject>* BboxPtr = GetObject(Root, TEXT("bbox")))
@@ -320,8 +244,6 @@ void ParseCesium(const TSharedPtr<FJsonObject>& Root, FMantlePlaceCesiumBlock& C
 	Cesium.bHasTerrain = !Cesium.TerrainPath.IsEmpty();
 }
 
-/** `delivery`: display only (see FMantlePlaceDeliveryFacts). Verbatim, never validated -- nothing
- *  reads it to place, so an unknown value is a word the user is shown, not a refusal. */
 void ParseDelivery(const TSharedPtr<FJsonObject>& Root, FMantlePlaceDeliveryFacts& Delivery)
 {
 	const TSharedPtr<FJsonObject>* DeliveryPtr = GetObject(Root, TEXT("delivery"));
@@ -334,7 +256,6 @@ void ParseDelivery(const TSharedPtr<FJsonObject>& Root, FMantlePlaceDeliveryFact
 	Delivery.LinearUnit = GetString(*DeliveryPtr, TEXT("linear_unit"));
 	Delivery.Label = GetString(*DeliveryPtr, TEXT("label"));
 	double HorizontalEpsg = 0.0;
-	// A JSON null reads as no number, which is what the `local_ft` tier means by it.
 	Delivery.bHasHorizontalEpsg = (*DeliveryPtr)->TryGetNumberField(TEXT("horizontal_epsg"), HorizontalEpsg);
 	Delivery.HorizontalEpsg = Delivery.bHasHorizontalEpsg ? FMath::RoundToInt(HorizontalEpsg) : 0;
 }
@@ -342,9 +263,6 @@ void ParseDelivery(const TSharedPtr<FJsonObject>& Root, FMantlePlaceDeliveryFact
 
 namespace
 {
-/** `file_entries` (MPB 1.14.0): each file's ODbL role, licence and sources. Only those three members are
- *  read; the frame members are the host blocks' to state (HPS-33). A malformed entry is skipped, and a
- *  file with no entry reads as `database` (MantlePlaceOdblLogic::RoleOfPath), the stricter duty. */
 void ParseFileLicensing(const TSharedPtr<FJsonObject>& Root, TMap<FString, FMantlePlaceFileLicensing>& Out)
 {
 	const TSharedPtr<FJsonObject>* EntriesPtr = GetObject(Root, TEXT("file_entries"));
@@ -379,8 +297,6 @@ void ParseFileLicensing(const TSharedPtr<FJsonObject>& Root, TMap<FString, FMant
 	}
 }
 
-/** `view` and the `part` of each `files` entry (MPB 1.10.0): what this one archive holds. A `view`
- *  that states no `parts` array is not a statement of what is held, so it reads as no view. */
 void ParseArchiveView(const TSharedPtr<FJsonObject>& Root, FMantlePlaceArchiveView& Out)
 {
 	const TSharedPtr<FJsonObject>* ViewPtr = GetObject(Root, TEXT("view"));
@@ -416,7 +332,6 @@ void ParseArchiveView(const TSharedPtr<FJsonObject>& Root, FMantlePlaceArchiveVi
 	Out.bDeclared = true;
 }
 
-/** `attribution.sources[]`: the credit the manifest words, kept verbatim for MantlePlaceOdblLogic::CreditLine. */
 void ParseAttribution(const TSharedPtr<FJsonObject>& Root, TArray<FMantlePlaceAttributionSource>& Out)
 {
 	const TSharedPtr<FJsonObject>* AttributionPtr = GetObject(Root, TEXT("attribution"));
@@ -455,52 +370,25 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	}
 
 	M.JobId = GetString(Root, TEXT("job_id"));
-	// The vault order id (orders.id), written into the manifest for order-linked cloud bundles (it
-	// rides through the ETL as a top-level `order_id`; empty on legacy / local-dev / admin
-	// bundles). This is the join key that lets a downloaded zip map back to its vault order so an
-	// incomplete bundle can be materialized on demand. NB: job_id is the per-rebuild ETL job id and
-	// is deliberately NOT used for this - it changes on every rebuild.
 	M.OrderId = GetString(Root, TEXT("order_id"));
 	M.Version = GetString(Root, TEXT("version"));
 
-	// Clean-break version gate (HPS-31). Read as a STRING and parsed as semver: an MPB version IS
-	// a string, so anything that fails to parse — an absent version, an integer from the
-	// pre-history, a partial "1.0" — is refused here. Deliberately NOT coerced through a number:
-	// the integer era's reader read an absent version as 0 and refused it, and letting a string
-	// fall to 0 the same way would be an accident that happens to work rather than a decision.
 	const FMantlePlaceManifestVersion Parsed = FMantlePlaceManifestVersion::Parse(M.Version);
 	const FMantlePlaceManifestVersion Floor =
 	    FMantlePlaceManifestVersion::Parse(MantlePlaceMinSupportedManifestVersion);
 	if (!Parsed.bValid || Parsed < Floor)
 	{
-		// One text for both readers (FMantlePlaceBundleReaderLogic): the words are as they shipped.
 		OutError = FMantlePlaceBundleReaderLogic::BelowFloorMessage(M.Version, MantlePlaceMinSupportedManifestVersion);
 		return M;
 	}
 
-	// The other end of the semver compatibility policy. Minors are strictly additive and unknown
-	// fields are ignored, so any minor of a major this reader speaks reads here; an unknown higher
-	// MAJOR is a graceful refusal rather than a best-effort parse, because a major is exactly the
-	// promise that something this reader relies on may have changed meaning. This is a refusal, not
-	// a crash, and it names the version it saw so the user can tell "too new" from "too old" — the
-	// two failures a bare "unsupported" message makes indistinguishable.
-	//
-	// This reader speaks 1.x and 2.x (MantlePlaceMaxSupportedManifestMajor): a 2.0 bundle changed the
-	// folders and the names, and every file here is found through a pointer value, so the same
-	// parse reads both. What a 2.0 bundle moved is read where it moved to (the heightmap's and the
-	// UE-ready rasters' value mappings, in `file_entries`), never by branching on the version. A 3.x
-	// manifest is at the bundle's root, not here, and FMantlePlaceBundleReaderLogic reads it; this path
-	// is the 2.x one, frozen as it ships.
 	if (Parsed.Major > MantlePlaceMaxSupportedManifestMajor)
 	{
 		OutError = FMantlePlaceBundleReaderLogic::NewerMajorMessage(M.Version, MantlePlaceMaxSupportedManifestMajor);
 		return M;
 	}
 
-	// Top-level facts, read whether or not the bundle has been materialized for this host (HPS-37).
 	ParseCesium(Root, M.Cesium);
-	// Vault pick-and-process: a base_on_demand marker bundle ships no `unreal` block yet —
-	// its Unreal formats generate later, on demand.
 	if (const TSharedPtr<FJsonObject>* PackagingPtr = GetObject(Root, TEXT("packaging")))
 	{
 		M.DeliveryModel = GetString(*PackagingPtr, TEXT("delivery_model"));
@@ -509,8 +397,6 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 	ParseFileLicensing(Root, M.FileLicensing);
 	ParseAttribution(Root, M.Attribution);
 	ParseArchiveView(Root, M.Archive);
-	// The order's vertical datum, verbatim, for ONE purpose: a second bundle is placed beside the first
-	// only when both state the same one (FMantlePlaceLevelFrameLogic). Nothing is placed from it.
 	if (const TSharedPtr<FJsonObject>* LocationPtr = GetObject(Root, TEXT("location")))
 	{
 		if (const TSharedPtr<FJsonObject>* SiteOriginPtr = GetObject(*LocationPtr, TEXT("site_origin")))
@@ -519,7 +405,6 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 		}
 	}
 
-	// `hosts.unreal` — the one subtree this host reads, and never a sibling's (HPS-33).
 	TSharedPtr<FJsonObject> Unreal;
 	if (const TSharedPtr<FJsonObject>* HostsRootPtr = GetObject(Root, TEXT("hosts")))
 	{
@@ -529,32 +414,22 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 		}
 	}
 
-	// Each artifact reads its own block. The handlers that read only top-level siblings (road
-	// splines) run whether or not `hosts.unreal` exists, as they always have; the rest find no
-	// block and leave theirs absent.
 	const MantlePlaceArtifacts::FHandlers Handlers = MantlePlaceArtifacts::MakeAll();
 	const FMantlePlaceParseInput Input{ Root, Unreal };
 	if (!ParseGeoreference(Unreal, M.Georef, OutError))
 	{
-		return M; // bValid stays false
+		return M;
 	}
 	for (const TUniquePtr<IMantlePlaceArtifactHandler>& Handler : Handlers)
 	{
 		if (!Handler->ParseFields(Input, M, OutError))
 		{
-			return M; // bValid stays false
+			return M;
 		}
 	}
 
 	if (!Unreal.IsValid())
 	{
-		// A missing `hosts.unreal` block does NOT mean "unmaterialized" — web can materialize a
-		// bundle for another host only (a `hosts.revit` block, vector layers) and this
-		// host still has nothing to import. IsBundleMaterialized decides which of the two this is
-		// from the neutral signals, never from our own content (HPS-47); either way the shape is
-		// the same refusal — the top-level facts above stay parsed (HPS-37) and the user is guided
-		// to materialize the Unreal scope, keeping the Cesium-streaming fields intact for the
-		// interim preview.
 		OutError = IsBundleMaterialized(Root)
 			? TEXT("This bundle hasn't generated its Unreal formats yet (it carries formats for other "
 			       "tools, but nothing Unreal imports). Open your vault at mantle.place/vault, choose "
@@ -566,21 +441,17 @@ FMantlePlaceVaultManifest MantlePlaceImportManifest::Parse(const FString& JsonTe
 		return M;
 	}
 
-	// Checks that need more than one block, once every block is read.
 	for (const TUniquePtr<IMantlePlaceArtifactHandler>& Handler : Handlers)
 	{
 		if (!Handler->CrossCheck(M, OutError))
 		{
-			return M; // bValid stays false
+			return M;
 		}
 	}
 
 	M.bValid = M.Heightmap.bPresent || M.Mesh.bPresent;
 	if (!M.bValid)
 	{
-		// An empty-but-present `unreal` block on a base_on_demand bundle means the same thing as an
-		// absent one: the Unreal formats just haven't been generated yet — give the vault guidance,
-		// not a malformed-manifest message.
 		if (M.DeliveryModel == TEXT("base_on_demand"))
 		{
 			OutError = TEXT("This bundle hasn't generated its Unreal formats yet. Open your vault at "

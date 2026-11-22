@@ -2,15 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The vault window's rows, its search and its status line: what a row says about a bundle, which
-/// rows a query keeps, and how many the line says are shown.
-/// </summary>
-/// <remarks>
-/// ⛔<c>HPS-20</c> is the reason this is not left to the shim: a null size is unknown, not zero, and
-/// a row that read <c>0 B</c> for a bundle the listing gave no size for would be the plugin appearing
-/// to work. Only a test can hold that, and CI never builds the window.
-/// </remarks>
 internal static class VaultRowsTests
 {
     private const string CacheText = "Not downloaded.";
@@ -43,8 +34,6 @@ internal static class VaultRowsTests
 
         run.Case("search does not match the order id, even on a row shown under it", () =>
         {
-            // An unlabelled row is shown under its order id, and the curator may well type what they
-            // see. The brief is the label only: an id is not what a curator names an area by.
             VaultBundle unlabelled = Bundle("ord_7f3a", string.Empty);
             VaultBundle labelled = Bundle("ord_7f3a", "Harbour Front");
 
@@ -55,16 +44,12 @@ internal static class VaultRowsTests
 
         run.Case("the typed text is trimmed before it is matched", () =>
         {
-            // A trailing space from typing "Harbour " and pausing should not empty the list.
             VaultBundle bundle = Bundle("order-1", "Harbour Front");
             run.True(VaultRows.Matches("  front ", bundle), "surrounding whitespace is ignored");
         });
 
         run.Case("under a filter, the selected index names the selected bundle, not the listing's row at that index", () =>
         {
-            // ⛔ The failure this guards: the window used to read the selection as an index into the
-            // whole listing. With "front" typed, the one shown row is index 0, and the listing's row
-            // 0 is a different bundle — Prepare would have built the wrong order.
             VaultBundle[] listing = [Bundle("a", "Airport"), Bundle("b", "Bridge"), Bundle("c", "Harbour Front")];
 
             VaultView<VaultBundle> view = VaultRows.Show(listing, row => row, "front", "c");
@@ -84,8 +69,6 @@ internal static class VaultRowsTests
 
         run.Case("after a refresh the filter still holds, and the selection finds its order wherever it now sits", () =>
         {
-            // A refresh hands over new row objects, and the platform may have added orders above the
-            // selected one. Selection is by order id, so it follows the order, not the position.
             VaultBundle[] before = [Bundle("a", "Harbour North"), Bundle("c", "Harbour Front")];
             VaultView<VaultBundle> first = VaultRows.Show(before, row => row, "harbour", "c");
             run.Equal(first.SelectedIndex, 1, "selected before the refresh");

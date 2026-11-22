@@ -3,30 +3,12 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.CarrierSpike;
 
-/// <summary>One position as a carrier file wrote it: x first, whatever the frame; Z when there is one.</summary>
 public readonly record struct CarrierPosition(double X, double Y, double? Z);
 
-/// <summary>One line or ring out of a carrier file, before it is placed in a frame.</summary>
-/// <param name="Positions">As written; a ring may repeat its first position at the end.</param>
-/// <param name="Closed">A ring of an area, not a line.</param>
-/// <param name="IsHole">An inner ring.</param>
-/// <param name="Polygon">Which polygon of the layer it belongs to, counting from one; zero for a line.</param>
 public sealed record CarrierPart(IReadOnlyList<CarrierPosition> Positions, bool Closed, bool IsHole, int Polygon);
 
-/// <summary>
-/// The one place a carrier's parts and attributes become the <see cref="SiteFeature"/> list the
-/// importer already takes, so both prototype readers agree with <see cref="SiteVectorReader"/> by
-/// construction and a parity test can hold each to it.
-/// </summary>
-/// <remarks>
-/// It repeats SiteVectorReader's three rules on purpose: a ring's repeated closing position is
-/// dropped, a line under two positions or a ring under three is no feature, and a position the
-/// frame cannot place is passed over. Placement is the frame's own <see cref="SiteFrame.TryPlace"/>:
-/// subtraction and scaling, nothing derived here.
-/// </remarks>
 public static class CarrierFeatureBuilder
 {
-    /// <summary>The attribute names the Revit importer reads today, the carrier's column and key names.</summary>
     public static readonly IReadOnlyList<string> AttributeNames =
     [
         "name", "class", "width_m_estimated", "subtype", "fld_zone", "zone_subty", "threshold_deg",

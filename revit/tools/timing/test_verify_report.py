@@ -1,5 +1,3 @@
-"""Cases for verify_report.py. Run from this folder: python -m unittest test_verify_report"""
-
 import json
 import os
 import sqlite3
@@ -49,7 +47,6 @@ def verify_record(**overrides):
 
 
 def footprints_gpkg(squares):
-    """A GeoPackage with one table of axis-aligned square polygons (centre x, centre y, half side)."""
     path = os.path.join(tempfile.mkdtemp(), "f.gpkg")
     connection = sqlite3.connect(path)
     connection.execute("create table gpkg_geometry_columns (table_name text, column_name text)")
@@ -113,7 +110,6 @@ class PlacementCases(unittest.TestCase):
         self.assertTrue(verify_report.judge(run_dir("0,1,2,1,1\n", verify_record()))["frame"]["pass"])
 
     def test_the_frame_check_reads_a_foot_origin_in_its_own_foot(self):
-        # A State Plane easting: the two feet differ by about a metre here, so the wrong one fails.
         east, north = 1449621.322926113, 542689.5776930021
         us = verify_record(origin_projected={"east": east, "north": north, "unit": "ftUS"},
                            internal_origin_in_shared_m=[east * 1200 / 3937, north * 1200 / 3937, 0.0])
@@ -175,7 +171,6 @@ class HandoverCases(unittest.TestCase):
 
 
 def with_log(folder, *lines):
-    """The plugin's import log, each line stamped as the importer writes it, then the summary it repeats."""
     stamped = [f"12:00:{i % 60:02d}  {line}" for i, line in enumerate(lines)]
     write(os.path.join(folder, "import.log"), "Mantle Place bundle import.\n" + "\n".join(stamped) + "\n\n" + "\n".join(lines) + "\n")
     return folder

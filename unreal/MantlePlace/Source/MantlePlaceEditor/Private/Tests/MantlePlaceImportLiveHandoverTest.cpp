@@ -19,23 +19,8 @@
 #include "HAL/PlatformMisc.h"
 #include "Misc/Paths.h"
 
-// MantlePlace.Import.LiveHandover: the ODbL container and Prepare for handover against a real bundle.
-//
-// MantlePlace.Import.Odbl.Handover proves the mechanics on stand-in actors; this proves them on what a
-// real import puts in a level. The bundle is MP_LIVETEST_BUNDLE (else the in-tree live-test copy), the
-// same one MantlePlace.Import.LiveFreeTier reads, and the same skip rule: no bundle warns and passes
-// locally, and is an error when CI is set.
-//
-// After the import, every actor carrying the ODbL tag sits in its order's ODbL outliner folder (the
-// labelled container). Prepare for handover then removes every one of them, leaves no ODbL tag in the
-// level, and writes one credit actor per order whose imported content recorded a credit, holding each
-// line that content recorded. A bundle whose ODbL content imports nothing (a layer refused by name,
-// say) still runs the credit half; the count of ODbL actors is logged so a run that removed nothing
-// says so.
-
 namespace MantlePlaceImportLiveHandoverTest
 {
-/** Every credit line the import recorded on this order's actors, from the tags Claim wrote. */
 TArray<FString> RecordedCredit(UWorld* World, const FName& ImportTag)
 {
 	TArray<FString> Lines;
@@ -102,7 +87,6 @@ bool FMantlePlaceImportLiveHandoverTest::RunTest(const FString& Parameters)
 		return false;
 	}
 
-	// The labelled container: every ODbL actor of this order is in the order's ODbL folder.
 	const FName ImportTag(*MantlePlaceImportNaming::ImportTag(Result.Identity));
 	const FName OdblTag = MantlePlaceImportNaming::OdblTag();
 	const FName OdblFolder(*MantlePlaceImportNaming::OdblFolder(Result.Identity));
@@ -121,7 +105,6 @@ bool FMantlePlaceImportLiveHandoverTest::RunTest(const FString& Parameters)
 	AddInfo(FString::Printf(TEXT("import: %d actor(s), %d of them ODbL in folder \"%s\"; %d credit line(s) recorded"),
 		Result.CreatedActors.Num(), OdblLabels.Num(), *OdblFolder.ToString(), Credit.Num()));
 
-	// Prepare for handover, through the command's own entry point.
 	const FMantlePlaceHandoverReport Report = MantlePlaceHandover::Prepare(World);
 	AddInfo(Report.Summary());
 
@@ -159,4 +142,4 @@ bool FMantlePlaceImportLiveHandoverTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
+#endif

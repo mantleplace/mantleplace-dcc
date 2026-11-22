@@ -1,15 +1,5 @@
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The 24-byte PNG header read that corroborates the satellite drape's ground extent.
-/// </summary>
-/// <remarks>
-/// The inputs are built byte by byte rather than committed as files, for two reasons. The
-/// interesting cases here are all files that are NOT valid PNGs, and a fixture directory of
-/// deliberately corrupt binaries is indistinguishable from a corrupt fixture directory. And
-/// <c>.gitattributes</c> tracks <c>*.png</c> in Git LFS, which bills every version ever pushed — so
-/// a fixture image would be a permanent cost for something a literal states more clearly anyway.
-/// </remarks>
 internal static class PngHeaderTests
 {
     internal static int Run()
@@ -27,8 +17,6 @@ internal static class PngHeaderTests
 
         run.Case("dimensions are read big-endian, as the spec writes them", () =>
         {
-            // 258 is 0x00000102: the two significant bytes are not adjacent, so a byte-order slip
-            // reads 513 or 33 554 432 rather than something merely close.
             ImageSize? size = PngHeader.TryReadSize(Png(258, 1));
 
             run.Equal(size?.Width ?? 0, 258, "width");
@@ -44,8 +32,6 @@ internal static class PngHeaderTests
 
         run.Case("the wrong magic is not a PNG", () =>
         {
-            // A JPEG's SOI marker plus enough bytes to reach the prefix length, so this fails on the
-            // signature rather than incidentally on the length.
             byte[] jpeg = new byte[PngHeader.PrefixLength];
             jpeg[0] = 0xFF;
             jpeg[1] = 0xD8;
@@ -89,16 +75,15 @@ internal static class PngHeaderTests
         return run.Report("png header");
     }
 
-    /// <summary>The first 24 bytes of a PNG declaring <paramref name="width"/> × <paramref name="height"/>.</summary>
     private static byte[] Png(uint width, uint height)
     {
         byte[] prefix =
         [
-            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // signature
-            0x00, 0x00, 0x00, 0x0D,                         // IHDR data length, fixed at 13
-            0x49, 0x48, 0x44, 0x52,                         // "IHDR"
-            0, 0, 0, 0,                                     // width
-            0, 0, 0, 0,                                     // height
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+            0x00, 0x00, 0x00, 0x0D,
+            0x49, 0x48, 0x44, 0x52,
+            0, 0, 0, 0,
+            0, 0, 0, 0,
         ];
 
         WriteBigEndian(prefix.AsSpan(16, 4), width);

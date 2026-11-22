@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""`validate()`: one bundle in, one report out."""
 
 from __future__ import annotations
 
@@ -18,19 +17,13 @@ from .schema_subset import UnsupportedSchema, errors
 from .schemas import SchemaProblem, SchemaSource, version_key
 from .zipmethods import check_zip
 
-#: Past this many, schema errors are summarised: one broken block can fan out into hundreds.
 MAX_SCHEMA_FINDINGS = 100
 
-#: A major whose text is written (`spec/format.md`) and whose schema is not published yet. A
-#: manifest that declares one, while no schema is served for its version, is held to the text's
-#: rules alone and the report says so (`schema.pending`, at info). Once the schema is served the
-#: manifest is held to it like any other, so this set changes nothing for a published version.
 PENDING_MAJORS = frozenset({3})
 
 
 def validate(path: str | Path, *, schemas: SchemaSource | None = None,
              strict: bool = False) -> Report:
-    """Validate the bundle at `path` (a zip, a folder, or either inside one wrapper folder)."""
     report = Report(input=str(path), strict=strict)
     schemas = schemas if schemas is not None else SchemaSource()
     bundle = open_bundle(Path(path), report)
@@ -51,10 +44,8 @@ def validate(path: str | Path, *, schemas: SchemaSource | None = None,
             return report
         _check_schema(manifest, schemas, report)
         declared = major(manifest.get("version"))
-        # `Manifest.json` keeps its name and place in every major after 2 (format.md §2).
         _check_place(where, (declared or 0) >= 3, report)
         if declared == 3:
-            # The 3.x tree: one catalog, one level, no per-file frames and no layout pointers.
             check_tree(bundle, report, manifest.get("version"))
             check_level(manifest, report)
             check_host_block(manifest, report)
@@ -63,9 +54,7 @@ def validate(path: str | Path, *, schemas: SchemaSource | None = None,
             check_roles(manifest, bundle, report, unstated=False, member=CATALOG)
             return report
         if (declared or 0) > 3:
-            return report  # A later major: its version is all this validator reads (§14).
-        # The 2.0 layout's rules hold a bundle that declares 2.x, and only one: a 1.x bundle is
-        # judged by its own version, whose layout and names were different.
+            return report
         layout_2 = is_layout_2(manifest.get("version"))
         check_pointers(manifest, bundle, report, fold_case=layout_2)
         check_hashes(manifest, bundle, report, fold_case=layout_2)
@@ -78,7 +67,6 @@ def validate(path: str | Path, *, schemas: SchemaSource | None = None,
 
 
 def _check_place(where: str, at_root: bool, report: Report) -> None:
-    """A 3.x manifest sits at the root as `Manifest.json`; an earlier one in `Metadata/`."""
     expected = MANIFEST_PATH_3 if at_root else MANIFEST_PATH
     if where != expected:
         report.add("manifest", "manifest.place", "error",
@@ -131,7 +119,6 @@ def _check_schema(manifest: dict, schemas: SchemaSource, report: Report) -> None
 
 
 def _pending(key: str, problem: SchemaProblem, schemas: SchemaSource, report: Report) -> bool:
-    """Record `schema.pending` when `key` is of a pending major and no schema is served for it."""
     if problem.code != "schema.version-unpublished" or major(key) not in PENDING_MAJORS:
         return False
     try:

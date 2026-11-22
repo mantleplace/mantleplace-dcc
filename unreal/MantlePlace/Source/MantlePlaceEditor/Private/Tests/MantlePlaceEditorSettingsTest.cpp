@@ -6,17 +6,6 @@
 
 #include "MantlePlaceEditorSettings.h"
 
-// The numbers the plugin used to hardcode are project settings now, and a setting arrives from a
-// checked-in ini file that nothing validates on the way in. The ClampMin/ClampMax meta specifiers
-// constrain the Project Settings UI only — a value hand-edited into DefaultGame.ini, or carried over
-// from an older plugin version, reaches the code unchecked.
-//
-// So each one has a usability rule, and each rule is asserted here rather than being a clamp inline
-// at a call site where nobody can see it. The shape is the same as the content root's: an unusable
-// value falls back to the shipped default rather than failing the operation, because a stream that
-// cannot start and an import that times out before asking once are both worse than a number the
-// user did not choose.
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMantlePlaceEditorSettingsTest,
     "MantlePlace.Import.EditorSettings",
@@ -26,9 +15,6 @@ bool FMantlePlaceEditorSettingsTest::RunTest(const FString& Parameters)
 {
 	using FSettings = UMantlePlaceEditorSettings;
 
-	// --- The defaults are the literals the code used to hardcode --------------------------------
-	// Asserted literally, like the naming test asserts the strings the importer writes: an edit to
-	// one of these changes what an unconfigured project does, and that edit IS the decision.
 	{
 		TestEqual(TEXT("the first stream port is still 8088"),
 			FSettings::DefaultLocalTileServerFirstPort, 8088);
@@ -40,14 +26,10 @@ bool FMantlePlaceEditorSettingsTest::RunTest(const FString& Parameters)
 			FSettings::DefaultMaterializeMaxPolls, 200);
 		TestEqual(TEXT("the failure tolerance is still five"),
 			FSettings::DefaultMaxConsecutivePollFailures, 5);
-		// Not a literal the code used to hardcode, but the engine's own: the New Landscape tool's
-		// World Partition Grid Size defaults to 2 components per proxy per axis.
 		TestEqual(TEXT("the World Partition grid size is the engine's default of two"),
 			FSettings::DefaultWorldPartitionGridSize, 2);
 	}
 
-	// --- World Partition grid size ---------------------------------------------------------------
-	// The engine's own clamp is 1-16 components per proxy per axis; outside it, the engine default.
 	{
 		TestEqual(TEXT("a usable grid size is honoured"), FSettings::UsableWorldPartitionGridSize(4), 4);
 		TestEqual(TEXT("one component per proxy is usable"), FSettings::UsableWorldPartitionGridSize(1), 1);
@@ -59,7 +41,6 @@ bool FMantlePlaceEditorSettingsTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the resolved grid size is in the engine's range"), Resolved >= 1 && Resolved <= 16);
 	}
 
-	// --- Ports ------------------------------------------------------------------------------------
 	{
 		TestEqual(TEXT("a usable port is honoured"),
 			FSettings::UsableLocalTileServerFirstPort(9000), 9000);
@@ -68,8 +49,6 @@ bool FMantlePlaceEditorSettingsTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the top of the port space is usable"),
 			FSettings::UsableLocalTileServerFirstPort(65535), 65535);
 
-		// A privileged port is not a preference to honour: the editor does not run as root on any
-		// platform this plugin supports, so binding it fails and the stream never starts.
 		TestEqual(TEXT("a privileged port falls back"),
 			FSettings::UsableLocalTileServerFirstPort(80),
 			FSettings::DefaultLocalTileServerFirstPort);
@@ -84,7 +63,6 @@ bool FMantlePlaceEditorSettingsTest::RunTest(const FString& Parameters)
 			FSettings::DefaultLocalTileServerFirstPort);
 	}
 
-	// --- The scan count ---------------------------------------------------------------------------
 	{
 		TestEqual(TEXT("a usable count is honoured"),
 			FSettings::UsableLocalTileServerPortScanCount(8088, 3), 3);
@@ -97,27 +75,20 @@ bool FMantlePlaceEditorSettingsTest::RunTest(const FString& Parameters)
 			FSettings::UsableLocalTileServerPortScanCount(8088, -5),
 			FSettings::DefaultLocalTileServerPortScanCount);
 
-		// The scan must not run off the end of the port space. Clamped rather than refused: a scan
-		// starting near the top still has ports worth trying.
 		TestEqual(TEXT("a scan from the last port covers exactly that port"),
 			FSettings::UsableLocalTileServerPortScanCount(65535, 8), 1);
 		TestEqual(TEXT("a scan near the top is clamped to what is left"),
 			FSettings::UsableLocalTileServerPortScanCount(65530, 100), 6);
-		// An unusable first port is resolved before the room is measured, so the count is measured
-		// against the port that will actually be scanned.
 		TestEqual(TEXT("an unusable first port does not shrink the scan"),
 			FSettings::UsableLocalTileServerPortScanCount(-1, 8), 8);
 	}
 
-	// --- The poll interval --------------------------------------------------------------------------
 	{
 		TestEqual(TEXT("a usable interval is honoured"),
 			FSettings::UsableMaterializePollIntervalSeconds(10.0f), 10.0f);
 		TestEqual(TEXT("the half-second floor is usable"),
 			FSettings::UsableMaterializePollIntervalSeconds(0.5f), 0.5f);
 
-		// Below the floor the polls cost more than the wait they measure; zero or negative is a busy
-		// loop against the platform. This floor used to be a FMath::Max inline at the scheduler.
 		TestEqual(TEXT("below the floor falls back"),
 			FSettings::UsableMaterializePollIntervalSeconds(0.1f),
 			FSettings::DefaultMaterializePollIntervalSeconds);
@@ -132,13 +103,10 @@ bool FMantlePlaceEditorSettingsTest::RunTest(const FString& Parameters)
 			FSettings::DefaultMaterializePollIntervalSeconds);
 	}
 
-	// --- The poll budget and the failure tolerance ----------------------------------------------------
 	{
 		TestEqual(TEXT("a usable budget is honoured"), FSettings::UsableMaterializeMaxPolls(50), 50);
 		TestEqual(TEXT("one poll is a usable budget"), FSettings::UsableMaterializeMaxPolls(1), 1);
 
-		// Zero polls is not "wait forever"; it times out before asking once, which reads to a user as
-		// an import that failed instantly for no reason.
 		TestEqual(TEXT("zero polls falls back"),
 			FSettings::UsableMaterializeMaxPolls(0), FSettings::DefaultMaterializeMaxPolls);
 		TestEqual(TEXT("a negative budget falls back"),
@@ -146,7 +114,6 @@ bool FMantlePlaceEditorSettingsTest::RunTest(const FString& Parameters)
 
 		TestEqual(TEXT("a usable tolerance is honoured"),
 			FSettings::UsableMaxConsecutivePollFailures(2), 2);
-		// Zero IS meaningful here, unlike the budget: fail on the first failed status poll.
 		TestEqual(TEXT("zero tolerance means zero, not the default"),
 			FSettings::UsableMaxConsecutivePollFailures(0), 0);
 		TestEqual(TEXT("a negative tolerance falls back"),
@@ -154,8 +121,6 @@ bool FMantlePlaceEditorSettingsTest::RunTest(const FString& Parameters)
 			FSettings::DefaultMaxConsecutivePollFailures);
 	}
 
-	// --- An unconfigured project behaves exactly as the hardcoded plugin did ------------------------
-	// The whole point of the exercise: configurability that changes nothing until someone configures.
 	{
 		int32 FirstPort = 0;
 		int32 PortCount = 0;
@@ -176,4 +141,4 @@ bool FMantlePlaceEditorSettingsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

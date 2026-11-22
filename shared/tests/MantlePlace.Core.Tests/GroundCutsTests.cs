@@ -2,10 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Which layers are cut into the ground — the water bodies and the road surfaces only — and what their
-/// rings become: one subdivision per polygon, holes left out of it.
-/// </summary>
 internal static class GroundCutsTests
 {
     private static readonly SiteVertex[] Ring =
@@ -17,13 +13,9 @@ internal static class GroundCutsTests
 
         run.Case("every step that cuts polygons names its layer, and nothing else does", () =>
         {
-            // The shim dispatches through this and SlowStepNotice takes its words from it, so a kind
-            // missing here would run no step at all and a kind wrongly here would run the wrong one.
             run.True(GroundCuts.LayerOf(ImportStepKind.Water) == GroundLayer.Water, "water");
             run.True(GroundCuts.LayerOf(ImportStepKind.RoadPolygons) == GroundLayer.RoadSurface, "road surfaces");
 
-            // ADR 0015: the land layers are drawn on land plans, and their GroundLayer members are
-            // kept only so an earlier build's cuts are still recognised.
             run.True(GroundCuts.LayerOf(ImportStepKind.LandUse) is null, "land use is drawn, not cut");
             run.True(GroundCuts.LayerOf(ImportStepKind.LandCover) is null, "and so is land cover");
 
@@ -37,9 +29,6 @@ internal static class GroundCutsTests
 
         run.Case("every step kind agrees between the ground cuts and the vector-layer table", () =>
         {
-            // Two maps from a step kind: the ground layer it cuts, and the vector layer it places. A
-            // kind in the first and not the second would cut a layer the reader never picked a file
-            // for; the words are one spelling, read from the table.
             foreach (ImportStepKind kind in Enum.GetValues<ImportStepKind>())
             {
                 SiteVectorLayer? layer = SiteVectorLayers.Of(kind);
@@ -73,8 +62,6 @@ internal static class GroundCutsTests
 
         run.Case("a cut's material word is its layer's, whatever its subtype or class says", () =>
         {
-            // The word rides on the stamp's layer (GroundLayerWords.MaterialWord), so a pond is
-            // water as much as a reservoir is, and a footway publishing subtype grass is still asphalt.
             run.Equal(GroundLayerWords.For(GroundLayer.Water).MaterialWord, "water", "water bodies");
             run.Equal(GroundLayerWords.For(GroundLayer.RoadSurface).MaterialWord, "asphalt", "road surfaces");
             run.Equal(GroundLayerWords.For(GroundLayer.LandUse).MaterialWord, null, "an earlier build's land-use cut names none");
@@ -83,8 +70,6 @@ internal static class GroundCutsTests
 
         run.Case("holes whose polygon has no outer ring are dropped and counted", () =>
         {
-            // The reader drops a ring with too few vertices to close, so a polygon can reach here as
-            // holes alone. A hole with nothing to be cut out of is not a subdivision.
             SiteFeature[] rings =
             [
                 Feature("Lake", subtype: "reservoir", polygon: 1, hole: true),
@@ -100,8 +85,6 @@ internal static class GroundCutsTests
 
         run.Case("rings are grouped by their polygon, never by adjacency", () =>
         {
-            // Polygon 2's outer ring was dropped by the reader. Its holes must not attach themselves
-            // to polygon 1, which would cut two lakes' worth of islands out of one lake.
             SiteFeature[] rings =
             [
                 Feature("First", subtype: "reservoir", polygon: 1),

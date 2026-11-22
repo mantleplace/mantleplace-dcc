@@ -2,11 +2,6 @@ using System.Reflection;
 using MantlePlace.Core;
 using MantlePlace.Core.Tests;
 
-// Headless entry point: no host, no test framework, no network (HPS-42). Non-zero exit on any
-// failing assertion, so CI needs nothing but `dotnet run`.
-//
-// The suite runs as the Revit plugin, the host its cases were written against, so it names itself
-// the way the Revit shell does (revit/src/MantlePlace.Revit.Addin/HostRegistration.cs).
 HostIdentity.Set(
     "revit",
     typeof(ConformanceCorpus).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,

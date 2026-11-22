@@ -19,15 +19,12 @@
 
 namespace
 {
-	/** The first actor of the class named by `ClassPath` in the world; null when the class is not loaded. */
 	AActor* FindActorOfClassPath(UWorld* World, const TCHAR* ClassPath)
 	{
 		if (World == nullptr)
 		{
 			return nullptr;
 		}
-		// Looked up, never loaded: a plugin whose module is not loaded has no class here, and that is
-		// the whole of "this georeference is absent".
 		const UClass* Class = FindObject<UClass>(nullptr, ClassPath);
 		if (Class == nullptr)
 		{
@@ -43,11 +40,6 @@ namespace
 		return nullptr;
 	}
 
-	/**
-	 * Call a native function by reflection. AActor::ProcessEvent silently does nothing until the world's
-	 * actors are initialized (a level still loading, a throwaway world), and both georeferences' converters
-	 * are plain native C++ with no script to guard, so the call goes to UObject's.
-	 */
 	void CallNative(AActor* Actor, const UFunction* Function, void* Params)
 	{
 		Actor->UObject::ProcessEvent(const_cast<UFunction*>(Function), Params);
@@ -70,10 +62,6 @@ namespace
 		return Field->GetPropertyValue_InContainer(StructValue);
 	}
 
-	/**
-	 * Epic's GeoReferencing: `void EngineToGeographic(const FVector& EngineCoordinates,
-	 * FGeographicCoordinates& GeographicCoordinates)`, the result a struct with Longitude and Latitude.
-	 */
 	bool ConvertNative(AActor* Actor, const FVector& Engine, FMantlePlaceGeoPoint& OutPoint)
 	{
 		const UFunction* Function = Actor->FindFunction(TEXT("EngineToGeographic"));
@@ -98,10 +86,6 @@ namespace
 		return bOk;
 	}
 
-	/**
-	 * Cesium for Unreal: `FVector TransformUnrealPositionToLongitudeLatitudeHeight(const FVector&
-	 * UnrealPosition) const`, the result (longitude, latitude, height) in degrees and metres.
-	 */
 	bool ConvertCesium(AActor* Actor, const FVector& Engine, FMantlePlaceGeoPoint& OutPoint)
 	{
 		const UFunction* Function = Actor->FindFunction(TEXT("TransformUnrealPositionToLongitudeLatitudeHeight"));
@@ -116,8 +100,6 @@ namespace
 			return false;
 		}
 		FStructOnScope Params(Function);
-		// Cesium reads a position in the georeference actor's own frame ("a parent Actor's reference
-		// frame"), which is the world frame only while the actor sits at the origin untransformed.
 		*In->ContainerPtrToValuePtr<FVector>(Params.GetStructMemory()) = Actor->GetActorTransform().InverseTransformPosition(Engine);
 		CallNative(Actor, Function, Params.GetStructMemory());
 
@@ -127,18 +109,15 @@ namespace
 		return true;
 	}
 
-	/** Select one actor so Details shows it. */
 	void Select(AActor* Actor)
 	{
-		// Only the editor's own world has a selection to put it in.
 		if (GEditor != nullptr && Actor->GetWorld() == GEditor->GetEditorWorldContext().World())
 		{
-			GEditor->SelectNone(/*bNoteSelectionChange*/ false, /*bDeselectBSPSurfs*/ true);
-			GEditor->SelectActor(Actor, /*bInSelected*/ true, /*bNotify*/ true);
+			GEditor->SelectNone(false, true);
+			GEditor->SelectActor(Actor, true, true);
 		}
 	}
 
-	/** The tag value after a prefix, or false. Same shape as the handover's reader. */
 	bool TagValue(const AActor& Actor, const FString& Prefix, FString& OutValue)
 	{
 		for (const FName& Tag : Actor.Tags)
@@ -185,8 +164,7 @@ namespace MantlePlaceLevelExtent
 		{
 			if (It->IsA<ALandscapeProxy>() || It->IsA<AStaticMeshActor>())
 			{
-				// bNonColliding: a mesh without collision is still the site.
-				Bounds += It->GetComponentsBoundingBox(/*bNonColliding*/ true);
+				Bounds += It->GetComponentsBoundingBox(true);
 			}
 		}
 		return Bounds;
@@ -217,8 +195,6 @@ namespace MantlePlaceLevelExtent
 			FMantlePlaceGeoPoint Point;
 			if (!(bNative ? ConvertNative(Georeference, Corner, Point) : ConvertCesium(Georeference, Corner, Point)))
 			{
-				// One corner that cannot be converted is a georeference this code cannot read: no
-				// source, rather than the box of the corners that did convert.
 				Points.Reset();
 				return Points;
 			}
@@ -245,8 +221,6 @@ namespace MantlePlaceLevelExtent
 			}
 			Seen.Add(Identity);
 
-			// The record is keyed on the SHORT identity, so two orders can share a file name; only a
-			// record that carries THIS identity in full is this order's.
 			MantlePlaceImportProvenance::FRecord Record;
 			if (MantlePlaceImportProvenance::Read(Identity, Record) && Record.Identity == Identity && Record.bHasExtent)
 			{
@@ -275,8 +249,8 @@ namespace MantlePlaceLevelExtent
 		FMantlePlaceLevelState State;
 		State.ImportExtents = ImportExtents(World);
 		const FBox Bounds = LevelBounds(World);
-		State.NativeGeoreferencedPoints = ConvertCorners(World, Bounds, /*bNative*/ true);
-		State.CesiumGeoreferencedPoints = ConvertCorners(World, Bounds, /*bNative*/ false);
+		State.NativeGeoreferencedPoints = ConvertCorners(World, Bounds, true);
+		State.CesiumGeoreferencedPoints = ConvertCorners(World, Bounds, false);
 		State.ExtentBoxes = ExtentBoxes(World);
 		return State;
 	}
@@ -302,7 +276,6 @@ namespace MantlePlaceLevelExtent
 		{
 			return nullptr;
 		}
-		// One box is the site. A second press selects the box that is there rather than stacking another.
 		for (TActorIterator<AMantlePlaceExtentBox> It(World); It; ++It)
 		{
 			Select(*It);

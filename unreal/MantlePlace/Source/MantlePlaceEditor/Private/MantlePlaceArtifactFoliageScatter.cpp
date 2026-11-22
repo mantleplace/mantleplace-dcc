@@ -1,15 +1,5 @@
 // Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
-// The PCG foliage scatter: generated from what two other handlers left, the tree-points table and
-// the coverage rasters, rather than read from a block of its own. Opt-in (FromMode leaves it out
-// unless asked), so an import that did not ask for foliage spawns none.
-//
-// It builds the order's foliage graph beside the table, spawns a volume over the AOI, claims it
-// (so in a World Partition level it joins the foliage Data Layer, and the PCG partition actors made
-// for it inherit that layer), and starts generation: partitioned on the PCG grid in a World
-// Partition level, so foliage generates and streams per cell, and on the volume itself otherwise.
-// A re-import's wipe sweeps what it generated before destroying the volume.
-
 #include "MantlePlaceArtifactHandler.h"
 
 #include "MantlePlaceEditorSettings.h"
@@ -29,13 +19,10 @@ public:
 	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::Foliage; }
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactFoliageScatter", "Foliage scatter"); }
 
-	// No block of its own: it reads what the tree points and the coverage rasters declared.
 	bool ParseFields(const FMantlePlaceParseInput& In, FMantlePlaceVaultManifest& M, FString& OutError) const override { return true; }
 	bool IsPresent(const FMantlePlaceVaultManifest& M) const override { return M.Foliage.bPresent; }
 	void CollectDeclared(const FMantlePlaceVaultManifest& M, TArray<FMantlePlaceDeclaredArtifact>& Out) const override {}
 
-	// The scatter is generated, not read from a file of its own: it is made from the tree points and the
-	// coverage rasters it filters by, so those files' roles are its roles.
 	void CollectSourcePaths(const FMantlePlaceVaultManifest& M, TArray<FString>& Out) const override
 	{
 		if (!M.Foliage.Path.IsEmpty())
@@ -46,7 +33,6 @@ public:
 		{
 			if (const FMantlePlaceLandscapeLayer* Layer = M.FindLandscapeLayer(Key))
 			{
-				// The UE-ready PNGs are what the importer reads; the source GeoTIFF is only the fallback.
 			for (const FMantlePlaceUeReadyRaster& Raster : Layer->UeReady)
 			{
 				Out.Add(Raster.Path);
@@ -72,9 +58,6 @@ public:
 
 		if (Ctx.Manifest.HasLevelOffset())
 		{
-			// The scatter samples its rasters and clips its points about the world origin, which is
-			// where a bundle sits only when it is the level's anchor. Placing it at an offset would
-			// read the wrong texels, so it is left out and said so (a later change can carry the offset).
 			Ctx.Log.Add(TEXT("Foliage scatter skipped: this bundle is placed beside another import in the level, "
 				"and the scatter samples its coverage rasters about the world origin. The tree-point table is "
 				"imported and placed at the offset."));
@@ -104,7 +87,6 @@ public:
 				Error.IsEmpty() ? TEXT("the volume could not be spawned") : *Error));
 			return;
 		}
-		// Claimed BEFORE the graph is assigned: the partition actors take the volume's Data Layer when made.
 		Ctx.Claim(Volume, MantlePlaceImportNaming::ActorLabel(MantlePlaceImportNaming::EActorKind::Foliage, Ctx.Identity));
 		MantlePlaceFoliageScatter::Generate(Volume, Graph);
 

@@ -5,18 +5,12 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The Realtime client against an in-process loopback WebSocket server: join, track, a row change,
-/// a token refresh, a dropped socket, a refused join, an order watched and dropped, and stop (the
-/// platform export contract, sections 1 to 3). Nothing leaves the machine (<c>HPS-42</c>).
-/// </summary>
 internal static class RealtimeClientTests
 {
     private const string Connection = "revit-0123456789abcdef";
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
-    // Long enough that a retry the client should not make has had every chance to show.
     private static readonly TimeSpan Quiet = TimeSpan.FromMilliseconds(400);
 
     private static readonly string Token1 = RealtimeFramesTests.Jwt("""{"sub":"user-1","n":1}""");
@@ -409,7 +403,6 @@ internal static class RealtimeClientTests
 
     private sealed record Seen(string Method, string Url, string Authorization);
 
-    /// <summary>The platform's Realtime route, answered in process.</summary>
     private sealed class Route : HttpMessageHandler
     {
         private readonly int _status;
@@ -437,7 +430,6 @@ internal static class RealtimeClientTests
         }
     }
 
-    /// <summary>A client's log, with a wait for its next line.</summary>
     private sealed class Logged
     {
         private readonly Channel<string> _lines = Channel.CreateUnbounded<string>();
@@ -468,7 +460,6 @@ internal static class RealtimeClientTests
         }
     }
 
-    /// <summary>A client on the loopback server, its events and its log as text in arrival order.</summary>
     private sealed class Rig : IAsyncDisposable
     {
         private readonly Channel<string> _events = Channel.CreateUnbounded<string>();
@@ -521,7 +512,6 @@ internal static class RealtimeClientTests
             }
         }
 
-        /// <summary>Starts, answers the join, reads the track: the client is subscribed.</summary>
         internal async Task<(ServerConnection Socket, RealtimeMessage Join)> SubscribeAsync(TestRun run)
         {
             Client.Start(Token1, Presence);

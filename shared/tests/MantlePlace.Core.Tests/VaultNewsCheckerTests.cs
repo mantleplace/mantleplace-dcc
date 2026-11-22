@@ -3,15 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The background listing that finds orders nobody asked Revit to prepare.
-/// </summary>
-/// <remarks>
-/// It costs a request on every signed-in session, including ones where nobody is waiting on
-/// anything, so it is bounded: never signed out, never while the vault browser owns the listing,
-/// never more often than the floor, and never a word to the curator when it fails. Driven through an
-/// <see cref="IVaultNewsSource"/> fake, so no request leaves the machine (<c>HPS-42</c>).
-/// </remarks>
 internal static class VaultNewsCheckerTests
 {
     private const string Email = "curator@example.com";
@@ -34,7 +25,6 @@ internal static class VaultNewsCheckerTests
             }
             catch (IOException)
             {
-                // A leftover temp folder is not a test failure.
             }
         }
 
@@ -184,7 +174,6 @@ internal static class VaultNewsCheckerTests
 
         public int Lists { get; private set; }
 
-        /// <summary>Runs as the listing answers — the moment a shutdown can land in.</summary>
         public Action? OnList { get; set; }
 
         public Task<(VaultListing? Listing, string? Error)> ListAsync(CancellationToken cancellationToken)

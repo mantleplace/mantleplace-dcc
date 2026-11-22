@@ -13,12 +13,6 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 
-// The ODbL decisions, asserted without a world or a bundle: which role a file reads as (a missing or
-// unknown one is the stricter `database`), which content owes the credit and what it says, what
-// Prepare for handover does to each piece, and that the manifest's `file_entries` and
-// `attribution.sources` reach the logic. The world-side round trip is
-// MantlePlace.Import.Odbl.Handover.
-
 namespace MantlePlaceOdblLogicTest
 {
 FMantlePlaceFileLicensing Entry(EMantlePlaceOdblRole Role, const TCHAR* SourceLicense = nullptr)
@@ -46,7 +40,6 @@ bool FMantlePlaceOdblLogicTest::RunTest(const FString& Parameters)
 	using namespace MantlePlaceOdblLogic;
 	using MantlePlaceOdblLogicTest::Entry;
 
-	// --- A role: stated ones read as stated, everything else is the stricter duty ------------------
 	TestTrue(TEXT("database"), ParseRole(true, TEXT("database")) == EMantlePlaceOdblRole::Database);
 	TestTrue(TEXT("produced-work"), ParseRole(true, TEXT("produced-work")) == EMantlePlaceOdblRole::ProducedWork);
 	TestTrue(TEXT("none"), ParseRole(true, TEXT("none")) == EMantlePlaceOdblRole::None);
@@ -56,7 +49,6 @@ bool FMantlePlaceOdblLogicTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a stated but empty role reads as database"), ParseRole(true, FString()) == EMantlePlaceOdblRole::Database);
 	TestEqual(TEXT("the published words"), RoleName(EMantlePlaceOdblRole::ProducedWork), FString(TEXT("produced-work")));
 
-	// --- A file and a set of files -----------------------------------------------------------------
 	TMap<FString, FMantlePlaceFileLicensing> Entries;
 	Entries.Add(TEXT("Mesh/Terrain.glb"), Entry(EMantlePlaceOdblRole::ProducedWork));
 	Entries.Add(TEXT("Landcover/WaterMask.png"), Entry(EMantlePlaceOdblRole::None));
@@ -80,7 +72,6 @@ bool FMantlePlaceOdblLogicTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("none alone reads as none"),
 		RoleOfPaths(Entries, { TEXT("Landcover/WaterMask.png") }) == EMantlePlaceOdblRole::None);
 
-	// --- The credit --------------------------------------------------------------------------------
 	TestTrue(TEXT("a database file owes the credit"), NeedsCredit(Entries, { TEXT("Vector/RoadSplines.gpkg") }));
 	TestTrue(TEXT("a Produced Work from an ODbL source still owes it"), NeedsCredit(Entries, { TEXT("Mesh/Buildings.glb") }));
 	TestFalse(TEXT("a Produced Work from no ODbL source does not"), NeedsCredit(Entries, { TEXT("Mesh/Terrain.glb") }));
@@ -112,7 +103,6 @@ bool FMantlePlaceOdblLogicTest::RunTest(const FString& Parameters)
 		FString(TEXT("OpenStreetMap")) + Dash + TEXT("ODbL-1.0"));
 	TestTrue(TEXT("nothing to credit gives no lines"), CreditLines({}, Entries, { TEXT("Mesh/Terrain.glb") }).IsEmpty());
 
-	// --- Prepare for handover ----------------------------------------------------------------------
 	const auto Item = [](const TCHAR* Identity, bool bOdbl, const TCHAR* Group, std::initializer_list<const TCHAR*> Credit)
 	{
 		FHandoverItem Result;
@@ -127,12 +117,12 @@ bool FMantlePlaceOdblLogicTest::RunTest(const FString& Parameters)
 	};
 	{
 		const TArray<FHandoverItem> Items = {
-			Item(TEXT("a"), true, TEXT("terrain"), { TEXT("OSM") }),   // 0 landscape: a Produced Work mesh stands in
-			Item(TEXT("a"), false, TEXT("terrain"), {}),               // 1 mesh: kept
-			Item(TEXT("a"), true, TEXT(""), { TEXT("OSM") }),          // 2 roads: nothing stands in
-			Item(TEXT("a"), false, TEXT(""), {}),                      // 3 terrain imagery: kept
-			Item(TEXT("b"), true, TEXT("terrain"), { TEXT("OSM") }),   // 4 another order's landscape: its own mesh is absent
-			Item(TEXT("c"), false, TEXT(""), {}),                      // 5 an order that owes no credit
+			Item(TEXT("a"), true, TEXT("terrain"), { TEXT("OSM") }),
+			Item(TEXT("a"), false, TEXT("terrain"), {}),
+			Item(TEXT("a"), true, TEXT(""), { TEXT("OSM") }),
+			Item(TEXT("a"), false, TEXT(""), {}),
+			Item(TEXT("b"), true, TEXT("terrain"), { TEXT("OSM") }),
+			Item(TEXT("c"), false, TEXT(""), {}),
 		};
 		const FHandoverPlan Plan = PlanHandover(Items);
 		if (TestEqual(TEXT("a decision per item"), Plan.Decisions.Num(), Items.Num()))
@@ -162,7 +152,6 @@ bool FMantlePlaceOdblLogicTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("an empty level plans nothing"), PlanHandover({}).Decisions.IsEmpty() && PlanHandover({}).Credits.IsEmpty());
 	TestEqual(TEXT("credit text is one line per source"), CreditText({ TEXT("one"), TEXT("two") }), FString(TEXT("one\ntwo")));
 
-	// --- Names: the ODbL folder is the order's, the tags are the ones Prepare for handover reads ----
 	const FString Identity = TEXT("aaaaaaaa-1111");
 	TestEqual(TEXT("the ODbL folder sits inside the order's own"),
 		MantlePlaceImportNaming::OdblFolder(Identity), MantlePlaceImportNaming::OutlinerFolder(Identity) + TEXT("/ODbL"));
@@ -180,9 +169,6 @@ bool FMantlePlaceOdblLogicTest::RunTest(const FString& Parameters)
 
 	return true;
 }
-
-// The manifest reaches the logic: `file_entries` and `attribution.sources` are read from the shared
-// corpus, and the two cases the standard singles out come out as the stricter duty.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceOdblManifestTest,
@@ -214,7 +200,6 @@ bool FMantlePlaceOdblManifestTest::RunTest(const FString& Parameters)
 		return TestTrue(*FString::Printf(TEXT("%s parses: %s"), File, *Error), Out.bValid);
 	};
 
-	// A role stated on the road layer, beside a terrain mesh that says produced-work.
 	{
 		FMantlePlaceVaultManifest M;
 		if (Read(TEXT("file-frames-ignored.json"), M))
@@ -226,7 +211,6 @@ bool FMantlePlaceOdblManifestTest::RunTest(const FString& Parameters)
 			TestTrue(TEXT("with its licence and its source"), Mesh != nullptr && !Mesh->License.IsEmpty() && Mesh->Sources.Num() == 1);
 		}
 	}
-	// The credit the manifest words, read from its own block.
 	{
 		FMantlePlaceVaultManifest M;
 		if (Read(TEXT("bundle-parts-ignored.json"), M) && TestEqual(TEXT("attribution.sources are read"), M.Attribution.Num(), 1))
@@ -235,7 +219,6 @@ bool FMantlePlaceOdblManifestTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("with its provider"), M.Attribution[0].ProviderId, FString(TEXT("usgs-3dep")));
 		}
 	}
-	// The roleless road layer reads as database; the mesh keeps what it states.
 	{
 		FMantlePlaceVaultManifest M;
 		if (Read(TEXT("file-entry-no-role.json"), M))
@@ -248,7 +231,6 @@ bool FMantlePlaceOdblManifestTest::RunTest(const FString& Parameters)
 				MantlePlaceOdblLogic::RoleOfPath(M.FileLicensing, TEXT("Mesh/Terrain.glb")) == EMantlePlaceOdblRole::ProducedWork);
 		}
 	}
-	// A role this reader has not met fails closed, without refusing the manifest.
 	{
 		FMantlePlaceVaultManifest M;
 		if (Read(TEXT("file-entry-unknown-role.json"), M))
@@ -259,7 +241,6 @@ bool FMantlePlaceOdblManifestTest::RunTest(const FString& Parameters)
 				MantlePlaceOdblLogic::RoleOfPath(M.FileLicensing, TEXT("Mesh/Terrain.glb")) == EMantlePlaceOdblRole::ProducedWork);
 		}
 	}
-	// A bundle from before the member: nothing is listed, so everything reads as database.
 	{
 		FMantlePlaceVaultManifest M;
 		if (Read(TEXT("full.json"), M))
@@ -272,11 +253,6 @@ bool FMantlePlaceOdblManifestTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// A credit line is recorded on the actor as tags, and a tag is an FName, which holds at most 1023
-// characters: a longer FName is an assertion that takes the editor down. A real bundle's attribution
-// carries lines far longer than that (a public-records disclaimer of 1,750 characters crashed the
-// first live import of a 2.0 bundle), so a line that does not fit one tag is recorded in numbered
-// parts and read back whole, verbatim and in order.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceOdblCreditTagsTest,
 	"MantlePlace.Import.Odbl.CreditTags",
@@ -294,7 +270,6 @@ bool FMantlePlaceOdblCreditTagsTest::RunTest(const FString& Parameters)
 	}
 	const FString AlsoShort = TEXT("USGS 3DEP 1 m DEM");
 
-	// A line that fits is the tag it always was, so a level imported before this reads the same.
 	{
 		const TArray<FString> Tags = CreditTags({ Short });
 		TestEqual(TEXT("one short line is one tag"), Tags.Num(), 1);
@@ -302,7 +277,6 @@ bool FMantlePlaceOdblCreditTagsTest::RunTest(const FString& Parameters)
 			Tags.Num() > 0 ? Tags[0] : FString(), MantlePlaceImportNaming::CreditLineTag(Short));
 	}
 
-	// A long line becomes parts, every one short enough to be a tag, and reads back whole and in place.
 	{
 		const TArray<FString> Lines = { Short, Long, AlsoShort };
 		const TArray<FString> Tags = CreditTags(Lines);
@@ -316,7 +290,6 @@ bool FMantlePlaceOdblCreditTagsTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the lines read back verbatim, in order"), CreditLinesFromTags(Tags), Lines);
 	}
 
-	// Read back from an actor's tags, which hold other tags too and may hold the same line twice.
 	{
 		TArray<FString> Tags = { TEXT("mantleplace_import=abc"), TEXT("mantleplace_odbl") };
 		Tags.Append(CreditTags({ Long }));
@@ -325,19 +298,17 @@ bool FMantlePlaceOdblCreditTagsTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("other tags are ignored"), CreditLinesFromTags(Tags), TArray<FString>({ Long, Short }));
 	}
 
-	// A line with a part missing (an edited tag list) is dropped rather than credited half-said.
 	{
 		TArray<FString> Tags = CreditTags({ Long, Short });
 		Tags.RemoveAt(1);
 		TestEqual(TEXT("an incomplete line is dropped, the rest kept"), CreditLinesFromTags(Tags), TArray<FString>({ Short }));
 	}
 
-	// A part never ends between the two halves of a surrogate pair.
 	{
 		FString Wide;
 		while (Wide.Len() < 3000)
 		{
-			Wide += TEXT("🌍"); // a character outside the BMP: two UTF-16 units
+			Wide += TEXT("🌍");
 		}
 		const TArray<FString> Tags = CreditTags({ Wide });
 		TestEqual(TEXT("a line of wide characters reads back verbatim"), CreditLinesFromTags(Tags), TArray<FString>({ Wide }));
@@ -350,4 +321,4 @@ bool FMantlePlaceOdblCreditTagsTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

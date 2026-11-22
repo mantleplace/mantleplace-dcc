@@ -2,10 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The shrub Planting family's contract with the importer, and the dispatch that sends each tree
-/// point to the family of its published foliage type.
-/// </summary>
 internal static class ShrubFamilyTests
 {
     private static readonly CandidateLevel[] Levels = [new(300, "Level 1", 0.0)];
@@ -48,7 +44,6 @@ internal static class ShrubFamilyTests
 
         run.Case("the apex is what a small crown runs out of first", () =>
         {
-            // 0.05 of a 3 cm crown is 1.5 mm, under the 2 mm floor; 0.05 of 5 cm is 2.5 mm, over it.
             run.False(ShrubFamily.Fits(Shrub(1.5, 0.03)), "three-centimetre crown");
             run.True(ShrubFamily.Fits(Shrub(1.5, 0.05)), "five-centimetre crown");
             run.False(ShrubFamily.Fits(Shrub(0.003, 1.0)), "three-millimetre shrub: each half is under the floor");
@@ -56,9 +51,6 @@ internal static class ShrubFamilyTests
 
         run.Case("each point is judged by its own family, never by its size", () =>
         {
-            // A 4 mm point halves to the shrub's floor but is under the tree's trunk fraction: the same
-            // numbers, two foliage types, two answers. The foliage type picks the family; the size
-            // only decides whether that family can build it.
             run.False(PlantingFamilies.Fits(Tree(12.0, 0.03)), "a tree with a three-centimetre crown");
             run.False(PlantingFamilies.Fits(Shrub(12.0, 0.03)), "a shrub with the same");
             run.True(PlantingFamilies.Fits(Shrub(0.004, 1.0)), "a four-millimetre shrub halves to the floor");

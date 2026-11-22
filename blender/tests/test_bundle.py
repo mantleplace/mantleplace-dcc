@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The pure core's reading of a manifest: the version, the two pointers, and the site origin.
-
-No Blender here. Each test hands the core a manifest dict shaped like a 2.0 bundle's and asserts
-what the plugin will import and how it will place it.
-"""
 
 import copy
 import unittest
@@ -103,7 +98,6 @@ class VersionTests(unittest.TestCase):
                 read_major({"version": bad} if bad is not None else {})
 
     def test_a_higher_major_is_refused_before_any_pointer_is_read(self):
-        # §11: a reader of a higher major reads `version` and nothing else.
         with self.assertRaises(BundleRefused) as caught:
             plan_import({"version": "3.0.0", "layout": "not even an object"})
         self.assertIn("3.0.0", str(caught.exception))
@@ -149,7 +143,6 @@ class PointerTests(unittest.TestCase):
         self.assertTrue(any("Features" in note for note in plan.notes))
 
     def test_an_explicitly_null_features_pointer_is_honest_absence(self):
-        # §6.1: null says the layer is absent, so the fixed name is not tried even if listed.
         document = manifest()
         document["layout"]["features_usdz"] = None
         plan = plan_import(document)
@@ -259,8 +252,6 @@ class ScenePropertyTests(unittest.TestCase):
         self.assertEqual(origin["datum_height_m"], 137.792)
 
     def test_a_foot_origin_keeps_the_record_and_drops_the_metre_scene_keys(self):
-        # Blender's scene is in metres, so "crs x" in feet would place every later GIS import off
-        # by a factor of 3.28: the keys are left out, and nothing is scaled to make them fit.
         props = scene_properties(plan_import(
             manifest(location__site_origin__projected__unit="usft")).georeference)
         self.assertNotIn("crs x", props)

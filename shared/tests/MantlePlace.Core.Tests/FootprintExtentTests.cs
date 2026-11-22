@@ -2,7 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>The box around a published ring, which a drawn plan's crop and the hazard plan's key read.</summary>
 internal static class FootprintExtentTests
 {
     internal static int Run()

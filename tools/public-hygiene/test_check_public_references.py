@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""Offline cases for the private-reference gate.
-
-The gate's own failure modes are asymmetric, so both directions are asserted. A gate that misses a
-violation lets a misleading link reach a stranger; a gate that flags a Markdown anchor or a hex
-colour gets switched off within a week, and then it misses everything.
-"""
 
 from __future__ import annotations
 
@@ -36,28 +30,19 @@ class RefusesPrivateReferences(unittest.TestCase):
         self.assertIn("#88", found[0])
 
     def test_the_message_says_why_rather_than_just_what(self):
-        # A gate that prints "violation on line 3" teaches nobody. The reason is what stops the
-        # next occurrence, since the author's mental model is what was wrong.
         found = scan("closes #12\n")
         self.assertIn("private tracker", found[0])
 
     def test_the_message_does_not_over_claim_the_harm(self):
-        # An earlier cut said flatly that the reference "auto-links". In a .cs file it does not —
-        # GitHub only links where it renders Markdown. A gate caught overstating its own case is a
-        # gate whose next true finding gets argued with.
         found = scan("// see #12\n", "a.cs")
         self.assertIn("where GitHub renders Markdown", found[0])
 
     def test_only_the_corpus_is_self_exempt(self):
-        # The exemption must not widen to the directory: this gate's own script carries ordinary
-        # prose and is held to the rule like anything else.
         self.assertEqual(
             gate.SELF_EXEMPT, frozenset({"tools/public-hygiene/test_check_public_references.py"})
         )
 
     def test_the_real_leak_that_prompted_this_gate(self):
-        # Verbatim from the comment that reached main, where it rendered as a link to an unrelated
-        # public issue.
         found = scan(
             "            // #89's second correction: the drape's ChangeTypeId costs nearly as much\n",
             "SlowStepNoticeTests.cs",
@@ -70,7 +55,6 @@ class RefusesPrivateReferences(unittest.TestCase):
         self.assertIn("D-BF", found[0])
 
     def test_several_on_one_line_are_all_reported(self):
-        # Reporting only the first would turn one fix into several rounds of the same gate.
         self.assertEqual(len(scan("see #12 and #34\n")), 2)
 
     def test_every_scanned_suffix_is_scanned_the_same(self):
@@ -85,8 +69,6 @@ class AllowsWhatIsLegitimate(unittest.TestCase):
         self.assertEqual(found, [])
 
     def test_cross_file_section_link_is_not_a_tracker(self):
-        # The form the first cut of this gate missed. It resolves for every reader: it points at a
-        # heading in another file of this same public repository.
         found = scan("The machine contract is the pointer values ([`format.md` \u00a73](format.md#3-the-pointer-doctrine)).\n")
         self.assertEqual(found, [])
 
@@ -96,8 +78,6 @@ class AllowsWhatIsLegitimate(unittest.TestCase):
         self.assertIn("#91", found[0])
 
     def test_code_span_is_how_the_rule_documents_itself(self):
-        # CLAUDE.md states the rule using an example. A gate that fails its own rulebook is a gate
-        # somebody deletes.
         found = scan("A bare `#42` in a Markdown file auto-links to *this* repo's issue 42.\n")
         self.assertEqual(found, [])
 
@@ -110,33 +90,23 @@ class AllowsWhatIsLegitimate(unittest.TestCase):
         self.assertEqual(found, [])
 
     def test_a_hex_colour_carrying_letters_is_not_an_issue_number(self):
-        # The exemption used to be handed the MATCHED token rather than the colour, and `#\d+`
-        # stops at the first non-digit -- so `#0B0C10` arrived as `#0`, failed the three-or-six
-        # digit shape test, and was refused as a private tracker citation. Every colour that
-        # happened to be all digits passed, which is why it survived: the brand ground is the
-        # first colour in this repository whose second character is a letter.
         found = scan('html.Append("padding:2rem;background:#0B0C10;color:#fff;");\n', "a.cs")
         self.assertEqual(found, [])
         self.assertEqual(scan("body{background:#0b0c10}\n", "a.css"), [])
 
     def test_the_colour_exemption_still_needs_a_colour_shape(self):
-        # The exemption is anchored on a preceding ':' AND the hex shape. Neither alone is enough,
-        # or "fixes:#42" would launder a real citation.
         self.assertNotEqual(scan("fixes:#42 in the private tracker\n", "a.cs"), [])
         self.assertNotEqual(scan("fixes:#0B0C10FF is not a colour\n", "a.cs"), [])
 
     def test_public_rule_ids_are_prose_and_stay(self):
-        # The distinction CLAUDE.md already draws: HPS rule ids are stable public identifiers. Other-domain ids are not citable, but the gate does not scan for them, so no case asserts either way.
         found = scan("Registered in verified-against.json per HPS-38.\n")
         self.assertEqual(found, [])
 
     def test_a_lone_backtick_does_not_silence_the_rest_of_the_line(self):
-        # Otherwise one stray backtick anywhere becomes a universal waiver.
         found = scan("an unmatched ` tick and then #99\n")
         self.assertEqual(len(found), 1)
 
     def test_an_exemption_elsewhere_on_the_line_does_not_launder_a_violation(self):
-        # "host #2" earlier in the line must not exempt a real citation later in it.
         found = scan("host #2 regressed this, see #91 for the trace\n")
         self.assertEqual(len(found), 1)
         self.assertIn("#91", found[0])
@@ -146,13 +116,7 @@ class AllowsWhatIsLegitimate(unittest.TestCase):
 
 
 class RefusesInMetadata(unittest.TestCase):
-    """Commit messages, PR titles and bodies — public the moment they are pushed, editable never
-    (commits) or only with a public edit trail (PR text). The gate here is the last look anything
-    gets before the reference is permanent."""
-
     def test_the_real_leak_that_reached_a_merged_commit(self):
-        # Verbatim from the commit body that sat on main. The qualified form is not better than a
-        # bare number: it hands a stranger the name of a private repository and a 404.
         found = scan_text("Refs mantleplace-foo#90.\n")
         self.assertEqual(len(found), 1)
         self.assertIn("mantleplace-foo#90", found[0])
@@ -162,8 +126,6 @@ class RefusesInMetadata(unittest.TestCase):
         self.assertEqual(len(found), 1)
 
     def test_a_sibling_repository_never_named_in_the_gate_still_trips(self):
-        # The pattern is structural. If this case needs a new literal in the gate's source to pass,
-        # the gate has become the very list of private names it exists to keep out of this tree.
         found = scan_text("the fix lands in mantleplace-quux first\n")
         self.assertEqual(len(found), 1)
 
@@ -172,22 +134,15 @@ class RefusesInMetadata(unittest.TestCase):
         self.assertEqual(len(found), 1)
 
     def test_the_shorthand_forms_that_reached_a_pull_request_body(self):
-        # "nat PR #68" and "nat #68" — the observed shapes. Followed by a reference, so prose about
-        # NAT traversal never trips (asserted on the other side).
         self.assertEqual(len(scan_text("Ported from nat PR #68, before the move.\n")), 1)
         self.assertEqual(len(scan_text("was produced on nat #68 against this code\n")), 1)
 
     def test_the_natural_retypings_of_the_observed_shapes_trip_too(self):
-        # English capitalizes at sentence start and repo names are case-insensitive on GitHub. A
-        # gate that transcribes the historical leak too literally teaches the workaround, not the
-        # rule.
         self.assertEqual(len(scan_text("Ported from Nat PR #68, before the move.\n")), 1)
         self.assertEqual(len(scan_text("ported from nat issue #68 against this code\n")), 1)
         self.assertEqual(len(scan_text("the fix lands in Mantleplace-Quux first\n")), 1)
 
     def test_a_sibling_sharing_an_allowlisted_stem_still_trips(self):
-        # The allowlist is two artifact FILENAMES, not two stem families. A hypothetical
-        # mantleplace-import-api is a repository name and must trip; only the `.log` shapes pass.
         self.assertEqual(len(scan_text("mantleplace-import-api owns that half\n")), 1)
         self.assertEqual(len(scan_text("lands in mantleplace-terrain-service first\n")), 1)
 
@@ -197,8 +152,6 @@ class RefusesInMetadata(unittest.TestCase):
         self.assertIn("D-CX", found[0])
 
     def test_metadata_findings_carry_the_label_they_were_given(self):
-        # "PR body:3:" is what lets a CI failure point at the field to edit rather than at a file
-        # that does not exist.
         found = gate.violations_in_text("fine\nfine\nsee mantleplace-foo#1\n", "PR body",
                                         surface="metadata")
         self.assertTrue(found[0].startswith("PR body:3:"))
@@ -206,9 +159,6 @@ class RefusesInMetadata(unittest.TestCase):
 
 class AllowsInMetadata(unittest.TestCase):
     def test_a_bare_number_is_this_repositorys_own_voice(self):
-        # The semantic split from the file surface, and the reason the two pattern sets must never
-        # be merged: in a commit message or PR body, #12 is the native way to cite THIS repository's
-        # own issue, and GitHub appends "(#NN)" to every squash-merge subject.
         self.assertEqual(scan_text("closes #12\n"), [])
         self.assertEqual(scan_text("fix(revit): build from the TIN (#27)\n"), [])
 
@@ -217,9 +167,6 @@ class AllowsInMetadata(unittest.TestCase):
         self.assertEqual(scan_text("supersedes mantleplace/mantleplace-dcc#27\n"), [])
 
     def test_the_tracked_artifact_stems_that_forced_the_allowlist(self):
-        # `.mantleplace-import.log` and `mantleplace-terrain*.log` are product filenames tracked in
-        # this tree. A commit touching that code will name them; refusing that teaches people to
-        # reword truthful messages, which is the beginning of the end of the gate.
         self.assertEqual(scan_text("stop rotating .mantleplace-import.log on failure\n"), [])
         self.assertEqual(scan_text("the probe writes mantleplace-terrain-probe.log beside it\n"), [])
 
@@ -228,25 +175,17 @@ class AllowsInMetadata(unittest.TestCase):
         self.assertEqual(scan_text("gnat swarms are not a nat concern\n"), [])
 
     def test_a_code_span_is_how_this_rule_documents_itself(self):
-        # The escape hatch that lets a PR body explain what the gate refuses without tripping it —
-        # the same reasoning as the file surface's code-span exemption.
         self.assertEqual(scan_text("the gate refuses `mantleplace-foo#90` shapes\n"), [])
 
     def test_a_public_url_fragment_is_not_a_cross_repository_reference(self):
         self.assertEqual(scan_text("see https://mantle.place/spec#3 for the block\n"), [])
 
     def test_a_language_version_is_not_a_repository(self):
-        # The Revit half of this tree is C#. "C#12" and "F#7" are language prose a commit message
-        # touching revit/ will plausibly carry; a single letter is a language, not a repository.
         self.assertEqual(scan_text("revit: adopt C#12 collection expressions\n"), [])
         self.assertEqual(scan_text("the F#7 sample was removed\n"), [])
 
 
 class BranchNames(unittest.TestCase):
-    """A branch name is published by the push, listed by the API, and rendered forever in the header
-    of any pull request it opens. It is the one surface with a shape rule as well as pattern rules:
-    the convention is type/short-description, and an issue number is not a description."""
-
     def test_the_real_branch_that_encoded_a_private_issue(self):
         found = gate.branch_name_violations("fix/88-subdivision-drape-refusal")
         self.assertEqual(len(found), 1)
@@ -256,8 +195,6 @@ class BranchNames(unittest.TestCase):
         self.assertEqual(len(gate.branch_name_violations("fix/88")), 1)
 
     def test_dressing_the_number_up_does_not_pass_it(self):
-        # The retry shapes a developer reaches for when the bare number is refused. "#" is legal in
-        # a git ref name, and "issue-88" is the same citation wearing a word.
         self.assertEqual(len(gate.branch_name_violations("fix/#88-subdivision-drape")), 1)
         self.assertEqual(len(gate.branch_name_violations("fix/issue-88-subdivision-drape")), 1)
         self.assertEqual(len(gate.branch_name_violations("fix/gh-88-subdivision-drape")), 1)
@@ -266,21 +203,13 @@ class BranchNames(unittest.TestCase):
         self.assertEqual(len(gate.branch_name_violations("sync/mantleplace-quux-pin")), 1)
 
     def test_digits_inside_a_word_are_a_version_not_an_issue(self):
-        # ue5-8, net10, mpb-1.0.0 — the digits that belong in branch names. The rule is anchored to
-        # the start of a path segment because that is where an issue number lands.
         self.assertEqual(gate.branch_name_violations("feature/ue5-8-support"), [])
         self.assertEqual(gate.branch_name_violations("chore/net10-bump"), [])
         self.assertEqual(gate.branch_name_violations("feat/mpb-1.0.0-floor"), [])
 
 
 class CommitMessageFiles(unittest.TestCase):
-    """What the commit-msg hook hands over is COMMIT_EDITMSG — which is not yet the message. Git
-    strips comment lines and everything below the scissors line AFTER the hook runs, so the gate
-    must judge what will survive, not what is on disk."""
-
     def test_comment_lines_and_the_scissors_diff_are_not_the_message(self):
-        # `git commit -v` appends the whole diff below the scissors line. Refusing a commit because
-        # the DIFF quotes a forbidden shape (editing this very test file does) teaches --no-verify.
         editmsg = (
             "fix: tidy the gate's own corpus\n"
             "\n"
@@ -300,8 +229,6 @@ class CommitMessageFiles(unittest.TestCase):
         self.assertEqual(len(found), 1)
 
     def test_an_undecodable_message_file_reports_rather_than_crashes(self):
-        # i18n.commitEncoding or a Windows editor can put cp1252 bytes in COMMIT_EDITMSG. The file
-        # surface deliberately never crashes on undecodable input; the hook path keeps that.
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "COMMIT_EDITMSG"
             path.write_bytes("caf\xe9 fix\n".encode("cp1252"))
@@ -310,10 +237,6 @@ class CommitMessageFiles(unittest.TestCase):
 
 
 class ModesFailLoudly(unittest.TestCase):
-    """An empty value handed to a mode flag must be an error, never a quiet fall-through to the
-    file scan — a green 'OK: 208 file(s)' for a branch name that was never checked is the exact
-    false-green this gate exists to prevent."""
-
     def test_an_empty_branch_name_is_an_error_not_a_file_scan(self):
         with contextlib.redirect_stderr(io.StringIO()):
             with self.assertRaises(SystemExit) as caught:
@@ -328,12 +251,7 @@ class ModesFailLoudly(unittest.TestCase):
 
 
 class SurfacesStaySeparate(unittest.TestCase):
-    """Each surface's pattern set is calibrated to what renders there. These two cases pin the
-    calibration so a refactor cannot quietly merge the sets in either direction."""
-
     def test_the_file_surface_learned_the_sibling_pattern_but_keeps_the_artifact_filenames(self):
-        # The file surface now refuses a sibling repository's name, and still lets the two tracked
-        # artifact filenames through: `mantleplace-import.log` is plain prose in this tree.
         self.assertEqual(scan("The importer writes .mantleplace-import.log beside the zip.\n"), [])
 
     def test_the_metadata_surface_never_learns_the_bare_number_pattern(self):
@@ -341,10 +259,6 @@ class SurfacesStaySeparate(unittest.TestCase):
 
 
 class SiblingNamesInTrackedFiles(unittest.TestCase):
-    """The file surface refuses the same structural sibling pattern the metadata surfaces do, with
-    the same exemptions. Every fixture here is an invented name built on the project stem: if a case
-    needed a real private name to pass, the gate would have become the list it exists to keep out."""
-
     def test_a_sibling_name_in_a_markdown_file_is_refused(self):
         found = scan("The fix lands in mantleplace-widgets first.\n")
         self.assertEqual(len(found), 1)
@@ -369,7 +283,6 @@ class SiblingNamesInTrackedFiles(unittest.TestCase):
         self.assertEqual(scan("The probe writes mantleplace-terrain-probe.log beside it.\n"), [])
 
     def test_a_capitalised_or_upper_case_sibling_tail_is_refused_in_a_file(self):
-        # The brand allowance is a closed set, not "any capitalised tail".
         for name in ("MantlePlace-Foo", "MantlePlace-QUUX", "MantlePlace-Example1", "MantlePlace-Zzz-Bundle",
                      "Mantleplace-Foo", "MANTLEPLACE-TERMS", "mantleplace-Terms", "MantlePlace-Termsfoo"):
             with self.subTest(name=name):
@@ -396,16 +309,12 @@ class SiblingNamesInTrackedFiles(unittest.TestCase):
         self.assertEqual(scan("The gate refuses `mantleplace-widgets` shapes.\n"), [])
 
     def test_the_product_brand_casing_is_a_string_the_plugins_write_not_a_repository(self):
-        # Layer names, archive names and bundle terms are PascalCase product strings
-        # (`MantlePlace-Surface`, `MantlePlace-Terms`). A repository name is lowercase.
         self.assertEqual(scan('layer = "MantlePlace-Surface-x";\n', "a.cs"), [])
         self.assertEqual(scan("ships MantlePlace-Revit-1.2.0.zip\n"), [])
 
     def test_the_tracked_identifiers_in_code_pass_only_as_exact_tokens(self):
-        # A published package, temp-directory prefixes and an export format id this tree writes.
         self.assertEqual(scan("pip install mantleplace-mpb\n"), [])
         self.assertEqual(scan('var id = "mantleplace-autocad-bundle";\n', "a.cs"), [])
-        # A longer name sharing the prefix is a different name, and trips.
         self.assertEqual(len(scan("pip install mantleplace-mpb-secrets\n")), 1)
 
     def test_a_finding_in_a_file_redacts_for_a_published_report(self):
@@ -416,8 +325,6 @@ class SiblingNamesInTrackedFiles(unittest.TestCase):
         self.assertNotIn("mantleplace-widgets", found[0])
 
     def test_the_gates_own_script_is_held_to_the_rule(self):
-        # The script is not on the exempt list, so it must carry no sibling name; the stem alone,
-        # with no tail, names nothing.
         root = pathlib.Path(gate.__file__).resolve().parents[2]
         script = pathlib.Path(gate.__file__)
         relative = script.resolve().relative_to(root).as_posix()
@@ -427,12 +334,6 @@ class SiblingNamesInTrackedFiles(unittest.TestCase):
 
 
 class AgentToolingIsRefusedOnEverySurface(unittest.TestCase):
-    """Agent tooling that is not published here must not be named here. The identifiers have a
-    structure, built from the project's naming stem: a plugin installed from a catalogue named for
-    the stem, a setting that enables one, and a slash command namespaced by one. A code span is NOT
-    an exemption: the install line is nearly always written in one, so exempting spans would gut the
-    check. The names below are invented."""
-
     INSTALL = "/plugin install widgets@mantleplace"
     INSTALL_TAILED = "claude plugin install mantleplace-widgets@mantleplace-internal"
     SETTING = '  "enabledPlugins": { "widgets@mantleplace": true }'
@@ -488,7 +389,6 @@ class AgentToolingIsRefusedOnEverySurface(unittest.TestCase):
                 self.assertNotIn("widgets", found[0])
 
     def test_no_pattern_the_gate_carries_names_a_private_thing(self):
-        # The patterns are the stem plus structure. Whatever they say, they say it of any name.
         for pattern in (gate.PRIVATE_SIBLING, gate.PLUGIN_AT_CATALOGUE, gate.NAMESPACED_COMMAND):
             for private in ("foo", "quux", "zzz", "example"):
                 self.assertNotIn(private, pattern.pattern)
@@ -501,8 +401,6 @@ class AgentToolingIsRefusedOnEverySurface(unittest.TestCase):
 
     def test_this_repositorys_own_name_with_a_tag_is_not_a_namespaced_name(self):
         self.assertEqual(scan("docker run mantleplace-dcc:latest\n"), [])
-
-    # What must keep passing.
 
     def test_an_email_address_at_the_stem_domain_is_not_a_catalogue(self):
         self.assertEqual(scan("write to hello@mantleplace.com or me@mantleplace.example\n"), [])
@@ -519,10 +417,6 @@ class AgentToolingIsRefusedOnEverySurface(unittest.TestCase):
 
 
 class TrackerTextIsTheSixthSurface(unittest.TestCase):
-    """An issue title, an issue body and a comment are world-readable the moment they are posted,
-    with no draft state before that. They are metadata in the gate's sense, not files: a bare `#42`
-    there is this repository's own self-citation and GitHub renders it as one."""
-
     def test_a_bare_self_citation_in_an_issue_body_stays_legal(self):
         self.assertEqual(scan_text("Superseded by #76; take the masks there.\n", "issue #93 body"), [])
 
@@ -541,11 +435,6 @@ class TrackerTextIsTheSixthSurface(unittest.TestCase):
 
 
 class RedactedFindingsDoNotRepublish(unittest.TestCase):
-    """The tracker gate reports by posting a comment on the offending issue. A report that quoted
-    the refused token would make the gate's own comment a second, permanent copy of the thing it
-    refused — so editing the issue would no longer clean it up, which is the whole point of
-    noticing. The Actions log keeps the full detail; what gets posted does not."""
-
     def test_the_refused_token_is_not_echoed(self):
         found = gate.violations_in_text(
             "Blocked on mantleplace-foo#113.\n", "issue #94 body", surface="metadata", redact=True
@@ -555,7 +444,6 @@ class RedactedFindingsDoNotRepublish(unittest.TestCase):
         self.assertNotIn("#113", found[0])
 
     def test_a_redacted_finding_still_says_where_and_what_rule(self):
-        # A report that redacts everything is a report nobody can act on. Location and rule stay.
         found = gate.violations_in_text(
             "Blocked on mantleplace-foo#113.\n", "issue #94 body", surface="metadata", redact=True
         )
@@ -584,7 +472,6 @@ class RedactedFindingsDoNotRepublish(unittest.TestCase):
         self.assertIn("private tracker", found[0])
 
     def test_unredacted_is_still_the_default(self):
-        # CI's own log names the token, because the person reading it is us.
         found = scan_text("Blocked on mantleplace-foo#113.\n")
         self.assertIn("mantleplace-foo#113", found[0])
 
@@ -595,10 +482,6 @@ class RedactedFindingsDoNotRepublish(unittest.TestCase):
 
 
 class TheTrackerReportSaysWhatItIs(unittest.TestCase):
-    """The comment this workflow posts is itself a publication. These cases pin the two properties
-    that make it safe to post: it never carries the refused token, and it never claims to have
-    prevented anything."""
-
     def test_the_posted_body_carries_no_refused_token(self):
         findings = gate.violations_in_text(
             "Blocked on mantleplace-foo#113, recorded as D-CX.\n",
@@ -626,9 +509,6 @@ class TheTrackerReportSaysWhatItIs(unittest.TestCase):
         self.assertIn("https://example.invalid/run/1", body)
 
     def test_both_bodies_say_detection_rather_than_prevention(self):
-        # A tool that implied it had blocked the post would be worse than no tool, because
-        # somebody would rely on it. The text was public before this ever ran. Both messages carry
-        # the same footer so neither can drift away from saying it.
         self.assertIn("detection, not prevention", reporter.FOOTER)
         self.assertIn(reporter.FOOTER, reporter.CLEAN_BODY)
         self.assertIn("{footer}", reporter.FOUND_BODY)
@@ -639,19 +519,11 @@ class TheTrackerReportSaysWhatItIs(unittest.TestCase):
         self.assertIn(reporter.MARKER, reporter.CLEAN_BODY)
 
     def test_a_comment_url_resolves_to_its_id(self):
-        # The shape gh returns. Getting this wrong would post a new comment every time instead of
-        # updating one, which is the noise the marker exists to prevent.
         url = "https://github.com/o/r/issues/94#issuecomment-3344556677"
         self.assertEqual(url.rsplit("issuecomment-", 1)[-1], "3344556677")
 
 
 class RuleIdsMustResolve(unittest.TestCase):
-    """`HPS-NN` is a stable public identifier and stays as prose — but only while the text behind it
-    is published. It was not, for a while, and two READMEs written for strangers cited ids that
-    resolved nowhere they could reach: the claim and the identifier both looked authoritative, and
-    one of them was a dead end. A rule nothing checks decays silently, which is how the file rule
-    became a gate; this is the same argument one layer along."""
-
     def test_a_rule_statement_is_a_definition(self):
         published = "⛔ `HPS-01` — Every host plugin implements four layers.\n"
         self.assertEqual(gate.defined_rule_ids(published), {"HPS-01"})
@@ -668,7 +540,6 @@ class RuleIdsMustResolve(unittest.TestCase):
         )
 
     def test_a_passing_MENTION_is_not_a_definition(self):
-        # Otherwise "see HPS-99's precedent" would quietly license citing a rule nobody wrote.
         published = "Resolved on `HPS-46a`'s precedent, and see `HPS-99` for the rest.\n"
         self.assertEqual(gate.defined_rule_ids(published), set())
 
@@ -683,7 +554,6 @@ class RuleIdsMustResolve(unittest.TestCase):
         self.assertIn("revit/README.md", found[0])
 
     def test_the_message_says_where_the_rule_should_live(self):
-        # "HPS-99 is unknown" leaves the reader guessing whether to add the citation or the rule.
         found = gate.unresolved_rule_ids("see `HPS-99`\n", "a.md", {"HPS-14"})
         self.assertIn(gate.PUBLISHED_STANDARD, found[0])
 
@@ -697,13 +567,10 @@ class RuleIdsMustResolve(unittest.TestCase):
                 self.assertEqual(gate.unresolved_rule_ids(text, "a.cs", {"HPS-33"}), [])
 
     def test_the_lettered_variants_are_distinct_ids(self):
-        # HPS-46a resolving does not make HPS-46 resolve, and the reverse: they are separate rules.
         found = gate.unresolved_rule_ids("see `HPS-46`\n", "a.md", {"HPS-46a"})
         self.assertEqual(len(found), 1)
 
     def test_the_published_standard_is_not_checked_against_itself(self):
-        # It is where the rules are stated; every id in it resolves by construction, and a
-        # forward reference inside it is a drafting matter rather than a dangling citation.
         self.assertIn(gate.PUBLISHED_STANDARD, gate.RULE_SELF_EXEMPT)
 
     def test_several_unresolved_on_one_line_are_all_reported(self):

@@ -2,30 +2,6 @@ using System.Globalization;
 
 namespace MantlePlace.Core;
 
-/// <summary>
-/// The one geographic forward projection this host is allowed to perform: WGS84 lon/lat to UTM.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <c>HPS-33</c> is the default and stays the default — placement values arrive pre-derived and are
-/// applied verbatim. <c>HPS-45</c> carves out exactly one exception, and this is it: a bundle's
-/// <c>vector</c> GeoJSON layers are RFC 7946, so their coordinates are lon/lat while the manifest
-/// describes the layer rather than any vertex in it. There is nothing pre-derived to apply, and the
-/// alternative to projecting is not importing them.
-/// </para>
-/// <para>
-/// It is narrow on purpose. UTM only, forward only, no datum shift, no CRS registry: <c>HPS-03</c>'s
-/// ban on a geoprocessing stack is unchanged, and an EPSG this cannot handle is a refusal rather
-/// than a best effort. The known answers live in the shared corpus (<c>projection.lonLatToUtm</c>),
-/// because a zone or a false northing that is wrong places geometry kilometres away while every
-/// test that does not check numbers still passes.
-/// </para>
-/// <para>
-/// Snyder's series (USGS Professional Paper 1395, eq. 8-9 … 8-15) to the sixth order, which is
-/// sub-decimetre inside a zone — ample for road centrelines, and the same implementation the Unreal
-/// reference carries. The two hosts share the vectors, never the code (<c>HPS-43</c>).
-/// </para>
-/// </remarks>
 public static class GeoProjection
 {
     private const double SemiMajorMetres = 6378137.0;
@@ -33,24 +9,13 @@ public static class GeoProjection
     private const double ScaleFactor = 0.9996;
     private const double FalseEastingMetres = 500000.0;
 
-    /// <summary>The false northing UTM applies south of the equator, so northings stay positive.</summary>
     private const double SouthernFalseNorthingMetres = 10000000.0;
 
-    /// <summary>Outside this band UTM is not defined, and the series stops being trustworthy anyway.</summary>
     private const double MaxLatitudeDeg = 84.0;
 
-    /// <summary>Whether an EPSG code names a WGS84 UTM zone — <c>326xx</c> north, <c>327xx</c> south.</summary>
     public static bool IsUtmEpsg(int epsg)
         => (epsg is >= 32601 and <= 32660) || (epsg is >= 32701 and <= 32760);
 
-    /// <summary>
-    /// Projects WGS84 lon/lat degrees into the UTM zone <paramref name="epsg"/> names, in metres.
-    /// </summary>
-    /// <returns>
-    /// <c>false</c> — leaving the outputs at zero — for an EPSG that is not a UTM zone or a
-    /// coordinate outside the projection's validity band. A refusal, never a guess: the caller's
-    /// correct response is to skip the layer with a stated reason, not to place it approximately.
-    /// </returns>
     public static bool TryLonLatToUtm(
         double lonDeg,
         double latDeg,
@@ -115,15 +80,6 @@ public static class GeoProjection
         return true;
     }
 
-    /// <summary>
-    /// Parses an <c>EPSG:NNNN</c> authority string, or a bare code, into its numeric code.
-    /// </summary>
-    /// <remarks>
-    /// The manifest spells a CRS both ways — <c>revit.georeference.crs_projected</c> is
-    /// <c>"EPSG:32613"</c> while <c>revit.georeference.origin.projected.epsg</c> is <c>32613</c> —
-    /// so the comparison has to normalise rather than string-match. Anything else is <c>null</c>,
-    /// meaning UNKNOWN: a CRS this cannot read must not compare equal to one it can.
-    /// </remarks>
     public static int? TryParseEpsg(string? authority)
     {
         if (string.IsNullOrWhiteSpace(authority))
@@ -140,7 +96,6 @@ public static class GeoProjection
         return int.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out int code) ? code : null;
     }
 
-    /// <summary>Distance along the meridian from the equator (Snyder eq. 3-21).</summary>
     private static double MeridionalArc(double latRad, double e2)
     {
         double e4 = e2 * e2;

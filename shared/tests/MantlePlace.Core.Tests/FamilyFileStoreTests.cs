@@ -3,10 +3,6 @@ using MantlePlace.Client;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The file the tree step hands to <c>LoadFamily</c>: written by rename, verified before it is
-/// trusted, one per build, and the older builds' copies removed.
-/// </summary>
 internal static class FamilyFileStoreTests
 {
     private const string FileName = "Mantle Place Tree.rfa";

@@ -5,15 +5,6 @@ using System.Text.Json.Serialization;
 
 namespace MantlePlace.PlatformApi;
 
-/// <summary>
-/// Reads and writes a generated enum by its [EnumMember] value, the spelling the Platform API spec
-/// serves ("credit", "waiting_for_bundle"). System.Text.Json's own JsonStringEnumConverter ignores
-/// EnumMember and writes the C# name ("Credit"), which the platform refuses; the
-/// JsonStringEnumMemberName attribute that fixes it needs .NET 9 and this assembly targets net8.0.
-/// sync_platform_api.py swaps this converter into every generated property, and the generated
-/// client's settings hook (PlatformApiClient.UpdateJsonSerializerSettings) registers the factory
-/// so enums inside collections, which NSwag leaves without a converter, read and write the same way.
-/// </summary>
 public sealed class EnumMemberJsonConverter<T> : JsonConverter<T> where T : struct, Enum
 {
     private static readonly Dictionary<T, string> Names = Build();
@@ -54,7 +45,6 @@ public sealed class EnumMemberJsonConverter<T> : JsonConverter<T> where T : stru
     }
 }
 
-/// <summary>Hands the generated client's serializer an <see cref="EnumMemberJsonConverter{T}"/> for any enum.</summary>
 public sealed class EnumMemberJsonConverterFactory : JsonConverterFactory
 {
     public override bool CanConvert(Type typeToConvert) => typeToConvert.IsEnum;

@@ -9,17 +9,8 @@
 struct FMantlePlaceVaultItem;
 class UMantlePlaceVaultPanelController;
 
-/** Fired when a row's import button is clicked, or the card body is clicked (open details); carries the item. */
-DECLARE_DELEGATE_OneParam(FMantlePlaceOnRowImportClicked, TSharedPtr<FMantlePlaceVaultItem> /*Item*/);
+DECLARE_DELEGATE_OneParam(FMantlePlaceOnRowImportClicked, TSharedPtr<FMantlePlaceVaultItem>);
 
-/**
- * One vault-list bundle card. Native Slate replacement for the former UMantlePlaceVaultRowWidget: a
- * rounded/hairline "bento" card (MantlePlace.Card) that paints the pure BuildVaultRowView (codename,
- * meta, status pill, uniform Import) and drives a progress line for the bundle currently importing.
- * The whole card is clickable (opens the details page); the nested Import button consumes its own
- * click. The card is rebuilt whenever the list/busy state changes (SListView::RebuildList), so the
- * paint is computed once at Construct.
- */
 class SMantlePlaceVaultRow : public STableRow<TSharedPtr<FMantlePlaceVaultItem>>
 {
 public:
@@ -28,13 +19,11 @@ public:
 		SLATE_ARGUMENT(UMantlePlaceVaultPanelController*, Controller)
 		SLATE_EVENT(FMantlePlaceOnRowImportClicked, OnImportClicked)
 		SLATE_EVENT(FMantlePlaceOnRowImportClicked, OnSelected)
-		/** Fired when the card's "Report a problem" button is clicked (HPS-56); carries the item. */
 		SLATE_EVENT(FMantlePlaceOnRowImportClicked, OnReportProblemClicked)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs, const TSharedRef<STableViewBase>& OwnerTable);
 
-	/** Drive this row's progress line during its import (Fraction < 0 => indeterminate marquee). */
 	void UpdateProgress(const FString& Phase, const FString& Message, float Fraction);
 
 private:
@@ -48,7 +37,6 @@ private:
 	FMantlePlaceOnRowImportClicked OnSelected;
 	FMantlePlaceOnRowImportClicked OnReportProblem;
 
-	// Transient progress state, read by the progress widgets' attribute lambdas.
 	bool bShowProgress = false;
 	float ProgressFraction = -1.0f;
 	FString ProgressLine;

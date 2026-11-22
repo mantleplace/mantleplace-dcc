@@ -1,22 +1,3 @@
-"""Tests for the multi-host conformance gate.
-
-Two jobs:
-
-1. **Prove the loop.** The gate was single-host for its whole life — `pinned_doc["unreal"]`, a
-   hardcoded C++ header regex, and remediation text naming a `.cpp` file. Those are exactly the
-   bugs that stay invisible while only one host exists, so a *synthetic second host* is checked in
-   here permanently. It is not a placeholder for Revit; it is the fixture that fails the day
-   someone re-hardcodes a host name.
-2. **Guard the shipped `verified-against.json` offline.** Every host's `floorSource` must actually
-   resolve, on a runner with no engine installed. A pattern that silently stops matching turns the
-   floor check into a no-op, so it is asserted here rather than only in the network path.
-
-Stdlib `unittest` on purpose: this runs on a bare hosted runner in the same job as the gate, with
-no `pip install` step to go stale.
-
-Run: `python -m unittest discover -s tools/manifest-conformance`
-"""
-
 from __future__ import annotations
 
 import contextlib
@@ -37,16 +18,10 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _REAL_FETCH = gate.fetch_schema
 _REAL_LEDGER = gate.fetch_published_versions
 
-#: A published-schema stub, in the shape `check_host` reads. Takes the version CONST as the
-#: platform publishes it — an int for the pre-history family, a semver string for the MPB era —
-#: because the const's JSON type is exactly what tells the two apart.
 def _schema(const: int | str) -> dict:
     return {"properties": {"version": {"const": const}}}
 
 
-#: A fuller published-schema stub. `_schema` above is a version const and nothing else, which every
-#: editorial comparison would call identical for the wrong reason; these tests need a document with
-#: prose, constraints and examples so "only the prose moved" is a real assertion.
 def _semver_schema(const: str, description: str = "the contract") -> dict:
     return {
         "$id": f"https://mantle.place/.well-known/schemas/bundle-manifest/{const}.json",
@@ -84,20 +59,16 @@ def _host_entry(**overrides) -> dict:
 
 
 class VersionFamilyTest(unittest.TestCase):
-    """The two version families (integer pre-history, MPB semver) and the order over them."""
-
     def test_version_key_tells_the_families_apart_by_json_type(self) -> None:
         self.assertEqual("v19", gate.version_key(19))
         self.assertEqual("1.0.0", gate.version_key("1.0.0"))
 
     def test_version_key_refuses_the_near_misses(self) -> None:
-        # An integer-as-string is the one that would silently publish under the wrong filename.
         self.assertIsNone(gate.version_key("19"))
         self.assertIsNone(gate.version_key("1.0"))
         self.assertIsNone(gate.version_key("1.0.0-rc1"))
         self.assertIsNone(gate.version_key("01.0.0"))
         self.assertIsNone(gate.version_key(None))
-        # `True` is an int in Python, and would key as `vTrue` without the guard.
         self.assertIsNone(gate.version_key(True))
 
     def test_the_whole_integer_era_precedes_the_whole_semver_era(self) -> None:
@@ -119,8 +90,6 @@ class VersionFamilyTest(unittest.TestCase):
 
 
 class ChangelogEntryTest(unittest.TestCase):
-    """Every ledgered semver version must have a changelog entry."""
-
     _TEXT = (
         "## Semver era\n\n### 1.1.0 - a minor\n\n### Within 1.0.1 - prose\n\n### 1.0.0 - base\n"
     )
@@ -146,9 +115,6 @@ class ChangelogEntryTest(unittest.TestCase):
 
 
 class NewestPublishedTest(unittest.TestCase):
-    """Discovery reads the published ledger. The integer era could be found by counting; semver
-    cannot, and a walk that guesses one axis misses bumps on the others."""
-
     def setUp(self) -> None:
         self._real = gate.fetch_published_versions
         gate._ledger_cache = None
@@ -175,14 +141,11 @@ class NewestPublishedTest(unittest.TestCase):
         self.assertEqual("1.0.0", gate.newest_published("1.0.0"))
 
     def test_a_pin_above_everything_published_is_not_silently_downgraded(self) -> None:
-        """That disagreement is the pin check's to report, with its own message."""
         self._ledger(["v19", "1.0.0"])
         self.assertEqual("1.1.0", gate.newest_published("1.1.0"))
 
 
 class _FakeLedgerResponse:
-    """Just enough of an http.client response for `fetch_published_versions`."""
-
     status = 200
 
     def __init__(self, payload: bytes) -> None:
@@ -199,9 +162,6 @@ class _FakeLedgerResponse:
 
 
 class LedgerMalformedKeyTest(unittest.TestCase):
-    """The real ledger read. A frozen key in neither family may HIDE a published version, so it
-    must be loud (exit 2, could-not-check), never silently dropped."""
-
     def setUp(self) -> None:
         gate._ledger_cache = None
         self.addCleanup(lambda: setattr(gate, "_ledger_cache", None))
@@ -242,18 +202,14 @@ class LedgerMalformedKeyTest(unittest.TestCase):
 
 
 class MultiHostGateTest(unittest.TestCase):
-    """The generalized loop, driven by a synthetic two-host `verified-against.json`."""
-
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
         self.addCleanup(self._tmp.cleanup)
 
-        # Two hosts in different languages, each declaring its own floor location.
         (self.tmp / "Cpp.h").write_text("inline constexpr int FLOOR = 17;\n", encoding="utf-8")
         (self.tmp / "Dotnet.cs").write_text("public const int Floor = 17;\n", encoding="utf-8")
 
-        # `read_declared_floor` resolves floorSource.path against the repo root; point it at tmp.
         self._real_root = gate._REPO_ROOT
         gate._REPO_ROOT = self.tmp
         self.addCleanup(lambda: setattr(gate, "_REPO_ROOT", self._real_root))
@@ -261,15 +217,10 @@ class MultiHostGateTest(unittest.TestCase):
         gate._schema_cache.clear()
         self.addCleanup(gate._schema_cache.clear)
 
-        # Keyed by version KEY (`v17`, `1.0.0`) — the mirror filename stem, which is what the gate
-        # resolves a pin to before it fetches anything.
         self.published = {"v17": _schema(17)}
         gate.fetch_schema = lambda version, timeout=20: self.published.get(version)  # type: ignore[assignment]
         self.addCleanup(lambda: setattr(gate, "fetch_schema", _REAL_FETCH))
 
-        # "What else is published" comes from the platform's freeze ledger over the network. Stub
-        # it from the same dict so a test that publishes a version does not also have to remember
-        # to tell the ledger about it.
         gate._ledger_cache = None
         gate.fetch_published_versions = lambda timeout=20: sorted(  # type: ignore[assignment]
             self.published, key=gate.sort_key)
@@ -304,7 +255,6 @@ class MultiHostGateTest(unittest.TestCase):
         self.assertEqual(0, self._run(self._two_hosts()))
 
     def test_a_second_hosts_failure_fails_the_gate(self) -> None:
-        """The regression that motivates this file: a non-`unreal` key used to be unreachable."""
         hosts = self._two_hosts()
         (self.tmp / "Dotnet.cs").write_text("public const int Floor = 18;\n", encoding="utf-8")
         self.assertEqual(1, self._run(hosts))
@@ -317,7 +267,6 @@ class MultiHostGateTest(unittest.TestCase):
         self.assertIn("[synthetic]", failures[0])
 
     def test_remediation_names_the_hosts_own_tests_not_unreals(self) -> None:
-        """The old message told a .NET author to edit a .cpp file."""
         self.published["v18"] = _schema(18)
         failures, _ = gate.check_host("synthetic", self._two_hosts()["synthetic"])
         joined = "\n".join(failures)
@@ -326,13 +275,10 @@ class MultiHostGateTest(unittest.TestCase):
         self.assertNotIn(".cpp", joined)
 
     def test_an_integer_floor_under_a_semver_pin_is_drift(self) -> None:
-        """The cross-era hole: ordering says v18 <= 1.0.0, but a reader gating on an INTEGER floor
-        reads a semver version as 0 and refuses it. Without this the host passes every check while
-        refusing every manifest it claims to be verified against."""
         self.published["1.0.0"] = _schema("1.0.0")
         entry = _host_entry(
             verifiedAgainstManifestVersion="1.0.0",
-            floorSource={"path": "Cpp.h", "pattern": r"FLOOR\s*=\s*(\d+)"},  # still `= 17`
+            floorSource={"path": "Cpp.h", "pattern": r"FLOOR\s*=\s*(\d+)"},
         )
         failures, _ = gate.check_host("synthetic", entry)
         self.assertTrue(any("integer pre-history" in f for f in failures), failures)
@@ -348,7 +294,6 @@ class MultiHostGateTest(unittest.TestCase):
         self.assertEqual([], failures)
 
     def test_an_integer_floor_under_an_integer_pin_is_still_fine(self) -> None:
-        """The pre-history keeps working exactly as it did — this check must not retire it."""
         failures, _ = gate.check_host("unreal", self._two_hosts()["unreal"])
         self.assertEqual([], failures)
 
@@ -390,7 +335,6 @@ class MultiHostGateTest(unittest.TestCase):
         self.assertTrue(any("above the corpus's actual corpusVersion" in f for f in failures))
 
     def test_corpus_version_not_checked_when_unknown(self) -> None:
-        """`--skip-corpus` passes corpus_version=None; the drift check is a no-op, not a failure."""
         entry = _host_entry(verifiedAgainstCorpusVersion=1)
         failures, _ = gate.check_host("synthetic", entry, corpus_version=None)
         self.assertEqual([], [f for f in failures if "corpusVersion" in f])
@@ -404,13 +348,6 @@ class MultiHostGateTest(unittest.TestCase):
 
 
 class PinnedModeTest(unittest.TestCase):
-    """Pull requests compare against `verified-against.json`, not the live schema.
-
-    The platform can publish ahead of the pin without any commit landing here; that must not turn
-    every open pull request red. These tests make any network access an error, so "needs no
-    network" is asserted rather than assumed.
-    """
-
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
@@ -432,7 +369,6 @@ class PinnedModeTest(unittest.TestCase):
             patcher = mock.patch.object(gate, name, _no_network)
             patcher.start()
             self.addCleanup(patcher.stop)
-        # Belt and braces: even a new fetch path that bypasses the two helpers cannot connect.
         patcher = mock.patch.object(gate.urllib.request, "urlopen", _no_network)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -449,7 +385,6 @@ class PinnedModeTest(unittest.TestCase):
             return gate.main(["--verified-against", str(path), "--skip-corpus", *extra])
 
     def test_a_pinned_run_passes_with_no_network_however_far_ahead_the_platform_is(self) -> None:
-        """The live ledger and schema are never read, so a newer publication cannot fail it."""
         self.assertEqual(0, self._run({"unreal": self._entry()}, "--mode", "pinned"))
 
     def test_a_pinned_run_still_fails_when_the_floor_is_above_the_pin(self) -> None:
@@ -476,7 +411,6 @@ class PinnedModeTest(unittest.TestCase):
         self.assertEqual(1, self._run({"unreal": entry}, "--mode", "pinned"))
 
     def test_a_pinned_semver_without_a_changelog_entry_fails(self) -> None:
-        """The offline half of the changelog check: the pins themselves must be described."""
         (self.tmp / "Semver.h").write_text('FLOOR = TEXT("1.0.0");\n', encoding="utf-8")
         entry = self._entry(
             verifiedAgainstManifestVersion="1.0.0",
@@ -495,7 +429,6 @@ class PinnedModeTest(unittest.TestCase):
             self.assertEqual(0, gate.main(["--mode", "pinned"]))
 
     def test_live_mode_is_the_default_and_still_fetches(self) -> None:
-        """The scheduled job and a bare command-line run keep the live behaviour."""
         with mock.patch.object(gate, "fetch_schema", return_value=None) as fetch, \
                 mock.patch.object(gate, "fetch_published_versions", return_value=["v17"]):
             self.assertEqual(1, self._run({"unreal": self._entry()}))
@@ -510,15 +443,6 @@ class PinnedModeTest(unittest.TestCase):
 
 
 class PatchExemptionTest(unittest.TestCase):
-    """A newer PATCH is not drift — but only if it really is editorial.
-
-    `spec/compatibility.md` §2 says a patch is "documentation and description text only" and
-    "obliges a host to nothing: no re-pin and no re-verification". The gate used to fail on ANY
-    newer published key, which made it contradict the spec it enforces and turned every editorial
-    republication into two red hosts. The exemption added here is earned per release: the two
-    published documents are compared with prose and their own version stamp stripped.
-    """
-
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
@@ -550,17 +474,12 @@ class PatchExemptionTest(unittest.TestCase):
             **overrides,
         )
 
-    # ── the exemption ────────────────────────────────────────────────────────
-
     def test_a_newer_editorial_patch_is_not_drift(self) -> None:
-        """The case this exists for: 1.0.1 corrects prose and nothing else."""
         self.published["1.0.1"] = _semver_schema("1.0.1", description="corrected prose")
         failures, _ = gate.check_host("synthetic", self._entry())
         self.assertEqual([], failures)
 
     def test_the_exemption_is_reported_rather_than_silent(self) -> None:
-        """A host that skipped a published version should say so — silence would read as
-        'nothing newer published', which is a different fact."""
         self.published["1.0.1"] = _semver_schema("1.0.1", description="corrected prose")
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
@@ -571,7 +490,6 @@ class PatchExemptionTest(unittest.TestCase):
         self.assertNotIn("nothing newer published", printed)
 
     def test_prose_at_any_depth_is_editorial(self) -> None:
-        """Descriptions live on every field, not just the document root."""
         newer = _semver_schema("1.0.1")
         newer["properties"]["bbox"]["description"] = "reworded"
         newer["properties"]["bbox"]["properties"]["west"]["description"] = "reworded too"
@@ -580,14 +498,11 @@ class PatchExemptionTest(unittest.TestCase):
         self.assertEqual([], failures)
 
     def test_reworked_examples_are_editorial(self) -> None:
-        """`examples` are non-normative and carry the version stamp, so they move with a patch."""
         newer = _semver_schema("1.0.1")
         newer["examples"] = [{"version": "1.0.1", "anything": "at all"}]
         self.published["1.0.1"] = newer
         failures, _ = gate.check_host("synthetic", self._entry())
         self.assertEqual([], failures)
-
-    # ── what the exemption must NOT wave through ─────────────────────────────
 
     def test_a_patch_that_changes_what_validates_is_drift(self) -> None:
         newer = _semver_schema("1.0.1")
@@ -597,8 +512,6 @@ class PatchExemptionTest(unittest.TestCase):
         self.assertTrue(any("changes" in f and "validates" in f for f in failures), failures)
 
     def test_a_patch_that_narrows_a_nested_constraint_is_drift(self) -> None:
-        """The quiet half: a restriction deep in the tree still validates the same documents on
-        the happy path, which is exactly why it needs a machine to notice."""
         newer = _semver_schema("1.0.1")
         newer["properties"]["bbox"]["properties"]["west"]["maximum"] = 0
         self.published["1.0.1"] = newer
@@ -616,20 +529,12 @@ class PatchExemptionTest(unittest.TestCase):
         self.assertTrue(any("is only verified against" in f for f in failures), failures)
 
     def test_a_ledger_entry_that_is_not_served_is_drift(self) -> None:
-        """The ledger and the published set are two artifacts; if they disagree the gate has to
-        say so rather than treat the unfetchable version as a passing patch."""
         gate.fetch_published_versions = lambda timeout=20: ["1.0.0", "1.0.1"]  # type: ignore[assignment]
         failures, _ = gate.check_host("synthetic", self._entry())
         self.assertTrue(any("not served at" in f for f in failures), failures)
 
 
 class StagedPinTest(unittest.TestCase):
-    """A staged release is served before it is frozen: its schema answers at its URL, and the
-    freeze ledger does not name it yet. A host verified against it is verified (the document it
-    was exercised against is the served one), and the gate says it is staged rather than calling
-    it published. Served is not enough on its own, though: a served version below the ledger's
-    newest is not the next release, so it is not a staged one."""
-
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
@@ -643,7 +548,6 @@ class StagedPinTest(unittest.TestCase):
         gate._schema_cache.clear()
         self.addCleanup(gate._schema_cache.clear)
 
-        # Served: what answers at a URL. Ledgered: what the freeze ledger names. Two artifacts.
         self.served = {key: _semver_schema(key) for key in ("1.14.0", "1.15.0", "2.0.0")}
         self.ledgered = ["1.14.0", "1.15.0"]
         gate.fetch_schema = lambda version, timeout=20: self.served.get(version)  # type: ignore[assignment]
@@ -681,8 +585,6 @@ class StagedPinTest(unittest.TestCase):
         self.assertEqual([], failures)
 
     def test_a_served_version_below_the_ledgers_newest_is_not_staged(self) -> None:
-        """1.14.5 answers at its URL but the ledger already names 1.15.0: it is neither frozen nor
-        the next release, so a pin to it is not verified against anything published."""
         (self.tmp / "Semver.h").write_text('FLOOR = TEXT("1.14.0");\n', encoding="utf-8")
         self.served["1.14.5"] = _semver_schema("1.14.5")
         failures, _ = gate.check_host("synthetic", self._entry("1.14.5"))
@@ -704,8 +606,6 @@ class StagedPinTest(unittest.TestCase):
 
 
 class PatchRuleUnitTest(unittest.TestCase):
-    """The two pure helpers behind the exemption."""
-
     def test_a_higher_patch_is_a_patch(self) -> None:
         self.assertTrue(gate.is_patch_over("1.0.0", "1.0.1"))
         self.assertTrue(gate.is_patch_over("1.2.3", "1.2.10"))
@@ -721,7 +621,6 @@ class PatchRuleUnitTest(unittest.TestCase):
         self.assertFalse(gate.is_patch_over("1.0.1", "1.0.0"))
 
     def test_the_integer_era_has_no_patch_component(self) -> None:
-        """`v19` -> `v20` is a whole contract apart, and the era break most of all."""
         self.assertFalse(gate.is_patch_over("v19", "v20"))
         self.assertFalse(gate.is_patch_over("v19", "1.0.0"))
         self.assertFalse(gate.is_patch_over("v19", "v19"))
@@ -736,8 +635,6 @@ class PatchRuleUnitTest(unittest.TestCase):
         self.assertFalse(gate.patch_is_editorial(_semver_schema("1.0.0"), newer))
 
     def test_comparison_does_not_mutate_its_inputs(self) -> None:
-        """`check_host` reuses the memoized schema dicts, so a destructive compare would corrupt
-        the next host's check — and with two hosts pinned at the same version, always the second."""
         pinned = _semver_schema("1.0.0")
         newer = _semver_schema("1.0.1")
         gate.patch_is_editorial(pinned, newer)
@@ -747,8 +644,6 @@ class PatchRuleUnitTest(unittest.TestCase):
 
 
 class ShippedRegistryTest(unittest.TestCase):
-    """The real `verified-against.json`, checked without touching the network."""
-
     def setUp(self) -> None:
         self.doc = json.loads(gate._PINNED.read_text(encoding="utf-8"))
         self.hosts = gate.host_entries(self.doc)
@@ -770,7 +665,6 @@ class ShippedRegistryTest(unittest.TestCase):
                                     f"{host}.{key} points at a missing file: {entry[key]}")
 
     def test_every_floor_source_still_resolves(self) -> None:
-        """A floorSource that stops matching turns the floor check into a silent no-op."""
         for host, entry in self.hosts:
             with self.subTest(host=host):
                 floor, path, pattern = gate.read_declared_floor(host, entry)
@@ -780,8 +674,6 @@ class ShippedRegistryTest(unittest.TestCase):
                 self.assertLessEqual(gate.sort_key(floor), gate.sort_key(pinned))
 
     def test_every_floor_source_captures_a_recognizable_version(self) -> None:
-        """A pattern can match and still capture nonsense — `read_declared_floor` returns None for
-        a capture in neither family, and a None floor is drift, not a pass."""
         for host, entry in self.hosts:
             with self.subTest(host=host):
                 floor, _path, _pattern = gate.read_declared_floor(host, entry)
@@ -793,9 +685,6 @@ class ShippedRegistryTest(unittest.TestCase):
                 self.assertEqual(1, re.compile(entry["floorSource"]["pattern"]).groups)
 
     def test_every_shipped_host_is_at_the_shipped_corpus_version(self) -> None:
-        """A host pinned below (or above) the corpus's actual version is exactly the drift
-        ENF-01 exists to catch. Compared directly rather than via `check_host`, which would also
-        hit the network for the manifest-version leg -- this class stays offline by design."""
         corpus_version = gate.read_corpus_version()
         self.assertIsNotNone(corpus_version)
         for host, entry in self.hosts:
@@ -804,19 +693,14 @@ class ShippedRegistryTest(unittest.TestCase):
 
 
 class CorpusTest(unittest.TestCase):
-    """The shared corpus, which every host suite consumes (HPS-40)."""
-
     def test_shipped_corpus_is_intact(self) -> None:
         self.assertEqual([], gate.check_corpus())
 
     def test_shipped_corpus_passes_the_full_check_with_the_real_roster(self) -> None:
-        """Integrity + self-test + coverage ratchet, exactly as `main()` runs it."""
         doc = json.loads(gate._PINNED.read_text(encoding="utf-8"))
         self.assertEqual([], gate.check_corpus(gate.host_entries(doc)))
 
     def test_shipped_selftest_is_well_formed_broken(self) -> None:
-        """Each self-test fixture must be wrong in exactly its declared way (HPS-46) — a host
-        suite asserts these are rejected, which is only meaningful if the breakage is real."""
         self.assertEqual([], gate.check_selftest())
 
     def test_index_declares_both_accept_and_reject_cases(self) -> None:
@@ -826,7 +710,6 @@ class CorpusTest(unittest.TestCase):
         self.assertIn("reject", expectations)
 
     def test_a_malformed_index_reports_rather_than_crashes(self) -> None:
-        """The gate's contract is exit codes; a traceback is not one of them."""
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         root = Path(tmp.name)
@@ -871,9 +754,6 @@ class CorpusTest(unittest.TestCase):
 
 
 class CoverageRatchetTest(unittest.TestCase):
-    """Per-case host coverage: derived from `groups` x `appliesTo`, ratcheted against the
-    committed baseline. Any difference fails; --update-baseline records it."""
-
     _CASES = [
         {"id": "manifest.a", "group": "manifest", "file": "a.json", "expect": "vector",
          "reason": "r"},
@@ -906,14 +786,14 @@ class CoverageRatchetTest(unittest.TestCase):
 
     def test_a_host_losing_a_case_is_a_regression(self) -> None:
         recorded = self._expected()
-        recorded["vault.c"] = ["revit", "unreal"]  # revit once covered it; now it cannot
+        recorded["vault.c"] = ["revit", "unreal"]
         self._write_baseline(recorded)
         failures = gate.check_coverage(self._CASES, self.entries)
         self.assertTrue(any("coverage regression" in f and "revit" in f for f in failures))
 
     def test_an_unrecorded_improvement_is_a_stale_baseline(self) -> None:
         recorded = self._expected()
-        recorded["manifest.a"] = ["unreal"]  # revit's coverage is real but unrecorded
+        recorded["manifest.a"] = ["unreal"]
         self._write_baseline(recorded)
         failures = gate.check_coverage(self._CASES, self.entries)
         self.assertTrue(any("stale" in f and "manifest.a" in f for f in failures))
@@ -927,7 +807,6 @@ class CoverageRatchetTest(unittest.TestCase):
                                                  update_baseline=True))
         written = json.loads(gate._BASELINE.read_text(encoding="utf-8"))
         self.assertEqual(self._expected(), written["cases"])
-        # And the file it wrote passes the ratchet it feeds.
         self.assertEqual([], gate.check_coverage(self._CASES, self.entries))
 
     def test_applies_to_must_name_a_registered_host(self) -> None:
@@ -937,9 +816,6 @@ class CoverageRatchetTest(unittest.TestCase):
         self.assertTrue(any("appliesTo" in f and "rhino" in f for f in failures))
 
     def test_applies_to_may_name_a_planned_host_that_covers_nothing_yet(self) -> None:
-        """A host's cases land before the host does. A planned host is named in the gate, not in
-        verified-against.json (adding a key there is a schema-level change), and a case scoped to
-        it is covered by no registered host until the host registers."""
         planned = "blender"
         cases = self._CASES + [{"id": "manifest.p", "group": "manifest", "file": "p.json",
                                 "expect": "accept", "reason": "r", "appliesTo": planned}]
@@ -950,8 +826,6 @@ class CoverageRatchetTest(unittest.TestCase):
             self.assertEqual([], gate.check_coverage(cases, self.entries))
 
     def test_a_planned_host_is_not_a_registered_one(self) -> None:
-        """`autocad` registered with its plugin tree, so it left the planned set (the corpus README
-        says registering does that)."""
         self.assertEqual(frozenset(), gate._PLANNED_HOSTS)
         registered = json.loads(gate._PINNED.read_text(encoding="utf-8"))
         self.assertIn("autocad", registered)
@@ -963,8 +837,6 @@ class CoverageRatchetTest(unittest.TestCase):
         self.assertTrue(any("groups" in f for f in failures))
 
     def test_update_baseline_refuses_to_write_a_derivation_that_failed(self) -> None:
-        """A case dropped for a bad `appliesTo` would be written out MISSING, and a case the
-        baseline never mentions is one the ratchet can never regress."""
         cases = self._CASES + [{"id": "manifest.rot", "group": "manifest", "file": "r.json",
                                 "expect": "vector", "reason": "r", "appliesTo": "rhino"}]
         failures = gate.check_coverage(cases, self.entries, update_baseline=True)
@@ -973,10 +845,6 @@ class CoverageRatchetTest(unittest.TestCase):
 
 
 class SelfTestSweepTest(unittest.TestCase):
-    """The self-test corpus's own orphan sweep. The MAIN sweep excludes `self-test/` wholesale,
-    so anything this one misses is invisible to the gate while the host readers' recursive sweeps
-    still flag it — the HPS-46 asymmetry, inverted."""
-
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
@@ -984,7 +852,6 @@ class SelfTestSweepTest(unittest.TestCase):
         real = gate._CORPUS
         gate._CORPUS = self.root
         self.addCleanup(lambda: setattr(gate, "_CORPUS", real))
-        # A minimal well-formed-broken self-test tree: one fixture, declared broken its one way.
         selftest = self.root / "self-test"
         (selftest / "cases").mkdir(parents=True)
         (selftest / "cases" / "missing-is-fine.json").write_text("{}", encoding="utf-8")
@@ -1005,7 +872,6 @@ class SelfTestSweepTest(unittest.TestCase):
         self.assertEqual([], gate.check_selftest())
 
     def test_a_stray_file_deeper_than_cases_is_still_flagged(self) -> None:
-        """The sweep used to be one non-recursive listing of `cases/`."""
         nested = self.selftest / "cases" / "nested"
         nested.mkdir()
         (nested / "stray.json").write_text("{}", encoding="utf-8")
@@ -1018,14 +884,10 @@ class SelfTestSweepTest(unittest.TestCase):
         self.assertTrue(any("notes.json" in f for f in failures), failures)
 
     def test_files_inside_a_nested_corpus_are_not_swept(self) -> None:
-        """A directory carrying its own index.json is another index's to sweep, not this one's."""
         (self.selftest / "broken-index-schema" / "extra.json").write_text("{}", encoding="utf-8")
         self.assertEqual([], gate.check_selftest())
 
     def test_a_fixture_disagreeing_with_its_declared_manifest_version_is_rot(self) -> None:
-        """The same declared-vs-actual cross-check the corpus proper gets — without it a self-test
-        fixture can sit in a dialect the readers refuse, and its case passes on the version gate
-        rather than on its declared breakage."""
         (self.selftest / "cases" / "unknown-key.json").write_text(
             json.dumps({"version": "1.0.0"}), encoding="utf-8")
         (self.selftest / "index.json").write_text(json.dumps({
@@ -1041,9 +903,6 @@ class SelfTestSweepTest(unittest.TestCase):
                         failures)
 
     def test_a_selftest_pin_that_trails_the_corpus_pin_is_rot(self) -> None:
-        """The rot that motivated the check: fixtures internally consistent at a version the
-        readers no longer speak. Caught by comparing the self-test index's own pin to the corpus
-        proper's."""
         (self.root / "index.json").write_text(json.dumps({
             "corpusVersion": 3, "manifestVersion": "1.0.0", "cases": [],
         }), encoding="utf-8")
@@ -1065,12 +924,6 @@ class SelfTestSweepTest(unittest.TestCase):
 
 
 class NestedUnreadFixtureTest(unittest.TestCase):
-    """`nestedUnreadExpectation` must be broken exactly its declared way (HPS-46b).
-
-    A host suite asserts its reader REJECTS this fixture. That assertion is worth nothing if the
-    unread nested keys quietly stopped being unread — which is the single way this fixture rots.
-    """
-
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
@@ -1105,34 +958,25 @@ class NestedUnreadFixtureTest(unittest.TestCase):
         self.assertEqual([], self.write(self.WELL_FORMED))
 
     def test_a_reserved_key_that_is_prose_cannot_be_the_breakage(self) -> None:
-        """`selfTestNote` ends in `Note`, so it is documentation and exempt at every depth — a
-        fixture whose only reserved key is prose asserts nothing and must not pass as broken."""
         failures = self.write({
             "items": [{"orderId": "ord", "status": 404, "selfTestNote": "prose"}],
         })
         self.assertTrue(any("reserved `selfTest` prefix" in f for f in failures), failures)
 
     def test_the_coercion_half_is_required(self) -> None:
-        """Without a wrong-typed nested value, a host reading through UE's coercing
-        `TryGet*Field` — which reads 404 back as "404" — passes the fixture (one level down)."""
         failures = self.write({
             "items": [{"orderId": "ord", "status": "Available", "selfTestNeverReadNested": True}],
         })
         self.assertTrue(any("coercion half" in f for f in failures), failures)
 
     def test_the_breakage_must_sit_below_an_assertable_key(self) -> None:
-        """All-scalar expectations put the breakage at the top level, where HPS-46 already
-        catches it — such a fixture proves nothing about nesting."""
         failures = self.write({"status": 404, "selfTestNeverReadNested": True})
         self.assertTrue(any("top-level expectation holds a container" in f for f in failures),
                         failures)
 
 
 class NestedExpectationEntriesTest(unittest.TestCase):
-    """The walk HPS-46b's obligation is derived from."""
-
     def test_the_top_level_is_excluded(self) -> None:
-        """It is HPS-46's, and double-reporting it would make one gap read as two."""
         entries = gate.nested_expectation_entries({"itemCount": 2, "items": [{"orderId": "a"}]})
         self.assertEqual(["items[0].orderId"], [p for p, _, _ in entries])
 
@@ -1142,7 +986,6 @@ class NestedExpectationEntriesTest(unittest.TestCase):
         self.assertIn("items[1].hasManifestVersion", [p for p, _, _ in entries])
 
     def test_prose_is_yielded_but_never_walked(self) -> None:
-        """A `*Note` value that happens to be an object is documentation all the way down."""
         entries = gate.nested_expectation_entries(
             {"items": [{"layersNote": {"buried": True}}]})
         self.assertEqual(["items[0].layersNote"], [p for p, _, _ in entries])

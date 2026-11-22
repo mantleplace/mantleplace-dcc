@@ -2,365 +2,110 @@ using System.Globalization;
 
 namespace MantlePlace.Core;
 
-/// <summary>What the add-in will do to the Revit document, in order.</summary>
 public enum ImportStepKind
 {
-    /// <summary>Massing &amp; Site ▸ Toposurface ▸ Create from Import ▸ Specify Points File.</summary>
     ToposurfaceFromPointsFile,
 
-    /// <summary>
-    /// The toposolid built from the surface DXF's own TIN vertices — the preferred topo path.
-    /// </summary>
-    /// <remarks>
-    /// Same terrain as <see cref="ToposurfaceFromPointsFile"/> and fewer vertices, but sampled
-    /// adaptively instead of on a lattice. The points file is a perfectly regular grid, which makes
-    /// every cell's four corners cocircular and Delaunay triangulation degenerate, so the
-    /// triangulator picks slivers and fans arbitrarily and the terrain reads as faceted however good
-    /// the drape is. TIN vertices sit in general position and triangulate cleanly.
-    /// </remarks>
     ToposurfaceFromSurfaceTin,
 
-    /// <summary>Insert ▸ Link CAD, then Create from Import ▸ Select Import Instance.</summary>
     ToposurfaceFromSurfaceDxf,
 
-    /// <summary>
-    /// The bundle's published contours, one <c>DirectShape</c> per contour on a "Published Contours"
-    /// subcategory — see <c>docs/adr/0013-revit-published-contours-are-directshapes.md</c>.
-    /// </summary>
     PublishedContours,
 
-    /// <summary>Insert ▸ Link IFC — kept as a coordinated reference, not opened as a model.</summary>
-    /// <remarks>
-    /// Its checklist row starts unchecked (<see cref="ImportLayers.OnByDefault"/>):
-    /// <see cref="ContextBuildings"/> puts the same buildings in the project as elements, and both at
-    /// once shows each building twice.
-    /// </remarks>
     LinkSiteIfc,
 
-    /// <summary>
-    /// Every building in the site model copied into the project as its own Generic Model element,
-    /// the context terrain left out.
-    /// </summary>
-    /// <remarks>
-    /// The site model's own extrusions, reused rather than rebuilt: it carries one per building, where
-    /// the building mesh is one merged node and the footprints would have to be extruded here — see
-    /// <c>docs/adr/0012-context-buildings-come-from-the-site-model.md</c>.
-    /// </remarks>
     ContextBuildings,
 
-    /// <summary>Publish the pre-derived survey point / shared coordinates.</summary>
     SetSharedCoordinates,
 
-    /// <summary>
-    /// Manage ▸ Location: the project's latitude and longitude, which is what places the sun.
-    /// </summary>
-    /// <remarks>
-    /// Separate from <see cref="SetSharedCoordinates"/> because the two read different fields and
-    /// fail for different reasons: the survey point is a projected pair that may fall back to
-    /// <c>delivery.local_origin</c>, and the site location is the own block's lat/lon and nothing
-    /// else.
-    /// </remarks>
     SetSiteLocation,
 
-    /// <summary>
-    /// Road centrelines from the <c>road_splines</c> vector layer — Forma's "Roads" row.
-    /// </summary>
     RoadCentrelines,
 
-    /// <summary>
-    /// The <c>land_use</c> vector layer, drawn as filled regions on its build's land use plan
-    /// (<see cref="LandPlan"/>).
-    /// </summary>
-    /// <remarks>
-    /// Never on the terrain: it was cut as subdivisions until
-    /// <c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>, and is a classification of
-    /// the ground rather than a surface anyone builds against.
-    /// </remarks>
     LandUse,
 
-    /// <summary>
-    /// The <c>land_cover</c> vector layer, drawn on a land cover plan of its own the way
-    /// <see cref="LandUse"/> is. A different Overture layer from <c>land_use</c>, not a second name for
-    /// it: this one carries the physical subtype — forest and its like.
-    /// </summary>
     LandCover,
 
-    /// <summary>
-    /// The water bodies of the <c>water</c> vector layer, cut as subdivisions.
-    /// </summary>
-    /// <remarks>
-    /// Polygons only. That layer's stream centrelines stay out: turning a centreline into an area
-    /// means inventing a width, which is derivation and belongs upstream.
-    /// </remarks>
     Water,
 
-    /// <summary>
-    /// Road surfaces from the <c>road_polygons</c> vector layer, cut as subdivisions.
-    /// </summary>
-    /// <remarks>
-    /// The published surfaces, applied: already widened by the estimated width, merged per class and
-    /// cut so no two overlap. They come in flat, at the terrain's own surface.
-    /// </remarks>
     RoadPolygons,
 
-    /// <summary>
-    /// Trees from the tree-points file, with real height and crown — Forma's "Vegetation" row.
-    /// </summary>
     Vegetation,
 
-    /// <summary>
-    /// The "Mantle Place Site Context" 3D view, and the view filter that finds every element an
-    /// import stamped (<see cref="SiteContext"/>).
-    /// </summary>
     SiteContextView,
 
-    /// <summary>
-    /// The satellite imagery draped on the terrain as a material texture — Forma's last row.
-    /// </summary>
     ImageryDrape,
 
-    /// <summary>
-    /// The "Mantle Place Attribution" drafting view, and the provenance record on Project
-    /// Information — which bundle this project came from, and whose data is in it.
-    /// </summary>
-    /// <remarks>
-    /// Declared last so every kind before it keeps its number; its place in a plan is the planner's.
-    /// </remarks>
     AttributionAndProvenance,
 
-    /// <summary>
-    /// The flood map's zones, drawn as filled regions on the hazard plan (<see cref="HazardPlan"/>).
-    /// </summary>
-    /// <remarks>
-    /// Context, never a flood determination, and never on the terrain: flood zones overlap the land
-    /// cover and the roads, and a coincident subdivision does not draw in cut order. Declared after
-    /// every older kind so each keeps its number.
-    /// </remarks>
     FloodZones,
 
-    /// <summary>
-    /// Steep ground at the platform's stated threshold, hatched over the flood zones on the same plan.
-    /// </summary>
     SteepGround,
 }
 
-/// <summary>Which toposolid type the terrain step builds the ground on.</summary>
-/// <remarks>
-/// A role, not an element: the planner cannot see the document, so it decides WHICH type and the
-/// shim resolves that to one. The name the imagery type goes by is
-/// <see cref="DrapeLayering.ImageryName"/>, shared by both steps that touch it.
-/// </remarks>
 public enum TerrainToposolidType
 {
-    /// <summary>The project's own ground type, as <see cref="ToposolidTypeChoice"/> picks it.</summary>
     Project,
 
-    /// <summary>
-    /// A duplicate of that type whose top layer is the imagery drape's material — the type the drape
-    /// step would otherwise retype the terrain onto after the fact.
-    /// </summary>
     Imagery,
 }
 
-/// <summary>Why a step the bundle might have carried is not in the plan, as a closed vocabulary.</summary>
-/// <remarks>
-/// The machine-readable half of a skip. <see cref="SkippedImport.Reason"/> is prose written for a
-/// curator and is expected to be reworded; a test, a UI branch or a support triage rule that needs
-/// to know WHICH skip happened reads this instead of matching on the sentence.
-/// </remarks>
 public enum SkipReasonCode
 {
-    /// <summary>The manifest carries no pointer for this artifact.</summary>
     ArtifactNotInManifest,
 
-    /// <summary>The manifest points at an entry the archive does not contain.</summary>
     EntryNotInArchive,
 
-    /// <summary>The artifact declares a linear unit this host cannot read, so it fails closed.</summary>
     UnitNotUnderstood,
 
-    /// <summary>A lower-precedence path was planned in this one's place.</summary>
     SupersededByFallback,
 
-    /// <summary>This path was the fallback, and it was deliberately not attempted.</summary>
     FallbackSuppressed,
 
-    /// <summary>The manifest carries no pre-derived survey point to publish.</summary>
     NoSurveyPoint,
 
-    /// <summary>
-    /// The artifact's coordinates are absolute, and the manifest published no origin to place them
-    /// against.
-    /// </summary>
-    /// <remarks>
-    /// Distinct from <see cref="NoSurveyPoint"/>, which is about a step that does not happen. This
-    /// one is about geometry that cannot be positioned: the toposurface points file is already local
-    /// and imports fine without an origin, while a tree at easting 472 195 has nowhere to go.
-    /// </remarks>
     NoSiteFrame,
 
-    /// <summary>
-    /// The artifact's coordinate system cannot be brought into the bundle's own origin frame by the
-    /// one projection this host is permitted to perform (<c>HPS-45</c>).
-    /// </summary>
     CoordinateSystemNotSupported,
 
-    /// <summary>
-    /// The ground extent an artifact would be stretched over could not be corroborated against the
-    /// artifact's own contents, so it was not used.
-    /// </summary>
-    /// <remarks>
-    /// Distinct from <see cref="ArtifactNotInManifest"/> and from
-    /// <see cref="CoordinateSystemNotSupported"/>, and the distinction is the whole point: those two
-    /// mean the manifest said nothing, or said something this host cannot place. This one means the
-    /// manifest said something PLAUSIBLE that the bytes did not back up. A drape hung on an extent
-    /// that is wrong looks like a correct import of a photograph of somewhere else, which is the one
-    /// failure a curator has no way to notice.
-    /// </remarks>
     ExtentNotCorroborated,
 
-    /// <summary>
-    /// The host's own <c>georeference.origin</c> publishes no latitude and longitude pair.
-    /// </summary>
-    /// <remarks>
-    /// Distinct from <see cref="NoSurveyPoint"/>: that one is the projected pair, and a bundle can
-    /// carry either without the other.
-    /// </remarks>
     NoGeographicOrigin,
 
-    /// <summary>
-    /// The published latitude or longitude is off the globe, so it was not handed to Revit to throw
-    /// on or to wrap.
-    /// </summary>
     GeographicOriginOutOfRange,
-    /// <summary>
-    /// A layer derived from another is not in this bundle, while the layer it comes from is.
-    /// </summary>
-    /// <remarks>
-    /// Distinct from <see cref="ArtifactNotInManifest"/>, and the distinction is what the curator is
-    /// told: <c>road_polygons</c> is best-effort and its absence says nothing about whether the area
-    /// has roads (<c>spec/format.md</c> §6.3), so "no road surfaces were derived for this order" is
-    /// true where "no roads in this bundle" would not be. Re-downloading does not fix it.
-    /// </remarks>
     DerivedLayerNotPublished,
 
-    /// <summary>The bundle carries this layer and the curator left it out of the import window's checklist.</summary>
-    /// <remarks>
-    /// The one skip that is not about the bundle. A support triage rule reading a log has to tell "the
-    /// trees did not come in" apart from "the trees were not wanted", and only this code does.
-    /// </remarks>
     LeftOutByChoice,
 
-    /// <summary>
-    /// The bundle says this layer is absent, and no re-download can change that: a layer this host's
-    /// own copy lacks had no features in the area, and imagery declared absent was unavailable for
-    /// the site.
-    /// </summary>
-    /// <remarks>
-    /// Split from <see cref="ArtifactNotInManifest"/>, which is the bundle saying nothing — an absence
-    /// the order can sometimes fix from the vault. The import window lists that one and stays silent
-    /// on this one (<see cref="WindowLabels.UnavailableReason"/>), so the two must not share a code.
-    /// Declared last so every code before it keeps its number.
-    /// </remarks>
     DeclaredAbsent,
 
-    /// <summary>
-    /// The bundle carries this layer only in a form from before this host had a copy of its own —
-    /// a GeoPackage, from before MPB 1.4.0 — and a re-download is cut again with the copy.
-    /// </summary>
-    /// <remarks>
-    /// Split from <see cref="ArtifactNotInManifest"/>, whose remedy is adding the layer to the order:
-    /// this one is already on the order. Declared last so every code before it keeps its number.
-    /// </remarks>
     PredatesHostCopy,
 
-    /// <summary>
-    /// The fidelity level chosen for this layer is published in a form this host cannot import, so
-    /// the layer was left out rather than imported whole (<see cref="FidelityCuts.Apply"/>).
-    /// </summary>
-    /// <remarks>
-    /// The window never offers such a level, so only a choice made without it meets this. Declared
-    /// last so every code before it keeps its number.
-    /// </remarks>
     LevelUnavailable,
 
-    /// <summary>
-    /// The bundle is MPB 3.0 or later, and the format has no file this step reads: its 2.x input left
-    /// the tree, and making it from a file that stayed would be converting a georeferenced file, which
-    /// this host never does (<see cref="BundleImportPlanner.ThreeLeftOut"/>).
-    /// </summary>
-    /// <remarks>
-    /// No download can change it, and no vault holds it. Declared last so every code before it keeps
-    /// its number.
-    /// </remarks>
     NotInFormat,
 
-    /// <summary>
-    /// The bundle's manifest lists the file this step reads among the promised files it does not hold,
-    /// with its reason (<c>spec/format.md</c> §9.6), which the skip shows as stated.
-    /// </summary>
-    /// <remarks>
-    /// Never split by the reason: the reasons grow, and one the plugin does not know must still be
-    /// shown. Declared last so every code before it keeps its number.
-    /// </remarks>
     NotHeld,
 }
 
-/// <summary>
-/// Where a draped texture's image is pinned to the ground, decided here and not in the shim.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The four edges arrive as an absolute AOI-UTM rectangle and leave as frame-local metres, through
-/// the same <see cref="SiteFrame"/> every other absolutely-positioned artifact goes through — so the
-/// drape inherits its refusals rather than restating them, and the shim computes no rectangle of its
-/// own (<c>HPS-02</c>, <c>HPS-33</c>).
-/// </para>
-/// <para>
-/// Metres, not feet. The unit conversion Revit's API demands stays in the shim, exactly as it does
-/// for <see cref="SurveyPointPlacement"/> — this type states where the image goes, and Revit's
-/// preference for decimal feet is Revit's business.
-/// </para>
-/// </remarks>
 public sealed class DrapePlacement
 {
-    /// <summary>West edge, in frame-local metres.</summary>
     public required double LeftM { get; init; }
 
-    /// <summary>South edge, in frame-local metres.</summary>
     public required double BottomM { get; init; }
 
-    /// <summary>East edge, in frame-local metres.</summary>
     public required double RightM { get; init; }
 
-    /// <summary>North edge, in frame-local metres.</summary>
     public required double TopM { get; init; }
 
-    /// <summary>The image's own pixel grid, read from its header and checked to be non-degenerate.</summary>
     public required ImageSize PixelSize { get; init; }
 
-    /// <summary>
-    /// True when the extent came from the drape's own host-neutral block rather than from the DEM's
-    /// bounds.
-    /// </summary>
-    /// <remarks>
-    /// Carried so the import log can say which pointer placed the image. The two paths are not
-    /// equally trustworthy — one is a contract and the other is a corroborated inference — and a
-    /// tester reading a log after the fact cannot tell them apart from the numbers alone.
-    /// </remarks>
     public required bool ExtentFromDrapeBlock { get; init; }
 
-    /// <summary>Real-world width the image spans, in metres.</summary>
     public double WidthM => RightM - LeftM;
 
-    /// <summary>Real-world height the image spans, in metres.</summary>
     public double HeightM => TopM - BottomM;
 
-    /// <summary>
-    /// The same image moved by an offset, for a bundle built away from the project origin
-    /// (<see cref="AdjacentBundle"/>): its edges are frame-local, and the element the drape is written
-    /// for is read from the document, where the bundle stands at that offset.
-    /// </summary>
     public DrapePlacement Shifted(double eastM, double northM) => new()
     {
         LeftM = LeftM + eastM,
@@ -372,83 +117,24 @@ public sealed class DrapePlacement
     };
 }
 
-/// <summary>Why a step the bundle might have carried is not in the plan.</summary>
 public sealed class SkippedImport
 {
     public required ImportStepKind Kind { get; init; }
 
-    /// <summary>Which skip this is, for anything that needs to branch rather than print.</summary>
     public required SkipReasonCode ReasonCode { get; init; }
 
-    /// <summary>
-    /// User-facing sentence. Where the manifest states a reason of its own
-    /// (<c>hosts.revit.readiness.&lt;path&gt;.reason</c>) that reason is surfaced rather than replaced —
-    /// dead-ending on an empty import is the failure this rule exists to prevent (HPS-36).
-    /// </summary>
-    /// <remarks>
-    /// Surfaced, not echoed. The manifest's token is translated by
-    /// <see cref="ReadinessReasons.ClauseFor"/> before it reaches this string: that field's
-    /// vocabulary is open until v19 and includes <c>emit_threw:&lt;stage&gt;</c>, so interpolating it
-    /// verbatim put internal stage identifiers in front of curators.
-    /// </remarks>
     public required string Reason { get; init; }
 }
 
-/// <summary>
-/// Everything Revit's <c>ProjectPosition</c> needs, decided here rather than in the shim.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The shim used to pass <c>0.0, 0.0</c> for elevation and angle. Both happened to be right for the
-/// bundles on hand, and neither was derived from anything — so the day a bundle published a rotated
-/// grid the model would have been placed wrong with no test to notice. Deriving them here puts the
-/// rule where the headless suite can reach it (HPS-02): the shim is left with the unit conversion
-/// Revit's API demands and nothing else.
-/// </para>
-/// </remarks>
 public sealed class SurveyPointPlacement
 {
-    /// <summary>The pre-derived origin, applied verbatim (HPS-33).</summary>
     public required GeoOrigin Origin { get; init; }
 
-    /// <summary>
-    /// <c>revit.georeference.grid_rotation_deg</c> in radians, which is what Revit's
-    /// <c>ProjectPosition</c> takes.
-    /// </summary>
     public required double AngleRadians { get; init; }
 
-    /// <summary>
-    /// The survey point's elevation. Always zero, and zero for a stated reason.
-    /// </summary>
-    /// <remarks>
-    /// The manifest's <c>revit.units_note</c> states the contract: apply the origin verbatim as the
-    /// survey point and <em>set its Elev to 0</em>, because every artifact's Z is ABSOLUTE
-    /// orthometric height rather than an offset from the origin. A non-zero survey-point elevation
-    /// would therefore double-count it. The v19 origin block publishes no height of its own; if it
-    /// ever does, this is the single place that has to change.
-    /// </remarks>
     public double ElevationM => 0.0;
 }
 
-/// <summary>
-/// The project's latitude and longitude, from <c>hosts.revit.georeference.origin</c> and nothing
-/// else (<c>HPS-33</c>).
-/// </summary>
-/// <remarks>
-/// <para>
-/// Degrees as published, radians as Revit's <c>SiteLocation</c> takes them. The conversion is a unit
-/// conversion and lives here with the check that the pair is on the globe, so the shim does no
-/// arithmetic of its own. The sign goes through as published: Revit's own site database lists Boston
-/// at -71.0335, west negative, which is the convention the manifest's lon/lat pair is in.
-/// </para>
-/// <para>
-/// The time zone is <c>location.time_zone</c>'s and nobody else's. Revit derives one from longitude
-/// whenever a latitude or longitude is set — documented on both setters — so the shim writes the
-/// zone after the coordinates: the published one when there is one, and otherwise the project's own,
-/// read before the coordinates moved it. A zone derived from longitude is derivation whoever does
-/// it, and it is wrong wherever a political boundary is not a meridian.
-/// </para>
-/// </remarks>
 public sealed class SiteLocationPlacement
 {
     public required double LatitudeDeg { get; init; }
@@ -459,23 +145,10 @@ public sealed class SiteLocationPlacement
 
     public double LongitudeRadians => LongitudeDeg * Math.PI / 180.0;
 
-    /// <summary>The published zone, or <c>null</c> when the bundle published none this host can read.</summary>
     public SiteTimeZone? TimeZone { get; init; }
 
-    /// <summary>
-    /// The hours to write to <c>SiteLocation.TimeZone</c>: the published zone's, or else
-    /// <paramref name="projectHours"/>, the zone the project had before the coordinates changed.
-    /// </summary>
     public double TimeZoneToWrite(double projectHours) => TimeZone?.RevitHours ?? projectHours;
 
-    /// <summary>
-    /// The import log's line for this step, given the zone the project had before it ran.
-    /// </summary>
-    /// <remarks>
-    /// Here rather than in the shim because every branch of it is a decision this host made about a
-    /// published value — kept, applied, wrapped, or refused — and a decision is asserted headlessly
-    /// (<c>HPS-02</c>).
-    /// </remarks>
     public string LogLine(double projectHours)
     {
         string placed = string.Format(
@@ -492,40 +165,16 @@ public sealed class SiteLocationPlacement
     }
 }
 
-/// <summary>
-/// A published time zone fitted to Revit's <c>SiteLocation.TimeZone</c>, which takes −12 to +12
-/// hours and nothing past them.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Zones east of +12 exist — Tonga and Samoa at +13, Kiritimati at +14, the Chatham Islands at
-/// +12:45 — and the spec publishes their offsets unclamped and leaves the fit to the host
-/// (<c>spec/format.md</c> §4.1). This host wraps by 24 hours: +13 is written as −11. The clock time
-/// is kept and the date moves one day later, which moves the sun by less than half a degree.
-/// Clamping to +12 instead would keep the date and put every hour of a sun study one hour out, which
-/// is the larger error by far. No zone lies west of −12; one that did would wrap the other way.
-/// </para>
-/// <para>
-/// An offset of a day or more is not a time zone, so there is nothing to wrap and nothing is written.
-/// </para>
-/// </remarks>
 public sealed class SiteTimeZone
 {
-    /// <summary>The largest offset, either side of UTC, that Revit accepts.</summary>
     public const double RevitLimitHours = 12.0;
 
     public required PublishedTimeZone Published { get; init; }
 
-    /// <summary>The hours written to Revit, or <c>null</c> when the published offset is not a zone.</summary>
     public double? RevitHours => Wrap(Published.UtcOffsetStandardH);
 
-    /// <summary>True when the offset had to be moved by a day to fit Revit's range.</summary>
     public bool IsWrapped => RevitHours is { } hours && hours != Published.UtcOffsetStandardH;
 
-    /// <summary>
-    /// The log's sentences about the zone: what was written and why, or why the project's own,
-    /// <paramref name="projectHours"/>, was kept.
-    /// </summary>
     public string Describe(double projectHours)
     {
         double published = Published.UtcOffsetStandardH;
@@ -576,7 +225,6 @@ public sealed class SiteTimeZone
             : hours;
     }
 
-    /// <summary><c>UTC-7</c>, <c>UTC+5:30</c>, <c>UTC+12:45</c>, <c>UTC+0</c>.</summary>
     public static string FormatUtc(double hours)
     {
         int minutes = (int)Math.Round(Math.Abs(hours) * 60.0, MidpointRounding.AwayFromZero);
@@ -587,295 +235,89 @@ public sealed class SiteTimeZone
     }
 }
 
-/// <summary>One resolved action, with its bundle entry already checked to exist.</summary>
 public sealed class ImportStep
 {
     public required ImportStepKind Kind { get; init; }
 
-    /// <summary>The entry name inside the bundle zip, exactly as the archive spells it.</summary>
     public string EntryName { get; init; } = string.Empty;
 
-    /// <summary>The unit the artifact's coordinates are in — what Revit's import dialog needs.</summary>
     public LinearUnit Units { get; init; } = LinearUnit.Unspecified;
 
-    /// <summary>
-    /// The unit of the file's heights where the pointer states it apart from <see cref="Units"/> —
-    /// the published contours only. <see cref="LinearUnit.Unspecified"/> everywhere else.
-    /// </summary>
     public LinearUnit VerticalUnits { get; init; } = LinearUnit.Unspecified;
 
-    /// <summary>
-    /// How a vector layer's coordinates reach <see cref="Frame"/>: lon/lat, absolute in the origin's
-    /// CRS, or offsets about it, each in its file's unit. Populated only for the vector layers.
-    /// </summary>
     public LayerFrame? Layer { get; init; }
 
-    /// <summary>
-    /// The manifest's sha256 for <see cref="EntryName"/>, or <c>null</c> when it advertised none.
-    /// </summary>
-    /// <remarks>
-    /// Carried on the step so the integrity check cannot be skipped by an extraction that never
-    /// looked the hash up. <c>null</c> is <em>unknown</em>, which is a v18 bundle and a skip — never
-    /// "corrupt", and never "verified" (HPS-27, ⛔HPS-28).
-    /// </remarks>
     public string? ExpectedSha256 { get; init; }
 
-    /// <summary>
-    /// Populated only for <see cref="ImportStepKind.ContextBuildings"/>: the same import also links the
-    /// site model, so the conversion this step makes of the IFC is saved as the link's companion
-    /// (<see cref="SiteCompanionPath"/>) and the link step finds it there rather than converting the
-    /// IFC a second time.
-    /// </summary>
     public bool SavesLinkCompanion { get; init; }
 
-    /// <summary>
-    /// How long the file extracted for this step has to survive: its kind's
-    /// (<see cref="ImportStepKinds.LifetimeOf"/>), or as long as the link's for a step that saves the
-    /// link's companion, because the companion is written beside the IFC it was converted from and
-    /// the link reads both from there.
-    /// </summary>
     public ExtractionLifetime Lifetime => SavesLinkCompanion
         ? ImportStepKinds.LifetimeOf(ImportStepKind.LinkSiteIfc)
         : ImportStepKinds.LifetimeOf(Kind);
 
-    /// <summary>Populated only for <see cref="ImportStepKind.SetSharedCoordinates"/>.</summary>
     public SurveyPointPlacement? SurveyPoint { get; init; }
 
-    /// <summary>Populated only for <see cref="ImportStepKind.SetSiteLocation"/>.</summary>
     public SiteLocationPlacement? SiteLocation { get; init; }
 
-    /// <summary>
-    /// The frame this step's geometry is placed in, for the kinds whose artifact does not arrive
-    /// already local.
-    /// </summary>
-    /// <remarks>
-    /// Carried on the step rather than looked up by the shim, and only ever non-<c>null</c> where
-    /// the planner has already checked the frame CAN place that artifact. That check is the
-    /// interesting part — a foot-tier origin cannot place a metric UTM layer, and the failure is a
-    /// site quietly built two thousand kilometres away — so it belongs where a headless test reaches
-    /// it (<c>HPS-02</c>).
-    /// </remarks>
     public SiteFrame? Frame { get; init; }
 
-    /// <summary>Populated only for <see cref="ImportStepKind.ImageryDrape"/>.</summary>
     public DrapePlacement? Drape { get; init; }
 
-    /// <summary>
-    /// The closed vocabulary this step's <c>foliage_type</c> values are drawn from, as
-    /// <c>landcover.tree_points.foliage_type_vocabulary</c> published it. Read only for
-    /// <see cref="ImportStepKind.Vegetation"/>.
-    /// </summary>
-    /// <remarks>
-    /// Carried on the step for the same reason <see cref="Frame"/> and <see cref="Crop"/> are: the
-    /// manifest is the authority on what the CSV's values mean, and the shim must not have to go
-    /// looking for it. <c>null</c> is <em>the manifest named no vocabulary</em> — never "the one
-    /// this build knows" — and it is what every bundle before MPB 1.2.0 carries
-    /// (<see cref="FoliageTypes"/>).
-    /// </remarks>
     public string? FoliageTypeVocabulary { get; init; }
 
-    /// <summary>
-    /// The area of interest, in local metres — points outside it are dropped before Revit sees
-    /// them. Populated for <see cref="ImportStepKind.ToposurfaceFromPointsFile"/> and
-    /// <see cref="ImportStepKind.ToposurfaceFromSurfaceTin"/>.
-    /// </summary>
-    /// <remarks>
-    /// Carried on the step for the same reason <see cref="Frame"/> and <see cref="Drape"/> are: the
-    /// decision — including the decision that there is no usable window — is the interesting part,
-    /// and it belongs where a headless test reaches it. <c>null</c> is a stated degradation, never a
-    /// refusal: the bbox-free fill guard still runs on either path (<see cref="SurfaceGrid"/> for
-    /// the points file, <see cref="SurfaceTinSanitiser"/> for the TIN). Why the crop is needed at
-    /// all is <see cref="SurfacePointsSanitiser"/>.
-    /// </remarks>
     public SurfaceCropWindow? Crop { get; init; }
 
-    /// <summary>
-    /// Why <see cref="Crop"/> is <c>null</c> on a step that crops — <see cref="SurfaceCrop.Unavailable"/>'s
-    /// clause, for the log line — or <c>null</c> when there is a window or the step never crops.
-    /// </summary>
     public string? CropUnavailable { get; init; }
 
-    /// <summary>
-    /// The type the terrain is built on. Read only for
-    /// <see cref="ImportStepKind.ToposurfaceFromPointsFile"/> and
-    /// <see cref="ImportStepKind.ToposurfaceFromSurfaceTin"/>, the two kinds that build a toposolid.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ <see cref="TerrainToposolidType.Imagery"/> exactly when the plan also carries an
-    /// <see cref="ImportStepKind.ImageryDrape"/> step. Retyping a toposolid makes Revit rebuild the
-    /// whole terrain's element relations, and that cost tracks the point count: 409 s on an
-    /// 80,372-point terrain, the largest single cost in the import, spent on a type the terrain step
-    /// could have used at creation. Only a drape that will run earns the imagery type — one with no
-    /// photograph to carry would lay a blank layer over the ground.
-    /// </remarks>
     public TerrainToposolidType ToposolidType { get; init; } = TerrainToposolidType.Project;
 
-    /// <summary>
-    /// Whether this plan's drape will run after this step and drape what it cuts. Read only for the
-    /// two kinds that cut subdivisions (<see cref="GroundCuts.LayerOf"/>).
-    /// </summary>
-    /// <remarks>
-    /// ⛔ The same decision as <see cref="ToposolidType"/>, one step later, and for the same reason: a
-    /// type given after the fact is a retype, and a retype is what costs. Only a drape that will run
-    /// earns it, since a type whose photograph layer nothing fills is a blank layer over the ground.
-    /// What the polygon step does with it is <see cref="SubDivisionMaterial.TakesTypeAtCut"/>.
-    /// </remarks>
     public bool DrapePlanned { get; init; }
 
-    /// <summary>
-    /// Populated only for <see cref="ImportStepKind.AttributionAndProvenance"/>: what the attribution view says
-    /// and what the provenance record stores, both copied from the manifest.
-    /// </summary>
     public ProjectProvenance? Provenance { get; init; }
 
-    /// <summary>
-    /// Populated only for <see cref="ImportStepKind.FloodZones"/> and <see cref="ImportStepKind.SteepGround"/>:
-    /// which plan the layer is drawn on, and what its zone key quotes.
-    /// </summary>
     public HazardPlanFacts? Hazard { get; init; }
 
-    /// <summary>
-    /// Populated only for <see cref="ImportStepKind.LandUse"/> and <see cref="ImportStepKind.LandCover"/>:
-    /// which build's land plan the layer is drawn on, and the rectangle it is cropped to.
-    /// </summary>
     public LandPlanFacts? LandPlan { get; init; }
 
-    /// <summary>
-    /// The vertical datum this step's heights are stated in, for the kinds that place a height on the
-    /// ground (<see cref="HeightDatums.PlacesHeights"/>), and for the two that build the ground, where
-    /// it is the datum the ground records. <c>null</c> for every other kind.
-    /// </summary>
-    /// <remarks>
-    /// Carried on the step for the reason <see cref="Frame"/> is: which statement covers which file —
-    /// a layer's own, a host-neutral pointer's, or this host's block's for the files it points at — is
-    /// the decision, and it belongs where a headless test reaches it. The shim only compares it with
-    /// the ground it finds (<see cref="HeightDatums.Refusal"/>).
-    /// </remarks>
     public StatedDatum? HeightDatum { get; init; }
 
-    /// <summary>
-    /// The height every height in this step's file is measured above, in metres in
-    /// <see cref="HeightDatum"/>: the site origin's height, as an MPB 3.0 manifest states it, for a
-    /// host-ready file, whose heights are metres above the site origin (<c>spec/format.md</c> §4).
-    /// <c>null</c> for a file whose heights are absolute, which is every file of a 2.x bundle.
-    /// </summary>
-    /// <remarks>
-    /// Stated, never worked out: the importer adds it to each height as published (<c>HPS-33</c>).
-    /// </remarks>
     public double? HeightBaseM { get; init; }
 
-    /// <summary>
-    /// The fidelity levels the entry this step reads publishes, or <c>null</c> for one that is MAX
-    /// only: what the import window offers for the step's row. The entry's own, even when the step
-    /// reads a pointer level's file.
-    /// </summary>
     public FidelityLevels? Levels { get; init; }
 
-    /// <summary>
-    /// What the file this step reads holds, as an MPB 3.0 catalog counts it, in the unit this step's
-    /// measured cost is per (<see cref="SlowStepNotice.CostOfCatalogCount"/>); <c>null</c> for a 2.x
-    /// plan, whose levels state their own cost, for a file whose catalog entry states no count, and for
-    /// a step with no measured cost per unit. The import window's estimate and its budget read it
-    /// (<see cref="ImportChecklist.EstimateNote"/>); the step still reads the whole file.
-    /// </summary>
     public CostDriver? Cost { get; internal set; }
 
-    /// <summary>The level this step imports, as applied; <c>null</c> for an entry with no levels.</summary>
     public AppliedLevel? Level { get; init; }
 
-    /// <summary>
-    /// The sha256 of every file a placed artifact's entry publishes at any level — its own, which is
-    /// MAX, and each pointer level's — whichever of them this step reads. Empty for an entry with no
-    /// levels. How the tree step tells this build at another level from an earlier build
-    /// (<see cref="TreeIdentity.Decide"/>).
-    /// </summary>
     public IReadOnlyList<string> LevelFiles { get; init; } = [];
 
-    /// <summary>
-    /// The table of the GeoPackage <see cref="EntryName"/> names that this step reads, for a vector layer
-    /// read from the shared carrier; <c>null</c> for a step that reads its file whole. The entry is then
-    /// the whole carrier, shared by every layer it holds.
-    /// </summary>
     public string? Table { get; init; }
 
-    /// <summary>
-    /// True when the GeoPackage holds this layer alone, so the importer reads its one table whatever the
-    /// file names it (<see cref="BundleArtifact.SoleTable"/>); false where <see cref="Table"/> is read
-    /// by name.
-    /// </summary>
     public bool SoleTable { get; init; }
 
-    /// <summary>
-    /// For a carrier step, the same layer planned from its own GeoJSON file, or <c>null</c> where the
-    /// bundle lists none or this host could not place it. What the importer reads when the carrier has
-    /// no table for the layer, cannot be opened, or is stored in a CRS other than this project's: a
-    /// carrier that cannot be shown to be in the frame is not placed, and a layer the same bundle can
-    /// place by its other file is not lost to it (<c>HPS-53</c>).
-    /// </summary>
     public ImportStep? GeoJsonFallback { get; init; }
 
-    /// <summary>
-    /// The ODbL role of what this step makes, from the manifest's <c>file_entries</c> for the file it
-    /// reads (and, for a carrier step, the GeoJSON it may fall back to). Set by the planner once the
-    /// plan is final; <see cref="OdblRole.None"/> for a step that makes no content. A step of role
-    /// <see cref="OdblRole.Database"/> files everything it makes in an ODbL container
-    /// (<see cref="OdblContent"/>).
-    /// </summary>
     public OdblRole Odbl { get; internal set; } = OdblRole.None;
 }
 
-/// <summary>
-/// What a hazard step needs beyond its file: the build whose plan it draws on, the rectangle that
-/// plan is cropped to, and the published words its zone key quotes.
-/// </summary>
-/// <remarks>
-/// Decided by the planner, where a test reaches it, and carried on the step for the reason
-/// <see cref="ImportStep.Frame"/> is: the shim draws, and does not go looking in the manifest.
-/// </remarks>
 public sealed class HazardPlanFacts
 {
-    /// <summary>The build token the plan is named and stamped with (<see cref="HazardPlan.BuildToken"/>).</summary>
     public required string Build { get; init; }
 
-    /// <summary>
-    /// The drape's rectangle as published, in frame-local metres, or <c>null</c> when this import has
-    /// no drape to crop to — the plan is then drawn uncropped, and the log says so.
-    /// </summary>
     public FootprintExtent? Crop { get; init; }
 
-    /// <summary><c>flood.nfhl</c>'s facts, for the key's heading. Read for flood zones only.</summary>
     public FloodMap? FloodMap { get; init; }
 
-    /// <summary>The manifest's steep-ground threshold as written. Read for steep ground only.</summary>
     public string? Threshold { get; init; }
 }
 
-/// <summary>
-/// What a land plan step needs beyond its file: the build whose plan it draws, and the rectangle that
-/// plan is cropped to (<see cref="Core.LandPlan"/>).
-/// </summary>
-/// <remarks>Decided by the planner, where a test reaches it, as <see cref="HazardPlanFacts"/> are.</remarks>
 public sealed class LandPlanFacts
 {
-    /// <summary>The build token the plan is named and stamped with (<see cref="Core.LandPlan.BuildToken"/>).</summary>
     public required string Build { get; init; }
 
-    /// <summary>
-    /// The order's published rectangle in frame-local metres — the one the hazard plan is cropped to —
-    /// or <c>null</c> when this import has none: the plan is then drawn uncropped, and the log says so.
-    /// </summary>
     public FootprintExtent? Crop { get; init; }
 }
 
-/// <summary>
-/// The pure decision about what to import from a bundle, and what to tell the user about the rest.
-/// </summary>
-/// <remarks>
-/// Produced by <see cref="BundleImportPlanner"/> from a manifest plus the archive's entry list —
-/// no Revit, no file system, no zip reader. The add-in shim executes it. That split is what makes
-/// the import policy — which topo path wins, what happens when the points file is missing, whether
-/// shared coordinates get set — assertable in a headless test (HPS-02, HPS-42).
-/// </remarks>
 public sealed class BundleImportPlan
 {
     public required bool CanImport { get; init; }
@@ -884,13 +326,7 @@ public sealed class BundleImportPlan
 
     public IReadOnlyList<SkippedImport> Skipped { get; init; } = [];
 
-    /// <summary>
-    /// Set when the bundle carries artifacts this v1 does not import — the LandXML (a Civil 3D
-    /// deliverable) and the 2-D contour linework. Listed so the UI can say they are in the zip
-    /// rather than leaving the user to wonder.
-    /// </summary>
     public IReadOnlyList<string> AvailableButNotImported { get; init; } = [];
 
-    /// <summary>Why nothing can be imported, when <see cref="CanImport"/> is false.</summary>
     public string BlockedReason { get; init; } = string.Empty;
 }

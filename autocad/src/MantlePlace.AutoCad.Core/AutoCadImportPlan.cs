@@ -4,71 +4,44 @@ using MantlePlace.Core;
 
 namespace MantlePlace.AutoCad;
 
-/// <summary>The parts of an AutoCAD order (format.md §6.9, §6.10).</summary>
 public enum AutoCadPart
 {
-    /// <summary>The published contour linework, placed as polylines.</summary>
     Contours,
 
-    /// <summary>The terrain source for a Civil 3D surface.</summary>
     Surface,
 
-    /// <summary>The aerial image, placed at its published insertion.</summary>
     Aerial,
 
-    /// <summary>The public-record layers, each placed as polylines on its own layer (from 1.19.0).</summary>
     Records,
 
-    /// <summary>The site linework, placed as polylines on the layers the file names (from 1.19.0).</summary>
     Linework,
 }
 
-/// <summary>The layers an import puts its content on. Names are spelled out (root CLAUDE.md, naming).</summary>
 public static class AutoCadLayers
 {
-    /// <summary>The contours' layer.</summary>
     public const string Contours = "MantlePlace-Contours";
 
-    /// <summary>The aerial image's layer.</summary>
     public const string Aerial = "MantlePlace-Aerial";
 
-    /// <summary>The Civil 3D surface's layer.</summary>
     public const string Surface = "MantlePlace-Surface";
 
-    /// <summary>The site linework's layer, and the stem of the layers the file names.</summary>
     public const string Linework = "MantlePlace-Linework";
 
-    /// <summary>The stem of each public-record layer's own layer.</summary>
     public const string RecordsStem = "MantlePlace-Records-";
 
-    /// <summary>The characters AutoCAD refuses in a layer name.</summary>
     private const string RefusedInLayerName = "<>/\\\":;?*|,=`";
 
-    /// <summary>The layer a public-record layer goes on: the stem and the record's name, as the block states it.</summary>
     public static string Record(string name) => RecordsStem + Safe(name);
 
-    /// <summary>
-    /// The layer a linework polyline goes on: under <see cref="Linework"/>, by the layer the file puts it on,
-    /// and the linework layer itself for DXF's default layer <c>0</c> or none.
-    /// </summary>
     public static string LineworkLayer(string fileLayer) =>
         string.IsNullOrEmpty(fileLayer) || string.Equals(fileLayer, "0", StringComparison.Ordinal)
             ? Linework
             : $"{Linework}-{Safe(fileLayer)}";
 
-    /// <summary>A name with every character AutoCAD refuses in a layer name, and any control character, made a dash.</summary>
     private static string Safe(string name) =>
         string.Concat((name ?? string.Empty).Select(c => char.IsControl(c) || RefusedInLayerName.Contains(c, StringComparison.Ordinal) ? '-' : c));
 }
 
-/// <summary>One file a placed part goes in from: its pointer's values, verbatim, and the layer it goes on.</summary>
-/// <param name="Name">The record layer's name, as the block states it.</param>
-/// <param name="Path">The archive path.</param>
-/// <param name="Sha256">The digest the file is checked against before anything is drawn.</param>
-/// <param name="HorizontalFrame">The file's horizontal frame, as stated.</param>
-/// <param name="HorizontalUnits">The file's X/Y unit token, from its pointer.</param>
-/// <param name="VerticalUnits">The file's height unit token, from its pointer.</param>
-/// <param name="Layer">The layer it goes on.</param>
 public sealed record PlannedFile(
     string Name,
     string Path,
@@ -78,118 +51,65 @@ public sealed record PlannedFile(
     string VerticalUnits,
     string Layer);
 
-/// <summary>
-/// What the shell observed of the drawing's geographic location: whether one is set, the coordinate
-/// system it names in AutoCAD's own words, and the EPSG code AutoCAD resolves that to, if any.
-/// </summary>
-/// <param name="IsSet">Whether the drawing has a geographic location.</param>
-/// <param name="CoordinateSystem">The coordinate system the location names, as AutoCAD names it.</param>
-/// <param name="Epsg">The EPSG code AutoCAD gives for it, or <c>null</c> when it gives none.</param>
 public sealed record DrawingGeolocation(bool IsSet, string CoordinateSystem, int? Epsg)
 {
-    /// <summary>A drawing with no geographic location.</summary>
     public static DrawingGeolocation None { get; } = new(false, string.Empty, null);
 
-    /// <summary>A drawing whose geographic location names <paramref name="coordinateSystem"/>.</summary>
     public static DrawingGeolocation Located(string coordinateSystem, int? epsg) => new(true, coordinateSystem ?? string.Empty, epsg);
 }
 
-/// <summary>
-/// What the Civil 3D part observed of the drawing's coordinate zone: the code Civil 3D's drawing settings
-/// name (<c>SettingsUnitZone.CoordinateSystemCode</c>), and the EPSG code AutoCAD's own coordinate library
-/// gives for that code, if any. Read only: the plugin never sets the zone.
-/// </summary>
-/// <param name="Code">The zone code, in Civil 3D's own spelling (<c>CO83-NF</c>), or <see cref="NoZoneCode"/>.</param>
-/// <param name="Epsg">The EPSG code AutoCAD gives for the zone, or <c>null</c> when it gives none.</param>
 public sealed record DrawingZone(string Code, int? Epsg)
 {
-    /// <summary>The code a drawing with no coordinate zone reads (autocad/docs/api-record.md).</summary>
     public const string NoZoneCode = ".";
 
-    /// <summary>A Civil 3D drawing with no coordinate zone.</summary>
     public static DrawingZone None { get; } = new(NoZoneCode, null);
 
-    /// <summary>Whether the drawing has a zone: a code that is neither blank nor <see cref="NoZoneCode"/>.</summary>
     public bool IsSet => !string.IsNullOrWhiteSpace(Code) && !string.Equals(Code, NoZoneCode, StringComparison.Ordinal);
 }
 
-/// <summary>One part of the plan: placed, or skipped with the sentence that says why.</summary>
 public sealed class PlannedPart
 {
-    /// <summary>Which part.</summary>
     public required AutoCadPart Kind { get; init; }
 
-    /// <summary>Whether the import places it.</summary>
     public required bool Place { get; init; }
 
-    /// <summary>Whether the bundle ships it: its verdict says present and the block points at it.</summary>
     public required bool Present { get; init; }
 
-    /// <summary>The verdict's own <c>present</c>.</summary>
     public required bool Ready { get; init; }
 
-    /// <summary>Whether the block states a verdict for the part at all; a block from before the part existed states none.</summary>
     public bool VerdictStated { get; init; }
 
-    /// <summary>The verdict's stated reason, verbatim, or <c>null</c>.</summary>
     public string? Reason { get; init; }
 
-    /// <summary>The host part the verdict names, or <c>null</c>.</summary>
     public string? Requires { get; init; }
 
-    /// <summary>What the user is told about this part.</summary>
     public required string Sentence { get; init; }
 
-    /// <summary>The archive path, or empty when the block names none.</summary>
     public string Path { get; init; } = string.Empty;
 
-    /// <summary>The digest the file is checked against before it is placed.</summary>
     public string Sha256 { get; init; } = string.Empty;
 
-    /// <summary>The pointer's format word.</summary>
     public string Format { get; init; } = string.Empty;
 
-    /// <summary>The file's horizontal frame, as stated.</summary>
     public string HorizontalFrame { get; init; } = string.Empty;
 
-    /// <summary>The file's X/Y unit token, from its pointer.</summary>
     public string HorizontalUnits { get; init; } = string.Empty;
 
-    /// <summary>The file's height unit token, from its pointer.</summary>
     public string VerticalUnits { get; init; } = string.Empty;
 
-    /// <summary>The layer it goes on, when placed.</summary>
     public string Layer { get; init; } = string.Empty;
 
-    /// <summary>The aerial's insertion, verbatim, when the block publishes one.</summary>
     public AerialInsertion? Insertion { get; init; }
 
-    /// <summary>The public-record layers' files, in the order the block lists them; empty for every other part.</summary>
     public IReadOnlyList<PlannedFile> Files { get; init; } = [];
 
-    /// <summary>
-    /// The public-record layers a 3.x bundle does not hold while it holds others, each as <c>Name (why)</c>;
-    /// said after the layers placed. Empty for every other part, and for a 2.x bundle.
-    /// </summary>
     public IReadOnlyList<string> NotInBundle { get; init; } = [];
 }
 
-/// <summary>What one press does to the drawing: refuse, or place these parts and skip those, saying why.</summary>
 public sealed class AutoCadImportPlan
 {
     private static readonly AutoCadPart[] Order = [AutoCadPart.Contours, AutoCadPart.Surface, AutoCadPart.Aerial, AutoCadPart.Records, AutoCadPart.Linework];
 
-    /// <summary>
-    /// The promised files of a 3.0 bundle that this plugin's parts read, by path from the bundle root:
-    /// what a 3.0 download asks for (<see cref="DownloadLevels.BuildRequestBody"/>). Declared once,
-    /// here, beside the parts.
-    /// </summary>
-    /// <remarks>
-    /// Each <see cref="AutoCadPart"/>'s source in the order's frame, the georeferenced family: the
-    /// contours, the terrain's LandXML for the Civil 3D surface, the aerial image, every public-record
-    /// layer as linework, and the site linework. <c>Manifest.json</c> comes with every download, named
-    /// or not.
-    /// </remarks>
     public static IReadOnlyList<string> ThreeFiles { get; } =
     [
         "Elevation/Contours.dxf",
@@ -207,59 +127,37 @@ public sealed class AutoCadImportPlan
         "Site/Site.dxf",
     ];
 
-    /// <summary>The order this bundle is, still named on a refusal (HPS-37).</summary>
     public string OrderId { get; init; } = string.Empty;
 
-    /// <summary>The packaging job.</summary>
     public string JobId { get; init; } = string.Empty;
 
-    /// <summary>Why nothing is imported, or empty.</summary>
     public string Refusal { get; init; } = string.Empty;
 
-    /// <summary>Whether the import refuses as a whole.</summary>
     public bool IsRefused => Refusal.Length > 0;
 
-    /// <summary>The block's file frame.</summary>
     public AutoCadFileFrame Frame { get; init; } = AutoCadFileFrame.None;
 
-    /// <summary>
-    /// Whether the plan is an MPB 3.x bundle's, whose frame the manifest states once for every georeferenced
-    /// file: the surface step then holds its LandXML's own units and coordinate system to it
-    /// (<see cref="LandXmlSurface"/>). A 2.x plan's surface is read as it always was.
-    /// </summary>
     public bool FromThree { get; init; }
 
-    /// <summary>The unit the drawing's X and Y are in for this order: the block's, never the drawing's.</summary>
     public string HorizontalUnit => Frame.HorizontalUnit;
 
-    /// <summary>The unit the placed heights are in: the block's.</summary>
     public string VerticalUnit => Frame.VerticalUnit;
 
-    /// <summary>The parts, in the order the summary lists them. Empty on a refusal.</summary>
     public IReadOnlyList<PlannedPart> Parts { get; init; } = [];
 
-    /// <summary>What the user is told beside the parts: where the order lands, in which units.</summary>
     public IReadOnlyList<string> Notices { get; init; } = [];
 
-    /// <summary>The parts not placed.</summary>
     public IEnumerable<PlannedPart> Skipped => Parts.Where(p => !p.Place);
 
-    /// <summary>One part of the plan; on a refusal, a skipped part that says the import refused.</summary>
     public PlannedPart Part(AutoCadPart kind) =>
         Parts.FirstOrDefault(p => p.Kind == kind)
         ?? new PlannedPart { Kind = kind, Place = false, Present = false, Ready = false, Sentence = Refusal };
 
-    /// <summary>The whole plan as the text the shell shows: before an import, or with nothing yet run.</summary>
     public string Summary() => Summary(null);
 
-    /// <summary>
-    /// The whole plan as the text the shell shows after an import, each part's sentence replaced by what
-    /// running it said, where it said anything (a count placed, or why a placed part failed).
-    /// </summary>
     public string Summary(IReadOnlyDictionary<AutoCadPart, string>? outcomes)
     {
         StringBuilder text = new();
-        // A file refused before its manifest was read has no order to name.
         text.Append(OrderId.Length == 0 ? "Mantle Place" : string.Create(CultureInfo.InvariantCulture, $"Mantle Place order {OrderId}"));
         if (IsRefused)
         {
@@ -282,49 +180,18 @@ public sealed class AutoCadImportPlan
     }
 }
 
-/// <summary>Finds a part's file in the bundle zip by its manifest path, by the shared index's rule (HPS-32).</summary>
 public static class AutoCadBundleEntries
 {
-    /// <summary>The archive's own spelling of <paramref name="manifestPath"/>, or <c>null</c> when it is not carried unambiguously.</summary>
     public static string? Resolve(IEnumerable<string> entryNames, string manifestPath) =>
         new BundleEntryIndex(entryNames).Resolve(manifestPath);
 }
 
-/// <summary>
-/// Decides what importing an order into a drawing does, from the <c>hosts.autocad</c> block alone. Pure.
-/// </summary>
-/// <remarks>
-/// <para>
-/// ⛔ <b>Every placement value comes from the block and none is derived</b> (root CLAUDE.md, the
-/// boundary that keeps this client thin). The drawing's coordinates are the files' coordinates, in the
-/// block's units; the drawing's own unit setting is not read. The aerial goes in at its published
-/// insertion. A file the block does not show to be in its frame is skipped, never reprojected (HPS-53).
-/// </para>
-/// <para>
-/// The facts taken from the drawing are its geographic location and, in Civil 3D, its coordinate zone, and
-/// only to refuse: either one in another coordinate system than the order's means the order's coordinates
-/// mean something else in this drawing, so nothing is imported and the refusal names both. A drawing with
-/// neither set is placed at the order's coordinates, and a notice says so; the plugin never sets either for
-/// the user (the Civil 3D spike's rule, autocad/docs/api-record.md). The zone is compared by the EPSG code
-/// AutoCAD's own coordinate library gives for it, never by a spelling this plugin maps. A local frame's
-/// files are offsets in no coordinate system, so no location or zone agrees with them.
-/// </para>
-/// <para>
-/// Parts are decided apart: an absent one is skipped with its stated reason, echoed and never matched on
-/// (format.md §6.1), and the others are planned as usual. The surface is Civil 3D's; plain AutoCAD, and
-/// Civil 3D's "as AutoCAD" mode, say it needs Civil 3D from its own verdict, and Civil 3D builds it as a TIN
-/// surface from the block's terrain source.
-/// </para>
-/// </remarks>
 public static class AutoCadImportPlanner
 {
-    /// <summary>The one host part a surface verdict names that this plugin knows.</summary>
     public const string Civil3dPart = "civil3d";
 
-    /// <summary>The surface format this plugin knows (format.md §6.9).</summary>
     public const string LandXmlFormat = "landxml";
 
-    /// <summary>The aerial format this plugin can insert.</summary>
     public const string AerialPngFormat = "png-rgb-8bit";
 
     private const string AbsoluteProjected = "absolute_projected";
@@ -332,15 +199,9 @@ public static class AutoCadImportPlanner
     private const string AbsoluteHeights = "absolute";
     private const string EpsgPrefix = "EPSG:";
 
-    /// <summary>
-    /// Reads <paramref name="manifestJson"/> and plans it. Never throws. <paramref name="civil3d"/> is the
-    /// drawing's zone when the Civil 3D part is on, and <c>null</c> in plain AutoCAD and in Civil 3D's
-    /// "as AutoCAD" mode, where the part is off.
-    /// </summary>
     public static AutoCadImportPlan Plan(string manifestJson, DrawingGeolocation drawing, DrawingZone? civil3d)
         => Plan(AutoCadBlockReader.Read(manifestJson), drawing, civil3d);
 
-    /// <summary>Plans an already read manifest.</summary>
     public static AutoCadImportPlan Plan(AutoCadBlockRead read, DrawingGeolocation drawing, DrawingZone? civil3d)
     {
         ArgumentNullException.ThrowIfNull(read);
@@ -396,10 +257,8 @@ public static class AutoCadImportPlanner
         };
     }
 
-    /// <summary>What the user is told about a placed part whose placing failed: the part, and why.</summary>
     public static string FailedSentence(AutoCadPart kind, string why) => $"{Label(kind)}: not imported, because {why}";
 
-    /// <summary>What the user is told about placed contours, with the count that went in.</summary>
     public static string ContoursPlacedSentence(PlannedPart part, int placed)
     {
         ArgumentNullException.ThrowIfNull(part);
@@ -408,10 +267,6 @@ public static class AutoCadImportPlanner
             $"Contours: {placed} polylines placed on {part.Layer}, each at its height in {UnitWords(part.VerticalUnits)}.");
     }
 
-    /// <summary>
-    /// What the user is told about placed public-record layers, with the count that went in. A layer the reader
-    /// refused is left out of the layers placed and named, with its reason.
-    /// </summary>
     public static string RecordsPlacedSentence(PlannedPart part, int placed, IReadOnlyList<RefusedRecordLayer>? refused = null)
     {
         ArgumentNullException.ThrowIfNull(part);
@@ -428,10 +283,8 @@ public static class AutoCadImportPlanner
         return WithNotInBundle(sentence, part.NotInBundle);
     }
 
-    /// <summary>The words a part is called by in every sentence about it.</summary>
     internal static string LabelOf(AutoCadPart kind) => Label(kind);
 
-    /// <summary>What the user is told about placed site linework, with the count that went in and the layers it went on.</summary>
     public static string LineworkPlacedSentence(PlannedPart part, int placed, int layers)
     {
         ArgumentNullException.ThrowIfNull(part);
@@ -440,11 +293,9 @@ public static class AutoCadImportPlanner
             $"{Label(AutoCadPart.Linework)}: {placed} polylines placed on {layers} layers under {part.Layer}.");
     }
 
-    /// <summary>The name a built surface is given: spelled out, and carrying the order's id.</summary>
     public static string SurfaceName(string orderId) =>
         "MantlePlace-Surface-" + string.Concat((orderId ?? string.Empty).Select(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' ? c : '-'));
 
-    /// <summary>What the user is told about a built surface, with its name and the points Civil 3D read.</summary>
     public static string SurfacePlacedSentence(PlannedPart part, string name, int points)
     {
         ArgumentNullException.ThrowIfNull(part);
@@ -453,7 +304,6 @@ public static class AutoCadImportPlanner
             $"{Label(AutoCadPart.Surface)}: built as {name}, a TIN surface of {points} points from {part.Path}, on {part.Layer}.");
     }
 
-    /// <summary>The words a unit token is shown in, or <c>null</c> for a token this plugin does not know.</summary>
     public static string? UnitWords(string token) => token switch
     {
         "m" => "metres",
@@ -611,10 +461,6 @@ public static class AutoCadImportPlanner
         _ => "Aerial image",
     };
 
-    /// <summary>
-    /// A part a 3.x bundle leaves out, skipped with the sentence its reading gave, or <c>null</c> for a
-    /// part it holds and every part of a 2.x block, which is planned as usual.
-    /// </summary>
     private static PlannedPart? LeftOut(AutoCadBlock block, AutoCadPart kind)
     {
         if (!block.LeftOut.TryGetValue(kind, out string? sentence))
@@ -634,15 +480,12 @@ public static class AutoCadImportPlanner
         return Skip(kind, verdict, pointer, sentence);
     }
 
-    /// <summary>The records' sentence, and the layers a 3.x bundle does not hold after it.</summary>
     private static string WithNotInBundle(string sentence, IReadOnlyList<string> notInBundle) =>
         notInBundle.Count == 0 ? sentence : $"{sentence} Not in this bundle: {string.Join(", ", notInBundle)}.";
 
-    /// <summary>The part's verdict and pointer, before anything particular to the part is decided.</summary>
     private static PlannedPart? Absent(AutoCadPart kind, PartReadiness verdict, AutoCadPointer? pointer)
         => Absent(kind, verdict, pointer, pointer is not null);
 
-    /// <summary>As above, for a part whose files are not one pointer: <paramref name="namesFile"/> says whether the block names any.</summary>
     private static PlannedPart? Absent(AutoCadPart kind, PartReadiness verdict, AutoCadPointer? pointer, bool namesFile)
     {
         string label = Label(kind);
@@ -702,16 +545,9 @@ public static class AutoCadImportPlanner
         Insertion = pointer.Insertion,
     };
 
-    /// <summary>The frame word a file in this block's frame states.</summary>
     private static string FrameWord(AutoCadFileFrame frame) =>
         string.Equals(frame.Type, AutoCadFileFrame.Local, StringComparison.Ordinal) ? LocalEnu : AbsoluteProjected;
 
-    /// <summary>Why a file is not shown to be in the block's frame and units, or <c>null</c>.</summary>
-    /// <remarks>
-    /// <paramref name="absoluteHeights"/> asks, beside both units, that the heights be stated as real heights,
-    /// as the contours' and the surface's are. The records and the linework state their two units and no
-    /// height reference (format.md §6.10), so for them the units alone are checked.
-    /// </remarks>
     private static string? OutOfFrame(AutoCadPointer pointer, AutoCadFileFrame frame, bool hasHeights, bool absoluteHeights = true)
     {
         if (!string.Equals(pointer.HorizontalFrame, FrameWord(frame), StringComparison.Ordinal))
@@ -778,8 +614,6 @@ public static class AutoCadImportPlanner
         AutoCadPointer? pointer = block.Surface;
         string label = Label(AutoCadPart.Surface);
 
-        // The host part comes first: a plain AutoCAD reader answers from the verdict's `requires` whether
-        // or not the file shipped, so an absent surface still says what it would need (format.md §6.9).
         string? requires = verdict.Requires;
         bool known = string.Equals(requires, Civil3dPart, StringComparison.Ordinal);
         string? unavailable = requires is null
@@ -829,15 +663,12 @@ public static class AutoCadImportPlanner
             return absent;
         }
 
-        // A 2.x block's one aerial format is the PNG; a 3.0 bundle's aerial is the GeoTIFF (A14).
         string format = block.FromThree ? AutoCadThreeView.GeoTiffFormat : AerialPngFormat;
         if (!string.Equals(pointer!.Format, format, StringComparison.Ordinal))
         {
             return Skip(AutoCadPart.Aerial, verdict, pointer, $"{label}: not imported, because its format \"{pointer.Format}\" is one this plugin does not know.");
         }
 
-        // A 3.x aerial is held to the frame and unit its file states, as every other 3.x part is; a 2.x
-        // block's aerial is planned as it always was.
         if (block.FromThree && OutOfFrame(pointer, frame, hasHeights: false) is { } why)
         {
             return Skip(AutoCadPart.Aerial, verdict, pointer, $"{label}: not imported, because {why}.");
@@ -863,12 +694,6 @@ public static class AutoCadImportPlanner
                 $"{label}: placed on {AutoCadLayers.Aerial}, its lower-left corner at {insertion.X}, {insertion.Y}, {insertion.Width} by {insertion.Height} {UnitWords(frame.HorizontalUnit)}, rotated {insertion.RotationDeg} degrees."));
     }
 
-    /// <summary>The public-record layers, each on its own layer.</summary>
-    /// <remarks>
-    /// The set is placed whole or not at all, as the producer publishes it (format.md §6.10): a layer the block
-    /// does not show to be in its frame and units skips every record layer, naming it, and the other parts are
-    /// decided apart. Each layer goes on its own layer, named by the record's name as the block states it.
-    /// </remarks>
     private static PlannedPart PlanRecords(AutoCadBlock block, AutoCadFileFrame frame)
     {
         PartReadiness verdict = block.RecordsReadiness;
@@ -916,7 +741,6 @@ public static class AutoCadImportPlanner
         };
     }
 
-    /// <summary>The site linework, as polylines under its layer, by the layers the drawing names.</summary>
     private static PlannedPart PlanLinework(AutoCadBlock block, AutoCadFileFrame frame)
     {
         PartReadiness verdict = block.LineworkReadiness;

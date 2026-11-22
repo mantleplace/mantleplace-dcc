@@ -127,7 +127,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MantlePlace|Automation")
 	static FMantlePlaceCuratorResolution ResolveCuratorExtent();
 
-	/** ResolveCuratorExtent over any world. Not a UFUNCTION: the automation test hands it a throwaway world. */
 	static FMantlePlaceCuratorResolution ResolveCuratorExtentInWorld(UWorld* World);
 
 	/**
@@ -139,6 +138,5 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "MantlePlace|Automation")
 	static AActor* PlaceExtentBox();
 
-	/** PlaceExtentBox over any world. Not a UFUNCTION. */
 	static AActor* PlaceExtentBoxInWorld(UWorld* World);
 };

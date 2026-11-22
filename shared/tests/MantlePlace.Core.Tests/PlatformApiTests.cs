@@ -9,10 +9,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The generated Platform API client and the Revit calls made through it: the client header on every
-/// request, the 426 update prompt, and the requests the plugin sent before, sent unchanged.
-/// </summary>
 internal static class PlatformApiTests
 {
     private const string Base = "https://test.example";
@@ -224,7 +220,6 @@ internal static class PlatformApiTests
                 string name = Path.GetFileName(file);
                 string text = File.ReadAllText(file);
 
-                // MantlePlaceEndpoints holds the configured defaults a curator may override, not a call.
                 if (name != "MantlePlaceEndpoints.cs")
                 {
                     run.False(text.Contains("/api/v1/", StringComparison.Ordinal), name + " builds no Platform API path");
@@ -300,7 +295,6 @@ internal static class PlatformApiTests
     private static string Grant(string accessToken)
         => $$"""{ "access_token": "{{accessToken}}", "refresh_token": "stored-refresh", "expires_in": 3600, "user": { "email": "c@example.com" } }""";
 
-    /// <summary>A session renewed from a stored refresh token, through the handler, and a vault on it.</summary>
     private static (AuthSession Session, VaultClient Vault) SignedIn(Recorder handler)
     {
         MantlePlaceEndpoints endpoints = new()
@@ -316,7 +310,6 @@ internal static class PlatformApiTests
         return (session, new VaultClient(endpoints, session, handler));
     }
 
-    /// <summary>How many operations the vendored spec serves.</summary>
     private static int SpecOperationCount()
     {
         string? generated = RepoTree.Find("shared/src/MantlePlace.PlatformApi/Generated");
@@ -326,7 +319,6 @@ internal static class PlatformApiTests
             .Sum(path => path.Value.EnumerateObject().Count(member => verbs.Contains(member.Name)));
     }
 
-    /// <summary>An argument a generated call accepts: a string, a body, or the token.</summary>
     private static object? Dummy(ParameterInfo parameter)
     {
         Type type = parameter.ParameterType;

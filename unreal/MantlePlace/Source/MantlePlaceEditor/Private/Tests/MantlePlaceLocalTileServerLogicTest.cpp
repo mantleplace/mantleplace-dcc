@@ -8,15 +8,6 @@
 
 #include "Misc/Paths.h"
 
-// The local tile server hosts an extracted bundle on loopback so Cesium for Unreal can read the
-// user's own download. Its request handler is a catch-all preprocessor: every path a client sends
-// arrives here, and the only thing between that path and the rest of the machine's filesystem is
-// the containment check asserted below.
-//
-// None of this needs a router, a bound port or a directory on disk, which is why it can be asserted
-// at all. The server itself still cannot be tested here — it needs the HTTP module and a real
-// listener — and that is exactly the split: the shim binds and reads, the logic decides.
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMantlePlaceLocalTileServerLogicTest,
     "MantlePlace.Import.LocalTileServerLogic",
@@ -26,12 +17,9 @@ bool FMantlePlaceLocalTileServerLogicTest::RunTest(const FString& Parameters)
 {
 	using FLogic = FMantlePlaceLocalTileServerLogic;
 
-	// Built the way the server builds it at Start(), so the assertions hold on every platform rather
-	// than only on the one that spells absolute paths this way.
 	FString Root = FPaths::ConvertRelativePathToFull(TEXT("/mantleplace/served"));
 	FPaths::NormalizeDirectoryName(Root);
 
-	// --- A tile path resolves under the root ---------------------------------------------------
 	{
 		const FString Resolved = FLogic::ResolveUnderRoot(Root, TEXT("/Terrain/14/5615/11520.terrain"));
 		TestTrue(TEXT("a quantized-mesh tile resolves"), !Resolved.IsEmpty());
@@ -39,8 +27,6 @@ bool FMantlePlaceLocalTileServerLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("it names the tile the request asked for"),
 			Resolved.EndsWith(TEXT("/Terrain/14/5615/11520.terrain")));
 
-		// The two other things the bundle serves, so the arbitrary {z}/{x}/{y} depth above is not
-		// the only shape covered.
 		TestTrue(TEXT("layer.json resolves"),
 			FLogic::ResolveUnderRoot(Root, TEXT("/Terrain/layer.json"))
 				.EndsWith(TEXT("/Terrain/layer.json")));
@@ -49,8 +35,6 @@ bool FMantlePlaceLocalTileServerLogicTest::RunTest(const FString& Parameters)
 				.EndsWith(TEXT("/Imagery/Imagery.png")));
 	}
 
-	// --- Traversal is refused ------------------------------------------------------------------
-	// This is the assertion the split was made for. Every one of these is a path a client can send.
 	{
 		TestEqual(TEXT("a bare parent reference is refused"),
 			FLogic::ResolveUnderRoot(Root, TEXT("/../secret.txt")), FString());
@@ -62,7 +46,6 @@ bool FMantlePlaceLocalTileServerLogicTest::RunTest(const FString& Parameters)
 			FLogic::ResolveUnderRoot(Root, TEXT("/Terrain/..")), FString());
 	}
 
-	// --- Nothing to serve ----------------------------------------------------------------------
 	{
 		TestEqual(TEXT("an empty path is refused"),
 			FLogic::ResolveUnderRoot(Root, FString()), FString());
@@ -72,11 +55,6 @@ bool FMantlePlaceLocalTileServerLogicTest::RunTest(const FString& Parameters)
 			FLogic::ResolveUnderRoot(FString(), TEXT("/Terrain/layer.json")), FString());
 	}
 
-	// --- Two roots do not bleed into each other -------------------------------------------------
-	// `<root>-other` shares the served root's spelling as a prefix. The `..` rule above means no
-	// request can actually walk from one to the other today, so this is belt-and-braces — but the
-	// trailing slash in the containment guard is what makes it so, and it is also what refuses the
-	// root itself above. Asserted so a future loosening of the `..` rule cannot quietly remove both.
 	{
 		FString Sibling = FPaths::ConvertRelativePathToFull(TEXT("/mantleplace/served-other"));
 		FPaths::NormalizeDirectoryName(Sibling);
@@ -86,24 +64,17 @@ bool FMantlePlaceLocalTileServerLogicTest::RunTest(const FString& Parameters)
 			Resolved.StartsWith(Root + TEXT("/")));
 	}
 
-	// --- The `..` rule is cruder than containment, on purpose ------------------------------------
-	// A file whose own name contains two dots is refused even though it is inside the root. Recorded
-	// as a deliberate trade rather than left to be discovered: the served tree is machine-generated
-	// by the pipeline, so nothing that should be served carries such a name, and a traversal that
-	// never reaches the path arithmetic cannot be let through by a mistake in it.
 	{
 		TestEqual(TEXT("a legitimate name containing two dots is refused with the traversals"),
 			FLogic::ResolveUnderRoot(Root, TEXT("/Terrain/tile..terrain")), FString());
 	}
 
-	// --- Content types --------------------------------------------------------------------------
 	{
 		bool bGzip = false;
 
 		TestEqual(TEXT("a quantized-mesh tile is served as quantized mesh"),
 			FLogic::ContentTypeFor(TEXT("/served/Terrain/14/5615/11520.terrain"), bGzip),
 			FString(TEXT("application/vnd.quantized-mesh;extensions=octvertexnormals")));
-		// The load-bearing half: CTB writes these gzipped on disk. Declared, never re-compressed.
 		TestTrue(TEXT("and is declared gzip, because that is how CTB wrote it"), bGzip);
 
 		TestEqual(TEXT("layer.json is json"),
@@ -121,14 +92,12 @@ bool FMantlePlaceLocalTileServerLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("jpeg is jpeg"),
 			FLogic::ContentTypeFor(TEXT("/served/a.jpeg"), bGzip), FString(TEXT("image/jpeg")));
 
-		// Extensions arrive from a request path, so case is not ours to assume.
 		bGzip = false;
 		TestEqual(TEXT("an upper-case extension is recognised"),
 			FLogic::ContentTypeFor(TEXT("/served/Terrain/1.TERRAIN"), bGzip),
 			FString(TEXT("application/vnd.quantized-mesh;extensions=octvertexnormals")));
 		TestTrue(TEXT("and still declares gzip"), bGzip);
 
-		// Unknown is octet-stream rather than a guess: a wrong content type is worse than none.
 		bGzip = true;
 		TestEqual(TEXT("an unknown extension is octet-stream"),
 			FLogic::ContentTypeFor(TEXT("/served/notes.txt"), bGzip),
@@ -145,4 +114,4 @@ bool FMantlePlaceLocalTileServerLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

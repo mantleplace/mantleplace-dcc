@@ -4,15 +4,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The <c>PackageContents.xml</c> that makes the release zip an Autodesk application bundle
-/// (ADR 0018: the storefront installs the same zip the curator copies by hand).
-/// </summary>
-/// <remarks>
-/// Packaging and the storefront cannot run in CI, so what can be pinned is the manifest itself:
-/// well-formed, carrying the declared version, a module path for every supported year, and an icon
-/// that is a file in this tree.
-/// </remarks>
 internal static class AutodeskBundleManifestTests
 {
     internal static int Run()
@@ -65,9 +56,6 @@ internal static class AutodeskBundleManifestTests
 
         run.Case("each year is its own Components group, and no two years share one, because Revit reads one requirement per group", () =>
         {
-            // revit-1.1.0 put all three years in one group, and Revit read only the first
-            // RuntimeRequirements of it: the bundle loaded in 2025 and in neither 2026 nor 2027. Rebuilt
-            // with one group per year it loaded in both (8 of 8 checks on each, on the build machine).
             int[] years = [2025, 2026, 2027];
             XElement[] groups = [.. Parse("1.0.0", years).Root!.Elements("Components")];
 
@@ -158,7 +146,6 @@ internal static class AutodeskBundleManifestTests
         return run.Report("AutodeskBundleManifest");
     }
 
-    /// <summary>The version this build declares: the Core assembly's, minus the commit metadata.</summary>
     internal static string DeclaredVersion()
         => BuildIdentity.Parse(
             typeof(AutodeskBundleManifest).Assembly

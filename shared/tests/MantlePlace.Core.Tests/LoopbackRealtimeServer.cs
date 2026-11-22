@@ -7,15 +7,6 @@ using System.Threading.Channels;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// An in-process WebSocket server on the loopback, standing in for Realtime so the client is driven
-/// over a real socket with nothing leaving the machine (<c>HPS-42</c>).
-/// </summary>
-/// <remarks>
-/// A raw <see cref="TcpListener"/> and the RFC 6455 upgrade by hand, then
-/// <see cref="WebSocket.CreateFromStream(Stream, WebSocketCreationOptions)"/>: no http.sys URL
-/// reservation on Windows, no package, and the same code on the Linux runner.
-/// </remarks>
 internal sealed class LoopbackRealtimeServer : IDisposable
 {
     private const string AcceptGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -35,10 +26,8 @@ internal sealed class LoopbackRealtimeServer : IDisposable
 
     internal int Port { get; }
 
-    /// <summary>The Realtime location a client is configured with.</summary>
     internal string Location => $"ws://127.0.0.1:{Port}/realtime/v1";
 
-    /// <summary>How many sockets have been opened against this server.</summary>
     internal int Connections
     {
         get
@@ -50,7 +39,6 @@ internal sealed class LoopbackRealtimeServer : IDisposable
         }
     }
 
-    /// <summary>The next socket a client opens, or <c>null</c> when none arrives in time.</summary>
     internal async Task<ServerConnection?> AcceptAsync(TimeSpan timeout)
     {
         using CancellationTokenSource wait = new(timeout);
@@ -150,7 +138,6 @@ internal sealed class LoopbackRealtimeServer : IDisposable
     }
 }
 
-/// <summary>One socket a client opened: what it sent, in order, and a way to answer or drop it.</summary>
 internal sealed class ServerConnection
 {
     private readonly TcpClient _client;
@@ -166,13 +153,8 @@ internal sealed class ServerConnection
         _ = ReceiveLoopAsync();
     }
 
-    /// <summary>The path and query the client asked for.</summary>
     internal string RequestTarget { get; }
 
-    /// <summary>
-    /// The next frame the client sent that is not a heartbeat (answered here, as Realtime would), or
-    /// <c>null</c> when the socket closed or nothing came in time.
-    /// </summary>
     internal async Task<RealtimeMessage?> NextAsync(TimeSpan timeout)
     {
         using CancellationTokenSource wait = new(timeout);
@@ -199,11 +181,9 @@ internal sealed class ServerConnection
         }
     }
 
-    /// <summary>Answers a push with <c>ok</c>, by its ref.</summary>
     internal Task ReplyOkAsync(RealtimeMessage push)
         => SendAsync($$"""{"topic":"{{push.Topic}}","event":"phx_reply","ref":"{{push.Ref}}","join_ref":"{{push.JoinRef}}","payload":{"status":"ok","response":{ } } }""");
 
-    /// <summary>Answers a push with <c>error</c> and a reason, by its ref.</summary>
     internal Task ReplyErrorAsync(RealtimeMessage push, string reason)
         => SendAsync($$"""{"topic":"{{push.Topic}}","event":"phx_reply","ref":"{{push.Ref}}","join_ref":"{{push.JoinRef}}","payload":{"status":"error","response":{"reason":"{{reason}}"} } }""");
 
@@ -220,10 +200,8 @@ internal sealed class ServerConnection
         }
     }
 
-    /// <summary>Drops the TCP connection under the socket, with no close handshake: a network loss.</summary>
     internal void Drop()
     {
-        // A dropped connection has no socket left; dropping it again (the server's dispose) is a no-op.
         if (_client.Client is { } socket)
         {
             try

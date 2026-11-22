@@ -4,24 +4,15 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Client;
 
-/// <summary>The bearer session the export routes are called on: a token, and a way to renew it.</summary>
-/// <remarks>
-/// The seam exists so the 401 handling is asserted without a platform (<c>HPS-42</c>). The real one is
-/// <see cref="AuthBearerSession"/>.
-/// </remarks>
 public interface IBearerSession
 {
-    /// <summary>The access token, or empty when there is none.</summary>
     string AccessToken { get; }
 
-    /// <summary>Whether a renewal is possible: a refresh token is held.</summary>
     bool CanRenewSession { get; }
 
-    /// <summary>Renews the access token. <c>true</c> when it now holds a fresh one.</summary>
     Task<bool> RefreshAsync(CancellationToken cancellationToken);
 }
 
-/// <summary>The sign-in this process holds, as the bearer session the export routes use.</summary>
 public sealed class AuthBearerSession : IBearerSession
 {
     private readonly AuthSession _session;
@@ -39,38 +30,23 @@ public sealed class AuthBearerSession : IBearerSession
         => (await _session.RefreshAsync(cancellationToken).ConfigureAwait(false)).Succeeded;
 }
 
-/// <summary>How an export call ended.</summary>
 public enum ExportCallOutcome
 {
-    /// <summary>The platform answered 2xx and the body read.</summary>
     Ok,
 
-    /// <summary>The transition was refused here, before any request: a plugin bug, not the platform.</summary>
     RefusedLocally,
 
-    /// <summary>The web moved the export first. Not a fault.</summary>
     WebMovedFirst,
 
-    /// <summary>Still over the rate limit after waiting as told.</summary>
     RateLimited,
 
-    /// <summary>A 5xx, or no answer: try again later.</summary>
     RetryLater,
 
-    /// <summary>Another 4xx: the same request will not succeed.</summary>
     Rejected,
 
-    /// <summary>A 401 that a refresh did not cure, or no session to refresh: sign in again.</summary>
     SignInNeeded,
 }
 
-/// <summary>The result of one export call: the value on success, or what happened.</summary>
-/// <param name="Outcome">How it ended.</param>
-/// <param name="Value">The parsed body, for <see cref="ExportCallOutcome.Ok"/>.</param>
-/// <param name="Message">A sentence for the log or the curator; empty on success.</param>
-/// <param name="Status">The HTTP status of the last answer, or 0 when there was none.</param>
-/// <param name="Code">The refusal code of the last answer, or empty.</param>
-/// <param name="RetryAfterMs">With <see cref="ExportCallOutcome.RateLimited"/>, the wait the platform last asked for.</param>
 public readonly record struct ExportCall<T>(
     ExportCallOutcome Outcome,
     T? Value,
@@ -81,7 +57,6 @@ public readonly record struct ExportCall<T>(
 {
     public bool Succeeded => Outcome == ExportCallOutcome.Ok;
 
-    /// <summary>Everything but success and the web having moved the export first.</summary>
     public bool IsFault => Outcome is not (ExportCallOutcome.Ok or ExportCallOutcome.WebMovedFirst);
 
     internal static ExportCall<T> Ok(T value, int status)
@@ -91,32 +66,10 @@ public readonly record struct ExportCall<T>(
         => new(outcome, default, message, status, code, retryAfterMs);
 }
 
-/// <summary>
-/// The two v1 export routes, on the bearer session: list the exports for a connection, and advance
-/// one (the platform export contract, section 5).
-/// </summary>
-/// <remarks>
-/// <para>
-/// Every decision is made in <c>MantlePlace.Core</c> (<see cref="ExportRefusals"/>,
-/// <see cref="ExportLifecycle"/>, <see cref="HostExports"/>); what is here is the request, the single
-/// refresh on a 401, and the wait on a 429.
-/// </para>
-/// <para>
-/// <b>401</b>: the session renews once and the request is sent again; a second 401, a failed renewal,
-/// or no renewal to try is <see cref="ExportCallOutcome.SignInNeeded"/>. <b>409
-/// invalid_transition</b> is <see cref="ExportCallOutcome.WebMovedFirst"/>, not a fault. <b>429</b>
-/// waits <c>retryAfterMs</c> (capped, so a hostile value cannot park the plugin) and retries, at
-/// most <see cref="MaxRateLimitRetries"/> times. Any other code is handled by its status class, and a
-/// 5xx is reported rather than retried here: the caller owns when to ask again, because it knows
-/// whether anyone is still waiting.
-/// </para>
-/// </remarks>
 public sealed class ExportsClient : IExportRoutes
 {
-    /// <summary>How many times a 429 is waited out before it is reported.</summary>
     public const int MaxRateLimitRetries = 2;
 
-    /// <summary>The longest single wait honoured, whatever the platform asks.</summary>
     public const int MaxRetryAfterMs = 30_000;
 
     private readonly MantlePlaceEndpoints _endpoints;
@@ -124,10 +77,6 @@ public sealed class ExportsClient : IExportRoutes
     private readonly HttpMessageHandler? _handler;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
 
-    /// <param name="endpoints">Where the routes are.</param>
-    /// <param name="session">The sign-in.</param>
-    /// <param name="handler">A message handler, for tests; the shared client when <c>null</c>.</param>
-    /// <param name="delay">How a 429 is waited out, for tests; a real delay when <c>null</c>.</param>
     public ExportsClient(
         MantlePlaceEndpoints endpoints,
         IBearerSession session,
@@ -140,7 +89,6 @@ public sealed class ExportsClient : IExportRoutes
         _delay = delay ?? Task.Delay;
     }
 
-    /// <summary>The exports that target this connection and are not terminal, oldest first.</summary>
     public async Task<ExportCall<IReadOnlyList<HostExport>>> ListAsync(
         string connectionId,
         CancellationToken cancellationToken)
@@ -159,13 +107,6 @@ public sealed class ExportsClient : IExportRoutes
             : ExportCall<IReadOnlyList<HostExport>>.Ok(exports, call.Status);
     }
 
-    /// <summary>
-    /// Moves one export forward. The transition is checked against the export's status first, and a
-    /// move the contract refuses is not sent.
-    /// </summary>
-    /// <param name="current">The export as this plugin last read it.</param>
-    /// <param name="connectionId">This plugin's connection id.</param>
-    /// <param name="transition">What to move it to.</param>
     public async Task<ExportCall<HostExport>> AdvanceAsync(
         HostExport current,
         string connectionId,
@@ -195,7 +136,6 @@ public sealed class ExportsClient : IExportRoutes
 
     private string Base() => _endpoints.ApiBaseUrl.TrimEnd('/');
 
-    /// <summary>One Platform API call through the generated client, with the renewal and 429 rules above.</summary>
     private async Task<(ExportCall<string> Call, string Body)> SendAsync(
         Func<PlatformApiClient, CancellationToken, Task> operation,
         string? jsonBody,
@@ -247,8 +187,6 @@ public sealed class ExportsClient : IExportRoutes
             switch (refusal.Kind)
             {
                 case ExportRefusalKind.SignInNeeded:
-                    // Once only, and only when a renewal is possible. Asking the platform beats
-                    // guessing from the clock, and a second 401 means the renewal did not take.
                     if (!refreshed && _session.CanRenewSession)
                     {
                         refreshed = true;

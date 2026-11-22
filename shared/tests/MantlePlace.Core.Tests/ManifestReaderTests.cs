@@ -1,16 +1,7 @@
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Reader behaviour that is this host's own rather than the shared contract's — and the regression
-/// cases for defects found in adversarial review of the first tranche.
-/// </summary>
 internal static class ManifestReaderTests
 {
-    /// <summary>
-    /// The shape of the real 2 km × 2 km metric purchase <c>a043aaeb-…</c>: a v19 manifest whose
-    /// <c>delivery</c> block carries no <c>local_origin</c> at all, and whose origin is published in
-    /// the <c>revit</c> block instead.
-    /// </summary>
     private const string MetricTierOwnBlock = """
           {
             "version": "1.0.0",
@@ -50,10 +41,6 @@ internal static class ManifestReaderTests
 
         run.Case("a readiness block alone means materialized, so its reasons survive (HPS-36)", () =>
         {
-            // Regression: this manifest used to be refused outright, which threw away all three
-            // stated reasons and left the user a generic "nothing here yet". Worse, adding an
-            // unrelated `unreal` block made it behave correctly — Revit's compliance with its own
-            // rule was contingent on another host being materialized.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
                   {
@@ -90,8 +77,6 @@ internal static class ManifestReaderTests
 
         run.Case("a bundle materialized only for a host this plugin doesn't know is still readable", () =>
         {
-            // The host-block list cannot be the only materialization signal — max/ and blender/ are
-            // already anticipated in this repo's layout.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """{"version": "1.0.0", "hosts": {"max": {"readiness": {"mesh": {"present": true}}}}}""");
             run.True(manifest.IsValid, $"accepted ({manifest.Error})");
@@ -120,9 +105,6 @@ internal static class ManifestReaderTests
 
         run.Case("metadata is not transplanted from a detail block naming a different file", () =>
         {
-            // Regression: `layout` and the (still undeclared) detail block can drift. Pairing
-            // B.csv's path with A.csv's units imports a metric file at 0.3048 m/unit — a site 3.28×
-            // too small, with nothing on screen to suggest it.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
                   {
@@ -179,21 +161,10 @@ internal static class ManifestReaderTests
 
         run.Case("a version that is not a semver string is refused, whatever its JSON type", () =>
         {
-            // Replaces "the version gate truncates, matching the Unreal reference". That case
-            // pinned truncate-not-round because a non-integral version like 17.6 would otherwise be
-            // rounded up and accepted by one host while the other refused it — a divergence inside
-            // a ⛔ gate. MPB versions are STRINGS, so there is no number to round and the
-            // divergence is unrepresentable rather than merely policed.
-            //
-            // What has to hold now is that nothing outside the semver family is coerced into one.
-            // A number is the whole integer pre-history and is refused wholesale; the near-misses
-            // are refused because "close to a version" is how a reader ends up dual-parsing.
             string[] notVersions =
                 ["19", "18.9", "\"19\"", "\"1.0\"", "\"1.0.0-rc1\"", "\"01.0.0\"", "null", "true"];
             foreach (string version in notVersions)
             {
-                // Concatenated rather than interpolated: the literal ends in three consecutive
-                // closing braces, which an interpolated raw string reads as a placeholder.
                 BundleManifest manifest = BundleManifestReader.Parse(
                     """{"version": """ + version + """, "hosts": {"unreal": {}}}""");
                 run.False(manifest.IsValid, $"{version} refused");
@@ -207,8 +178,6 @@ internal static class ManifestReaderTests
 
         run.Case("unit_system is recorded but does not gate the import", () =>
         {
-            // Nothing reads UnitSystem — scale comes from linear_unit and per-artifact units. A
-            // refusal here would make every bundle unimportable the day web adds a third token.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """{"version": "1.0.0", "hosts": {"unreal": {}}, "delivery": {"unit_system": "nautical", "linear_unit": "m"}}""");
             run.True(manifest.IsValid, $"accepted ({manifest.Error})");
@@ -225,8 +194,6 @@ internal static class ManifestReaderTests
 
         run.Case("a present v19 revit deliverable surfaces its own hash (HPS-33, HPS-34)", () =>
         {
-            // v19 publishes the Revit deliverables' hashes in the `revit` block and nowhere else —
-            // `elevation.points_csv` still carries none. A host reads its OWN block (HPS-33).
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
                   {
@@ -263,8 +230,6 @@ internal static class ManifestReaderTests
 
         run.Case("a present v19 revit deliverable with no sha256 is refused (HPS-34)", () =>
         {
-            // The v19 schema makes sha256 REQUIRED on each present revit.* sub-object, so a missing
-            // one is a producer bug. Importing unverifiable bytes is worse than not importing.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
                   {
@@ -291,8 +256,6 @@ internal static class ManifestReaderTests
 
         run.Case("below v19 an absent hash is valid-but-unverified, never corrupt", () =>
         {
-            // The floor still accepts v18, which published no Revit hashes at all. The version gate
-            // on the required-hash rule is what keeps those bundles importable.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
                   {
@@ -322,10 +285,6 @@ internal static class ManifestReaderTests
 
         run.Case("a metric-tier bundle is georeferenced from this host's own block", () =>
         {
-            // The defect this closes: `delivery.local_origin` is emitted on the `local_ft` tier
-            // ALONE, so on the metric tier the reader found no survey point, the planner skipped
-            // SetSharedCoordinates, and the model was imported not georeferenced at all — while the
-            // origin sat in the manifest addressed to this host by name.
             BundleManifest manifest = BundleManifestReader.Parse(MetricTierOwnBlock);
 
             run.True(manifest.IsValid, $"accepted ({manifest.Error})");
@@ -340,9 +299,6 @@ internal static class ManifestReaderTests
 
         run.Case("the own block wins over delivery.local_origin when both are published", () =>
         {
-            // The ordering is what makes reading the own block a complete fix with no coordinated
-            // pipeline release: a `local_ft` bundle carrying both is placed from the block addressed
-            // to this host, and one carrying only the delivery origin still works (below).
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
                   {
@@ -389,8 +345,6 @@ internal static class ManifestReaderTests
 
         run.Case("delivery.local_origin still works when there is no own block", () =>
         {
-            // The fallback. Every `local_ft` bundle already in a curator's hands predates the v19
-            // block; dropping this path would break them to fix the metric tier.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
                   {
@@ -448,8 +402,6 @@ internal static class ManifestReaderTests
 
         run.Case("an unreadable origin linear_unit fails the bundle closed (HPS-35)", () =>
         {
-            // Same rule as delivery.linear_unit, for the same reason: the origin positions
-            // everything in the bundle, so a scale nobody can read is not one artifact's problem.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
                   {
@@ -527,10 +479,6 @@ internal static class ManifestReaderTests
             run.Equal(manifest.DemBounds?.Epsg ?? 0, 32613, "and their CRS");
             run.True(manifest.ImageryDrapeExtent is null, "no imagery.drape block means no drape extent");
 
-            // The sibling host's block carries both an extent and a sha for this very file. Reading
-            // either would be the read-a-sibling's-block failure exactly, so the drape stays
-
-            // unverified instead.
             run.True(manifest.ImageryDrape?.Sha256 is null, "unreal.imagery_drape.sha256 is not read");
         });
 
@@ -650,9 +598,6 @@ internal static class ManifestReaderTests
 
         run.Case("a time zone under hosts.revit is not the published one", () =>
         {
-            // The platform publishes the zone at the top level because it describes the place, and a
-            // host block is this host's frame. Reading it from under hosts.revit would be reading a
-            // field nobody publishes there.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """{"version": "1.1.0", "hosts": {"revit": {"georeference": {"time_zone": {"iana": "America/Denver", "utc_offset_standard_h": -7}}}}}""");
 
@@ -661,10 +606,6 @@ internal static class ManifestReaderTests
 
         run.Case("attribution.order_id is the order only when attribution.job_id stands beside it (MPB 1.7.0)", () =>
         {
-            // Before 1.7.0 the key was emitted undeclared and held the packaging JOB id; 1.7.0 declares
-            // it the order and adds attribution.job_id, whose absence marks the old meaning. A job id
-            // changes on every rebuild, so joining a vault row on it would address the wrong one: an
-            // old bundle with no top-level order_id gives no order at all.
             const string Old = """, "attribution": {"order_id": "job-7", "sources": []}""";
             const string New = """, "attribution": {"job_id": "job-7", "order_id": "ord-3", "sources": []}""";
             const string NewUnknown = """, "attribution": {"job_id": "job-7", "order_id": null, "sources": []}""";
@@ -676,10 +617,6 @@ internal static class ManifestReaderTests
             run.Equal(OrderIdOf("1.6.0", TopLevel + Old), "ord-1", "the top-level order_id wins over an old bundle's key");
             run.Equal(OrderIdOf("1.7.0", TopLevel + New), "ord-1", "and over a new one's");
 
-            // Filing is not joining. Every earlier import filed an old bundle -- its cache folder and
-            // the stem its elements are stamped with -- under the id attribution.order_id carries, so
-            // that stays its identity key: filed anywhere else, a re-import would be a stranger to
-            // the ground it already placed.
             run.Equal(FilingKeyOf("1.6.0", Old), "job-7", "an old bundle is still filed under the id it always was");
             run.Equal(FilingKeyOf("1.7.0", New), "ord-3", "a new one under its order");
             run.Equal(FilingKeyOf("1.7.0", NewUnknown), string.Empty, "a null order files nothing");
@@ -688,9 +625,6 @@ internal static class ManifestReaderTests
 
         run.Case("a shared layer split by geometry family gives each consumer the family it places (MPB 1.7.0)", () =>
         {
-            // One file per family, and every row read. The four layers cut as subdivisions are drawn
-            // from areas and take the polygon file; the road centrelines are drawn from lines and take
-            // the line file; wherever in the rows each sits. A row naming no family is the whole layer.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
                   {
@@ -722,8 +656,6 @@ internal static class ManifestReaderTests
 
         run.Case("a split layer with no file of the family its consumer places gives that consumer nothing", () =>
         {
-            // A line file is not a water body and points are drawn by nothing here: a consumer never
-            // takes another family's file, as it never takes another format.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
                   {
@@ -747,10 +679,6 @@ internal static class ManifestReaderTests
 
         run.Case("a family this build does not know, or one written wrongly, is read as the whole layer", () =>
         {
-            // compatibility.md section 3: a value nobody taught this reader is not a statement that the
-            // file holds nothing it places. The file is read like one naming no family, and each
-            // feature is kept or passed over by its own geometry, as in an unsplit file. A file naming
-            // the wanted family exactly still wins wherever it sits.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
                   {
@@ -777,10 +705,6 @@ internal static class ManifestReaderTests
 
         run.Case("a row with no path is passed over when a layer's file is chosen", () =>
         {
-            // A row with no path points at nothing. It neither ends the search for a later row that
-            // does, nor stands in for one as the whole layer. A layer whose only file of the wanted
-            // family has no path is a broken pointer, not a layer with nothing to place, so it keeps
-            // the vault's remedy.
             BundleManifest manifest = BundleManifestReader.Parse(
                 """
                   {

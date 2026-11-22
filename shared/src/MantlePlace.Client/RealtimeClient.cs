@@ -5,69 +5,27 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Client;
 
-/// <summary>Where the Realtime client is.</summary>
 public enum RealtimeState
 {
-    /// <summary>Not started, or not configured: nothing is connected.</summary>
     Off,
 
-    /// <summary>Opening the socket.</summary>
     Connecting,
 
-    /// <summary>The socket is open and the join is unanswered.</summary>
     Joining,
 
-    /// <summary>Joined, presence tracked, row changes flowing.</summary>
     Subscribed,
 
-    /// <summary>The socket dropped or the channel failed for a moment; waiting to try again.</summary>
     Retrying,
 
-    /// <summary>The join was refused as <c>Unauthorized</c>. Final: never retried.</summary>
     Refused,
 
-    /// <summary>Stopped: untracked, left and closed.</summary>
     Stopped,
 }
 
-/// <summary>
-/// The connected host's Realtime client: it joins the curator's private channel on the signed-in
-/// session, tracks this Revit's presence there, and hears row changes (the platform export contract,
-/// sections 1 to 3). It holds only the socket and the order of things; every frame is
-/// <see cref="RealtimeFrames"/> in <c>MantlePlace.Core</c>.
-/// </summary>
-/// <remarks>
-/// <para>
-/// ⚠ <b>Every event is raised on the client's own thread</b>, a thread-pool thread that runs its loop,
-/// never the caller's. A subscriber marshals before it touches anything the host owns: in Revit, an
-/// <c>ExternalEvent</c> for the document API and the window's dispatcher for UI. A handler that throws
-/// is logged, and the loop goes on. Handlers run inside the loop, so a slow one delays the next frame:
-/// hand the work off, do not do it there.
-/// </para>
-/// <para>
-/// <b>Off without configuration.</b> With no Realtime location or no publishable key,
-/// <see cref="Start"/> returns <c>false</c>, opens nothing, and logs one line saying why, once.
-/// </para>
-/// <para>
-/// <b>Retries.</b> A join refused as <c>Unauthorized</c> is final (<see cref="RealtimeState.Refused"/>).
-/// Any other channel error, a dropped socket, or a heartbeat left unanswered closes the socket and opens
-/// a new one after <see cref="RealtimeChannel.Backoff"/>, under the same connection id, so the curator
-/// sees one Revit that blinked rather than a second one. Every <c>SUBSCRIBED</c> tracks presence again
-/// and raises <see cref="Subscribed"/>, which is the host's cue to run the catch-up.
-/// </para>
-/// <para>
-/// <b>Commands</b> (<see cref="SetAuth"/>, <see cref="Track"/>, <see cref="WatchOrder"/>,
-/// <see cref="StopWatchingOrder"/>, <see cref="StopAsync"/>) may come from any thread. They are queued to
-/// the loop and applied in order, so the socket has one writer.
-/// </para>
-/// </remarks>
 public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
 {
-    /// <summary>The heartbeat interval Supabase's clients use; Realtime drops a socket quiet for longer.</summary>
     public static readonly TimeSpan DefaultHeartbeatInterval = TimeSpan.FromSeconds(25);
 
-    // How long stop waits for the leave to be answered before it closes anyway: Revit's shutdown must
-    // not hang on a platform that has gone quiet.
     private static readonly TimeSpan LeaveWait = TimeSpan.FromSeconds(2);
 
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(15);
@@ -85,11 +43,9 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
     private bool _offLogged;
     private int _state = (int)RealtimeState.Off;
 
-    // Set at construction, or by the loop once the published route has answered.
     private string _location;
     private string _publishableKey;
 
-    // Owned by the loop once it runs.
     private string _wireTopic = string.Empty;
     private string _accessToken = string.Empty;
     private string _presence = "{}";
@@ -97,17 +53,6 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
     private long _ref;
     private int _generation;
 
-    /// <param name="location">The Realtime location (<c>realtimeUrl</c>); empty means off.</param>
-    /// <param name="publishableKey">The publishable key (<c>realtimePublishableKey</c>); empty means off.</param>
-    /// <param name="connectionId">This launch's connection id: the presence key and the exports filter.</param>
-    /// <param name="log">Where the client's one-line notes go.</param>
-    /// <param name="backoff">The wait before the nth retry, for tests; <see cref="RealtimeChannel.Backoff"/> when <c>null</c>.</param>
-    /// <param name="heartbeatInterval">For tests; <see cref="DefaultHeartbeatInterval"/> when <c>null</c>.</param>
-    /// <param name="resolve">
-    /// Where the location and key come from when none was given: asked once, on the client's own thread
-    /// after <see cref="Start"/>, so Revit's thread never waits on the network. When it answers a reason,
-    /// the client logs it and stays off. <c>null</c> keeps the given values as they are.
-    /// </param>
     public RealtimeClient(
         string location,
         string publishableKey,
@@ -126,14 +71,6 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
         _heartbeat = heartbeatInterval ?? DefaultHeartbeatInterval;
     }
 
-    /// <summary>
-    /// The client for the endpoints and this launch's connection id: the local override when one is set,
-    /// otherwise the location and key the platform publishes (<see cref="RealtimeLocator"/>).
-    /// </summary>
-    /// <param name="endpoints">The loaded endpoints.</param>
-    /// <param name="connectionId">This launch's connection id.</param>
-    /// <param name="log">Where the client's one-line notes go.</param>
-    /// <param name="routeHandler">For tests: the handler the published route is read through.</param>
     public static RealtimeClient For(
         MantlePlaceEndpoints endpoints,
         string connectionId,
@@ -151,30 +88,16 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
                 resolve: () => RealtimeLocator.ResolveAsync(endpoints, routeHandler));
     }
 
-    /// <summary>
-    /// Raised on every <c>SUBSCRIBED</c>, after presence is tracked: a catch-up is due. On the client's
-    /// thread.
-    /// </summary>
     public event EventHandler? Subscribed;
 
-    /// <summary>A row change on a subscribed table. On the client's thread.</summary>
     public event EventHandler<RealtimeRowChange>? RowChanged;
 
-    /// <summary>The join was refused as <c>Unauthorized</c>; the platform's words. On the client's thread.</summary>
     public event EventHandler<string>? Refused;
 
-    /// <summary>Raised whenever <see cref="State"/> changes. On the client's thread.</summary>
     public event EventHandler<RealtimeState>? StateChanged;
 
-    /// <summary>Where the client is. Safe to read from any thread.</summary>
     public RealtimeState State => (RealtimeState)Volatile.Read(ref _state);
 
-    /// <summary>
-    /// Opens the socket and joins the curator's channel on this session, tracking
-    /// <paramref name="presence"/>. <c>false</c> when it will not connect: not configured, or a token
-    /// that names no curator, or a client already stopped. A second call while running changes nothing
-    /// and returns <c>true</c>.
-    /// </summary>
     public bool Start(string accessToken, ConnectedHost presence)
     {
         lock (_gate)
@@ -209,29 +132,18 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
         }
     }
 
-    /// <summary>Re-authorises the channel with a refreshed access token; the next join uses it too.</summary>
     public void SetAuth(string accessToken) => _inbox.Writer.TryWrite(new SetAuthCommand(accessToken ?? string.Empty));
 
-    /// <summary>Re-tracks presence when the payload changed (the open document); an unchanged one sends nothing.</summary>
     public void Track(ConnectedHost presence) => _inbox.Writer.TryWrite(new TrackCommand(presence.ToJson()));
 
-    /// <summary>
-    /// Watches one order's row while its bundle builds. Realtime fixes a channel's subscriptions at the
-    /// join, so this leaves and joins again with the order added, and a catch-up follows the rejoin.
-    /// </summary>
     public void WatchOrder(string orderId)
     {
         ArgumentException.ThrowIfNullOrEmpty(orderId);
         _inbox.Writer.TryWrite(new WatchCommand(orderId));
     }
 
-    /// <summary>Drops the order subscription, by the same leave and rejoin.</summary>
     public void StopWatchingOrder() => _inbox.Writer.TryWrite(new WatchCommand(null));
 
-    /// <summary>
-    /// Untracks, leaves and closes, waiting a bounded time for the leave to be answered. Nothing
-    /// reconnects afterwards.
-    /// </summary>
     public async Task StopAsync()
     {
         Task? loop;
@@ -282,7 +194,6 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
                 RealtimeValues values = await asking.ConfigureAwait(false);
                 if (values.WhyNot is not null)
                 {
-                    // Off for this launch, as an unconfigured install is: the next launch asks again.
                     SetState(RealtimeState.Off);
                     _log(values.WhyNot);
                     return;
@@ -320,13 +231,11 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            // The loop is the client: an escape here would leave a Revit silently offline.
             _log("Connected host stopped on an unexpected error: " + ex.Message);
             SetState(RealtimeState.Stopped);
         }
     }
 
-    // One socket's life: open, join, run until it drops, fails, is refused or is stopped.
     private async Task<Session> SessionAsync(Action subscribed)
     {
         int generation = ++_generation;
@@ -396,7 +305,6 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
                         break;
                     }
 
-                    // A frame of an earlier join on this socket (one left to watch an order) is history.
                     if (message.JoinRef is not null && message.JoinRef != joinRef)
                     {
                         break;
@@ -510,7 +418,6 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
         }
     }
 
-    // Untrack and leave, wait a bounded time for the leave's answer, then close.
     private async Task LeaveAsync(ClientWebSocket socket, int generation, string joinRef, bool joined)
     {
         if (joined)
@@ -554,8 +461,6 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
         }
     }
 
-    // Applies commands while waiting on something that is not the socket (the connect, a backoff).
-    // False when a stop arrived, which ends the wait at once.
     private async Task<bool> IdleUntilAsync(Task until)
     {
         while (!until.IsCompleted)
@@ -608,7 +513,6 @@ public sealed class RealtimeClient : IConnectedChannel, IAsyncDisposable
         }
     }
 
-    // The socket's one reader: each whole text frame onto the inbox, then the end of the socket.
     private async Task PumpAsync(ClientWebSocket socket, int generation)
     {
         byte[] buffer = new byte[16 * 1024];

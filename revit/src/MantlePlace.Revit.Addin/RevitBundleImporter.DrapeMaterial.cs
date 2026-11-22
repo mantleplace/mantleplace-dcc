@@ -4,14 +4,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// The imagery drape's material: the appearance asset, the UnifiedBitmap writes and their
-// read-back.
 internal sealed partial class RevitBundleImporter
 {
-    /// <summary>
-    /// The UnifiedBitmap properties that decide whether a real-world-scaled image is a drape or a
-    /// tile, and that this plugin has never written. Logged, not set — see <see cref="Describe"/>.
-    /// </summary>
     private static readonly string[] Tiling =
     [
         UnifiedBitmap.TextureScaleLock,
@@ -22,15 +16,6 @@ internal sealed partial class RevitBundleImporter
         UnifiedBitmap.TextureWAngle,
     ];
 
-    /// <summary>
-    /// The material carrying the drape, created or reused by name.
-    /// </summary>
-    /// <remarks>
-    /// The bitmap hangs off the generic schema's diffuse slot rather than replacing the material's
-    /// colour, because that is the slot Revit renders AND shades a realistic view from. The four
-    /// real-world properties are what make it a drape rather than a tile: the image is pinned to a
-    /// rectangle of ground, so it stays put when the terrain is edited underneath it.
-    /// </remarks>
     private ElementId DrapeMaterialId(
         string name,
         string imagePath,
@@ -70,18 +55,11 @@ internal sealed partial class RevitBundleImporter
 
             Trace("  drape: " + SetString(bitmap, UnifiedBitmap.UnifiedbitmapBitmap, imagePath));
 
-            // ⚠ Read either side of the writes. texture_ScaleLock is True by default, and if it
-            // locked Y to X through the API then writing one and then the other would not mean what
-            // these four calls look like they mean. Measured: it does not — X and Y land as
-            // distinct values — but the log says so rather than the reader having to trust it.
             foreach (string untouched in Tiling)
             {
                 Trace("  drape, as found: " + Describe(bitmap, untouched));
             }
 
-            // Real-world scale is the ground the image spans; the offset is where its lower-left
-            // corner sits, measured from whichever origin the renderer uses (DrapeAnchor). Together
-            // they are the whole placement.
             (string Name, double Metres, DistanceWrite Result)[] writes =
             [
                 ("width", placement.WidthM,
@@ -121,16 +99,6 @@ internal sealed partial class RevitBundleImporter
         return materialId;
     }
 
-    /// <summary>
-    /// The material named <paramref name="name"/>, created or reused, with an appearance asset of its
-    /// own — but no photograph yet. <c>null</c> when this Revit has no asset to start one from.
-    /// </summary>
-    /// <remarks>
-    /// Split from <see cref="DrapeMaterialId"/> because the terrain step needs the material before the
-    /// drape step can write it: the imagery type's top layer has to wear SOMETHING when the ground is
-    /// created on it, and the photograph's offsets cannot be known until that ground exists to be
-    /// measured (<see cref="DrapeAnchor"/>).
-    /// </remarks>
     private Material? DrapeMaterial(string name)
     {
         Material? existing = new FilteredElementCollector(_document)
@@ -169,21 +137,6 @@ internal sealed partial class RevitBundleImporter
         return drapeMaterial;
     }
 
-    /// <summary>
-    /// Revit's own library "Generic" appearance asset, for a project that holds no appearance asset
-    /// at all. <c>null</c> when this Revit's library has none.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ A project started with no template holds none — measured in Revit 2027 on 2026-09-19: 0
-    /// appearance asset elements, where the default template holds 120. Before this fallback the
-    /// terrain step, which runs before any family has brought one in, declined the imagery type there
-    /// and the drape step paid for a retype of the whole terrain instead: the harness imports of
-    /// 2026-09-18, all into such a project, committed that retype in 129 s (2025), 107 s (2026) and
-    /// 63 s (2027) on a 74,852-point toposolid. The library has an asset named exactly
-    /// "Generic" with the generic diffuse slot the drape writes, and
-    /// <c>AppearanceAssetElement.Create</c> from it gives an editable one. Asking the library costs
-    /// several seconds (3,104 assets), which is why it is asked last.
-    /// </remarks>
     private Asset? LibraryGenericAsset()
     {
         return _document.Application.GetAssets(AssetType.Appearance)
@@ -191,25 +144,6 @@ internal sealed partial class RevitBundleImporter
                 && asset.FindByName(Generic.GenericDiffuse) is not null);
     }
 
-    /// <summary>
-    /// The toposolid type the terrain step builds a drape-bound ground on: a duplicate of
-    /// <paramref name="projectTypeId"/> whose top layer wears this bundle's drape material.
-    /// </summary>
-    /// <returns><c>null</c>, with the reason in <paramref name="declined"/>, when it cannot be built.</returns>
-    /// <remarks>
-    /// ⛔ This is what keeps the drape step from retyping the terrain. A retype makes Revit rebuild the
-    /// whole terrain's element relations on commit — 409 s on an 80,372-point toposolid, the largest
-    /// single cost in the import — and it bought nothing a type chosen at creation could not. The
-    /// photograph itself is still the drape step's to write; the material is created here bare so the
-    /// layer has something to wear, and the drape step finds it by the same name.
-    /// <para>
-    /// ⛔ <b>Contained, because it runs inside the terrain's transaction.</b> Everything here happens
-    /// in a sub-transaction that is rolled back on any refusal or Revit exception, so a type that
-    /// cannot be prepared costs the drape its fast path and nothing else: the terrain is still built,
-    /// on the project's type, and no half-made duplicate or bare material is committed beside it for
-    /// the drape step to find by name and trip over.
-    /// </para>
-    /// </remarks>
     private ToposolidType? ImageryToposolidType(ElementId projectTypeId, out string? declined)
     {
         declined = null;
@@ -249,15 +183,6 @@ internal sealed partial class RevitBundleImporter
         return null;
     }
 
-    /// <summary>
-    /// The imagery type named <paramref name="name"/> — reused, or duplicated from
-    /// <paramref name="source"/> — with <paramref name="materialId"/> as its top layer.
-    /// </summary>
-    /// <returns><c>null</c> when the type cannot be had or cannot be layered.</returns>
-    /// <remarks>
-    /// <b>Duplicated, never edited.</b> The source type belongs to the project, and texturing it in
-    /// place would repaint every other toposolid in the model with this site's photograph.
-    /// </remarks>
     private ToposolidType? ImageryTypeFrom(ToposolidType source, string name, ElementId materialId, out string layering)
     {
         ToposolidType? draped = new FilteredElementCollector(_document)
@@ -276,23 +201,6 @@ internal sealed partial class RevitBundleImporter
         return TryLayerImagery(draped, materialId, out layering) ? draped : null;
     }
 
-    /// <summary>
-    /// Puts <paramref name="materialId"/> on a thin top layer of a DUPLICATE of the terrain's type,
-    /// retypes the terrain onto it unless it already wears it, and drapes the subdivisions this
-    /// import created.
-    /// </summary>
-    /// <returns>
-    /// <c>false</c> when the type carries no layer to split, or when splitting it would leave a
-    /// degenerate structure. Refusal is asymmetric on purpose: the parent failing means no drape
-    /// happened and the caller rolls the whole transaction back, while a subdivision failing is one
-    /// un-draped patch — counted, not fatal, the same call <see cref="CutSubdivisions"/>
-    /// makes for a ring Revit declines.
-    /// </returns>
-    /// <param name="layering">
-    /// What became of the drape type's layer stack, as a clause a curator can read. Set on every
-    /// path, refusals included: it is the only account of the mechanism that keeps the photograph off
-    /// the vertical faces, and until it existed the log said nothing about layering at all.
-    /// </param>
     private bool TryWearMaterial(
         Toposolid terrain,
         ElementId materialId,
@@ -321,12 +229,6 @@ internal sealed partial class RevitBundleImporter
 
         try
         {
-            // ⛔ Only when the terrain does not already wear it. The terrain step builds a drape-bound
-            // ground on this type from the start (ImportStep.ToposolidType), so this is now the rare
-            // path: ground an earlier build of this plugin laid and ADR 0004's reuse arm kept, or a
-            // terrain step that could not prepare the type. Asking first is not a politeness — a
-            // retype rebuilds every element relation the terrain has, 409 s on an 80,372-point
-            // toposolid, and whether Revit short-circuits a same-type ChangeTypeId was never measured.
             if (terrain.GetTypeId() != draped.Id)
             {
                 terrain.ChangeTypeId(draped.Id);
@@ -334,30 +236,10 @@ internal sealed partial class RevitBundleImporter
         }
         catch (Exception ex) when (ex is Autodesk.Revit.Exceptions.ApplicationException)
         {
-            // Overwrite what TryLayerImagery just reported: the type is correct, and the terrain
-            // still refused to wear it. Leaving the success clause here would have the log announce
-            // a layer stack on a terrain that never took it.
             layering = $"Revit refused to put the drape type on the terrain — {ex.Message}";
             return false;
         }
 
-        // ⛔ How a subdivision takes a material depends on the Revit version, so the element is asked,
-        // never the version (SubDivisionMaterial). Measured in Revit 2025 (order eb00f56f, 2026-08-25,
-        // four of four): a subdivision is TYPELESS — GetTypeId() is InvalidElementId, IsValidType is
-        // false for every candidate, ChangeTypeId throws "This Element cannot have type assigned" — and
-        // the material is the instance's TOPOSOLID_SUBDIVIDE_MATERIAL. That is also the cheaper
-        // mechanism, so it is asked first. Paint would need get_Geometry plus a search across 2,725
-        // faces for the upward one, and stores its result per face, where a regeneration may drop it.
-        //
-        // Measured in Revit 2026 and 2027 (bundle 9d2dfdbf, 2026-09-19, 33 of 33 each): a subdivision
-        // is a Toposolid on the document's default toposolid type, the instance parameter is ABSENT,
-        // and a retype onto a duplicated type holds. So a typed subdivision wears the photograph
-        // through a type of its own, built the way the terrain's is (SubDivisionTypeFor). One this
-        // import cut was put on that type in the transaction that cut it (TypeForDrapeAtCut), so here
-        // it is found on it and only its material's photograph and offset are written; what that
-        // saves is measured in revit/CLAUDE.md.
-        // Counted as it goes, for the window: this loop is inside the step's one transaction, which
-        // cannot yield, and on ground an earlier build typed it still retypes, seconds a subdivision.
         List<ElementId> drapeable = DrapeableSubDivisionIds(terrain);
         int handled = 0;
         foreach (ElementId subdivisionId in drapeable)
@@ -406,19 +288,10 @@ internal sealed partial class RevitBundleImporter
         return true;
     }
 
-    /// <summary>
-    /// Writes <paramref name="wanted"/> into a typeless subdivision's own Material parameter, and
-    /// reads it back.
-    /// </summary>
-    /// <returns><c>null</c> when it holds, otherwise why not.</returns>
     private static string? WearOnInstance(Element subdivision, Parameter material, ElementId wanted)
     {
         bool wrote = material.Set(wanted);
 
-        // ⛔ Read back. The same four texture properties further down are read back for the same
-        // reason, and that read-back is what caught the drape going in as feet and tiling the
-        // photograph twelve times across the site. A Set returning true is a claim about the call,
-        // not about what Revit stored.
         ElementId stored = subdivision
             .get_Parameter(BuiltInParameter.TOPOSOLID_SUBDIVIDE_MATERIAL)
             ?.AsElementId() ?? ElementId.InvalidElementId;
@@ -428,11 +301,6 @@ internal sealed partial class RevitBundleImporter
             : $"the material did not hold on a subdivision (Set returned {wrote}, reads back {stored.Value})";
     }
 
-    /// <summary>
-    /// Moves a typed subdivision onto the type that wears <paramref name="wanted"/>, unless it is
-    /// already on it, and reads the result back.
-    /// </summary>
-    /// <returns><c>null</c> when it holds, otherwise why not.</returns>
     private string? WearThroughType(Element subdivision, ToposolidType own, ElementId wanted)
     {
         if (_document.GetElement(wanted) is not Material drape)
@@ -452,39 +320,6 @@ internal sealed partial class RevitBundleImporter
             : $"the drape type did not hold on a subdivision (on the type: {onType}, its top layer wears the photograph: {wearsIt})";
     }
 
-    /// <summary>
-    /// Gives a typed subdivision the polygon step has just cut the type the drape would otherwise
-    /// retype it onto, in the transaction that cut it.
-    /// </summary>
-    /// <param name="subdivision">The new cut, already stamped.</param>
-    /// <param name="typeAsCut">The type Revit gave it.</param>
-    /// <param name="smoothed">Whether smooth shading is on, as the polygon step settled it.</param>
-    /// <returns>Whether the subdivision is now on its type.</returns>
-    /// <remarks>
-    /// <para>
-    /// Only ever called for a cut Core has said takes its type now
-    /// (<see cref="SubDivisionMaterial.TakesTypeAtCut"/>): Revit 2025's typeless cuts never reach
-    /// here, and keep their instance material for the drape to write. The type and its bare material
-    /// are built by the drape's own builders under the names the drape looks for, and the drape then
-    /// finds the subdivision on it and writes only the photograph and its offset, which needs the
-    /// element's own corner and so cannot be known before the cut exists (ADR 0008).
-    /// </para>
-    /// <para>
-    /// Named for the shading the polygon step settled before its first cut, so the drape finds the
-    /// same names. An import cancelled before the drape leaves the subdivision on this type with its
-    /// material still bare, the state the terrain step leaves the terrain in
-    /// (<see cref="ImageryToposolidType"/>); importing again drapes both.
-    /// </para>
-    /// <para>
-    /// ⛔ <b>Contained whole.</b> Everything here, the name included, runs inside one try and one
-    /// sub-transaction that is rolled back on any refusal, so a type that cannot be prepared costs this
-    /// subdivision its fast path and nothing else: the cut stays, on the type Revit gave it, counted as
-    /// created, and the drape retypes it later. A cut Revit refuses at commit is deleted
-    /// (<see cref="ImportFailurePolicy"/>) and leaves its type and material behind, named by the
-    /// feature (<see cref="SiteBoundaryIdentity.NamingStamp"/>), for the next import that cuts it to
-    /// reuse.
-    /// </para>
-    /// </remarks>
     private bool TypeForDrapeAtCut(Toposolid subdivision, ToposolidType typeAsCut, bool smoothed)
     {
         SubTransaction? typing = null;
@@ -526,7 +361,6 @@ internal sealed partial class RevitBundleImporter
         return false;
     }
 
-    /// <summary>Rolls back a sub-transaction that is still open, and disposes of it, without throwing.</summary>
     private void RollBackIfOpen(SubTransaction? typing)
     {
         if (typing is null)
@@ -551,10 +385,6 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>
-    /// Which way a subdivision just cut can wear a material (<see cref="RouteFor"/>), contained: a
-    /// Revit refusal to answer is a route with nothing to write, never a lost cut.
-    /// </summary>
     private SubDivisionMaterialRoute RouteAtCut(Element subdivision, out ToposolidType? own)
     {
         try
@@ -569,22 +399,9 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>
-    /// What typing a cut for the drape treats as Revit declining, rather than as a defect: one
-    /// predicate for every catch the typing has, so they cannot drift apart.
-    /// </summary>
     private static bool IsRevitRefusal(Exception ex)
         => ex is Autodesk.Revit.Exceptions.ApplicationException or ArgumentException or InvalidOperationException;
 
-    /// <summary>
-    /// Moves a typed subdivision onto the type that wears <paramref name="drape"/>, unless it is on
-    /// it already: the one retype both the cut and the drape make.
-    /// </summary>
-    /// <param name="subdivision">The subdivision to move.</param>
-    /// <param name="currentType">The type it is on now, which the type it moves to is duplicated from.</param>
-    /// <param name="drape">The material the type's photograph layer wears.</param>
-    /// <param name="layering">What became of the type's layers, or why there is no type.</param>
-    /// <returns>The type, or <c>null</c> with the reason in <paramref name="layering"/>.</returns>
     private ToposolidType? MoveOntoOwnType(Element subdivision, ToposolidType currentType, Material drape, out string layering)
     {
         if (SubDivisionTypeFor(currentType, drape, out layering) is not { } type)
@@ -592,8 +409,6 @@ internal sealed partial class RevitBundleImporter
             return null;
         }
 
-        // ⛔ Only when it is not already on it: a re-import finds the subdivision on its type, and a
-        // ChangeTypeId is the whole cost of a retype (revit/CLAUDE.md).
         if (subdivision.GetTypeId() != type.Id)
         {
             subdivision.ChangeTypeId(type.Id);
@@ -602,24 +417,6 @@ internal sealed partial class RevitBundleImporter
         return type;
     }
 
-    /// <summary>
-    /// The toposolid type a typed subdivision wears <paramref name="drape"/> through, named from the
-    /// material (<see cref="SubDivisionMaterial.TypeName"/>) and found again by that name.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Built by <see cref="ImageryTypeFrom"/>, the terrain's own builder, from the subdivision's own
-    /// type: a duplicate whose top layer is split into a thin photograph over the original material,
-    /// so the subdivision keeps its type's thickness and its sides keep their material.
-    /// </para>
-    /// <para>
-    /// ⛔ <b>Except when the subdivision is already on a type whose top layer is a photograph</b>
-    /// (<see cref="SubDivisionMaterial.IsLayeredImageryType"/>) — this bundle's for another material,
-    /// after a renderer keyword changed between builds, or any bundle's imagery type that the document
-    /// made its default. Splitting that layer again would stack a second one or be refused as too
-    /// thin, so the duplicate only changes which material the thin layer wears.
-    /// </para>
-    /// </remarks>
     private ToposolidType? SubDivisionTypeFor(ToposolidType own, Material drape, out string layering)
     {
         string name = SubDivisionMaterial.TypeName(drape.Name);
@@ -650,17 +447,6 @@ internal sealed partial class RevitBundleImporter
         return type;
     }
 
-    /// <summary>
-    /// Sets one appearance-asset text property, and says what it did.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ These two setters used to return <c>void</c> and skip in silence. The first live import
-    /// tiled the aerial photograph roughly ten times across the site while the summary line said it
-    /// had been placed across 1,425 × 1,419 m — and nothing in the log could tell "the value never
-    /// landed" apart from "it landed in a unit this shim guessed wrong". Reading the stored value
-    /// back out of a saved document is the terrain probe's job; saying what was ATTEMPTED is this
-    /// one's, and neither answer is enough on its own.
-    /// </remarks>
     private static string SetString(Asset asset, string propertyName, string value)
     {
         if (asset.FindByName(propertyName) is not { } found)
@@ -682,24 +468,6 @@ internal sealed partial class RevitBundleImporter
         return $"{propertyName} = {value}";
     }
 
-    /// <summary>
-    /// Sets one real-world texture distance, converted into whatever unit the property declares,
-    /// and says what it did.
-    /// </summary>
-    /// <remarks>
-    /// It asks rather than assumes. Every other length this shim hands Revit goes through
-    /// <c>ConvertToInternalUnits</c> and lands in decimal feet, and appearance-asset distances are
-    /// the one place that is not obviously right — so the property's own
-    /// <c>GetUnitTypeId</c> is consulted instead of a guess being written down and flagged for a
-    /// human to check later. A property that declares no measurable unit falls back to internal
-    /// units rather than writing a number in an unknown scale.
-    /// <para>
-    /// The value is read back immediately after the write, inside the same edit scope. Revit will
-    /// refuse or clamp a distance outside a property's own range, and a clamped value reads
-    /// downstream exactly like a unit mistake — so the two are separated here rather than argued
-    /// about later.
-    /// </para>
-    /// </remarks>
     private static DistanceWrite SetDistance(Asset asset, string propertyName, double metres)
     {
         if (asset.FindByName(propertyName) is not { } found)
@@ -717,13 +485,6 @@ internal sealed partial class RevitBundleImporter
             return DistanceWrite.Refused($"{propertyName}: read-only, nothing written.");
         }
 
-        // ⛔ This guard used to call UnitUtils.IsMeasurableSpec, which answers a question about a
-        // SPEC (autodesk.spec.aec:length). What GetUnitTypeId hands back is a UNIT
-        // (autodesk.unit.unit:inches), and a unit is never a measurable spec — so the predicate was
-        // false every single time, the conversion below was dead code, and every real-world texture
-        // distance went into Revit as decimal feet. The property is in inches. Feet read as inches
-        // is a factor of twelve, and twelve is exactly how many times the aerial photograph tiled
-        // across a 1,425 m site. IsUnit is the question that was meant.
         ForgeTypeId unit = property.GetUnitTypeId();
         bool known = unit is not null && UnitUtils.IsUnit(unit);
         double converted = known
@@ -740,10 +501,6 @@ internal sealed partial class RevitBundleImporter
 
         property.Value = converted;
 
-        // Read back and convert back, in the same edit scope. The shim is the one assembly CI never
-        // builds, so a mistake here is caught by review or by nothing — unless the code checks its
-        // own arithmetic, which costs two lines and is the whole difference between this defect
-        // shipping and this defect being a log line.
         double stored = property.Value;
         double storedMetres = known
             ? UnitUtils.Convert(stored, unit!, UnitTypeId.Meters)
@@ -755,35 +512,13 @@ internal sealed partial class RevitBundleImporter
                 + $"reads back {stored:R} = {storedMetres:R} m.");
     }
 
-    /// <summary>
-    /// What one distance write actually achieved, measured in the units the caller asked in.
-    /// </summary>
-    /// <param name="StoredMetres">
-    /// What the property reads back as, converted to metres — <c>NaN</c> when nothing was written.
-    /// </param>
-    /// <param name="Report">One line for the log, whichever way it went.</param>
     private readonly record struct DistanceWrite(double StoredMetres, string Report)
     {
         internal static DistanceWrite Refused(string report) => new(double.NaN, report);
 
-        /// <summary>
-        /// Whether the property now holds the ground distance it was asked for. Five centimetres
-        /// over spans of a kilometre and a half: loose enough for a unit's own rounding, tight
-        /// enough that no wrong unit survives it — the closest wrong answer available is a factor
-        /// of twelve.
-        /// </summary>
         internal bool Holds(double metres) => Math.Abs(StoredMetres - metres) <= 0.05;
     }
 
-    /// <summary>
-    /// Reads one appearance-asset property WITHOUT writing it, for the log.
-    /// </summary>
-    /// <remarks>
-    /// The tiling properties Revit maintains beside the four real-world ones — the scale and offset
-    /// locks, the U/V repeat flags, the rotation — are not written by this plugin, so what they hold
-    /// is whatever Revit's own default is. That is either irrelevant or the entire explanation, and
-    /// the only way to know is to state them beside the values that were written.
-    /// </remarks>
     private static string Describe(Asset asset, string propertyName)
         => asset.FindByName(propertyName) switch
         {

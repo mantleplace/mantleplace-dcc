@@ -6,15 +6,6 @@ using MantlePlace.Client;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// An MPB 3.0 zip on disk, opened the way Revit's import opens one: the archive reads it as a 3.x
-/// bundle, files it under its order, plans it and checks its bytes, and the vault's download check
-/// finds its manifest.
-/// </summary>
-/// <remarks>
-/// The bundle is the shared corpus's full 3.0 download (<c>corpus/bundle/v3-full.json</c>), written
-/// out as a zip, so nothing here transcribes a manifest (HPS-40).
-/// </remarks>
 internal static class ThreeArchiveTests
 {
     private const string FullBundle = "bundle/v3-full.json";
@@ -37,7 +28,6 @@ internal static class ThreeArchiveTests
             }
             catch (IOException)
             {
-                // A scratch folder a virus scanner still holds is left to the temp sweep.
             }
         }
 
@@ -62,9 +52,6 @@ internal static class ThreeArchiveTests
 
         run.Case("a 3.0 bundle names its order, and is filed and stamped under it", () =>
         {
-            // The re-import rule finds what an earlier import placed by the stem it was stamped with,
-            // which is the filing key. A 3.0 bundle filed by its zip's path is a stranger to its own
-            // ground when the same order arrives from the vault, or under another file name.
             using LocalBundleArchive archive = LocalBundleArchive.Open(zip, cacheRoot);
             string other = WriteZip(Path.Combine(sandbox, "b", "renamed.zip"), files);
             using LocalBundleArchive renamed = LocalBundleArchive.Open(other, cacheRoot);
@@ -117,7 +104,6 @@ internal static class ThreeArchiveTests
         return path;
     }
 
-    /// <summary>A corpus bundle's files as bytes: a string is the file's text, and the manifest is written out as JSON.</summary>
     private static Dictionary<string, byte[]> Load(string bundleFile)
     {
         string root = ConformanceCorpus.FindCorpusDirectory() ?? throw new InvalidOperationException("the corpus is not found");

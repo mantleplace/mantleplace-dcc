@@ -2,10 +2,6 @@ using MantlePlace.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 
-/// <summary>
-/// Which surface in the block's LandXML Civil 3D is asked to build: the file's one surface, named as the
-/// file names it, and a refusal that says why when there is not exactly one.
-/// </summary>
 internal static class LandXmlSurfaceTests
 {
     private const string Head = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><LandXML xmlns=\"http://www.landxml.org/schema/LandXML-1.2\" version=\"1.2\">"

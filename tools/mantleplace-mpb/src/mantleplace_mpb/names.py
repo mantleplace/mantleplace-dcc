@@ -1,29 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The 2.0 layout: the folder allowlist (`format.md` §10.2) and the naming rules (§10.3).
-
-They bind a producer, and a consumer never depends on them: a reader finds every file by its
-pointer. So a folder outside the allowlist is a warning, as the spec says, and so is a file at
-the root other than the README, for the same reason. A broken naming rule is an error: a 2.0
-producer follows all six.
-
-What a machine can check, rule by rule:
-
-1. One noun per basename: the basename is PascalCase and the extension, lowercase, is the format
-   (`name.basename`); and one basename names one thing, so it never appears in two folders
-   (`name.basename-shared`). Two files with one basename in one folder are renditions.
-2. Plural or singular is a matter of meaning, which no validator can read.
-3. Qualifiers are hyphenated (`name.qualifier`) and run subset, then frame, then level
-   (`name.qualifier-order`). The frames and levels are named; any other qualifier is a subset.
-4. The fixed names, and the names inside a format's own structure (a tileset folder, a
-   Shapefile's sidecars), are exempt from rules 1 and 3.
-5. ASCII from `[A-Za-z0-9._-]` (`name.charset`), and no two entries differ only by case
-   (`name.case-collision`), checked over every file and folder.
-6. A reader matches a manifest path regardless of case; a writer uses the exact case. That one is
-   checked where the pointers are (`name.case-mismatch`, in `checks.check_pointers`).
-
-`__MACOSX` and `.DS_Store` never reach here: the archive drops them as it opens the bundle.
-"""
 
 from __future__ import annotations
 
@@ -32,16 +8,12 @@ import re
 from .archive import MANIFEST_PATH, Bundle
 from .report import Report
 
-#: The eight folders of a 2.0 bundle, in the spec's order.
 FOLDERS = ("Metadata", "Site", "Elevation", "Imagery", "LandCover", "Features", "Records",
            "Drawings")
 ROOT_FILES = frozenset({"README.md"})
-#: Names that software or a convention looks up (rule 4).
 FIXED_NAMES = frozenset({"README.md", MANIFEST_PATH, "Metadata/stac-item.json"})
 
-#: The frame qualifiers: a fixed-frame engine's grid, and a projected-CRS reader's twin.
 FRAMES = frozenset({"Engine", "Projected"})
-#: The level qualifiers, finest first.
 LEVELS = frozenset({"Raw", "Med", "Min"})
 _SUBSET, _FRAME, _LEVEL = 0, 1, 2
 
@@ -53,7 +25,6 @@ _SEMVER = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
 
 
 def is_layout_2(version: object) -> bool:
-    """Whether a manifest's `version` declares the 2.x layout: a semver string of major 2."""
     if not isinstance(version, str):
         return False
     found = _SEMVER.match(version)
@@ -111,8 +82,6 @@ def _check_basenames(files: list[str], report: Report) -> None:
     folders_by_basename: dict[str, set[str]] = {}
     for path in files:
         parts = path.split("/")
-        # Rules 1 and 3 name the files of a folder. A file deeper down sits inside a format's
-        # own structure (a tileset), whose names are the format's (rule 4); so are the fixed names.
         if len(parts) != 2 or path in FIXED_NAMES or not _SEGMENT.match(parts[1]):
             continue
         folder, name = parts
@@ -133,7 +102,6 @@ def _check_basenames(files: list[str], report: Report) -> None:
 
 
 def _basename_problem(basename: str, extensions: str) -> tuple[str, str] | None:
-    """`(code, why)` for the first naming rule `basename` + `.extensions` breaks, or None."""
     chain = extensions.split(".") if extensions else []
     if not chain:
         return "name.basename", "it has no extension, and the extension is the format"

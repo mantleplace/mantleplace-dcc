@@ -4,7 +4,7 @@
 
 #include "MantlePlaceImportNaming.h"
 
-#include "Containers/StringConv.h" // StringConv::IsHighSurrogate
+#include "Containers/StringConv.h"
 
 namespace
 {
@@ -21,7 +21,6 @@ EMantlePlaceOdblRole MantlePlaceOdblLogic::ParseRole(bool bStated, const FString
 		if (Value == TEXT("produced-work")) { return EMantlePlaceOdblRole::ProducedWork; }
 		if (Value == TEXT("none")) { return EMantlePlaceOdblRole::None; }
 	}
-	// `database`, an absent role and a role this reader has not met: the stricter duty.
 	return EMantlePlaceOdblRole::Database;
 }
 
@@ -43,8 +42,6 @@ const FMantlePlaceFileLicensing* MantlePlaceOdblLogic::FindEntry(
 	{
 		return Exact;
 	}
-	// A path is matched regardless of case (MPB 2.0, format.md 10.3 rule 6). A bundle never holds two
-	// entries that differ only by case, so the first match is the only one.
 	for (const TPair<FString, FMantlePlaceFileLicensing>& Pair : Entries)
 	{
 		if (Pair.Key.Equals(Path, ESearchCase::IgnoreCase))
@@ -105,7 +102,6 @@ bool MantlePlaceOdblLogic::NeedsCredit(
 
 FString MantlePlaceOdblLogic::CreditLine(const FMantlePlaceAttributionSource& Source)
 {
-	// A line break inside a field becomes a space, so one source is always one line.
 	auto OneLine = [](FString Text)
 	{
 		Text.ReplaceInline(TEXT("\r\n"), TEXT(" "));
@@ -178,14 +174,12 @@ TArray<FString> MantlePlaceOdblLogic::CreditTags(const TArray<FString>& Lines)
 			continue;
 		}
 
-		// Room for the widest header this line can need, so every part of it is cut to one length.
 		const int32 Room = MaxTagChars - PartPrefix.Len()
 			- FString::Printf(TEXT("%d.%d.%d:"), LineIndex, Line.Len(), Line.Len()).Len();
 		TArray<FString> Parts;
 		for (int32 Start = 0; Start < Line.Len();)
 		{
 			int32 Count = FMath::Min(Room, Line.Len() - Start);
-			// Never end a part between the two halves of a surrogate pair.
 			if (Start + Count < Line.Len() && Count > 1 && StringConv::IsHighSurrogate(Line[Start + Count - 1]))
 			{
 				--Count;
@@ -206,13 +200,12 @@ TArray<FString> MantlePlaceOdblLogic::CreditLinesFromTags(const TArray<FString>&
 	const FString WholePrefix = MantlePlaceImportNaming::CreditLineTagPrefix();
 	const FString PartPrefix = MantlePlaceImportNaming::CreditPartTagPrefix();
 
-	// One slot per line, in the order its first tag appears; a long line's parts fill its slot.
 	struct FSlot
 	{
 		FString Whole;
 		bool bParts = false;
-		FString PartKey;       // `<line>` of the parts, so two long lines never share a slot
-		TArray<FString> Parts; // by part index; an empty entry is a part not (yet) seen
+		FString PartKey;
+		TArray<FString> Parts;
 		TArray<bool> Seen;
 	};
 	TArray<FSlot> Slots;
@@ -256,7 +249,7 @@ TArray<FString> MantlePlaceOdblLogic::CreditLinesFromTags(const TArray<FString>&
 		}
 		if (Slot->Parts.Num() != PartCount)
 		{
-			continue; // parts that disagree on their count belong to no line this reader can trust
+			continue;
 		}
 		Slot->Parts[PartIndex] = Rest.Mid(Colon + 1);
 		Slot->Seen[PartIndex] = true;

@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The 2.0 layout: the folder allowlist and the naming rules (`format.md` §10.2, §10.3), and the
-staged schema a 2.0 manifest is held to before 2.0.0 is frozen."""
 
 from __future__ import annotations
 
@@ -49,17 +47,12 @@ class Case(unittest.TestCase):
 
     @staticmethod
     def layout_codes(report, severity: str | None = None) -> set[str]:
-        """The 2.0 layout findings only: the rest of the report is other tests' business."""
         return {f.code for f in report.findings
                 if f.code.startswith(("name.", "layout."))
                 and (severity is None or f.severity == severity)}
 
 
 class TheStagedSchema(unittest.TestCase):
-    """2.0.0 is served before it is frozen. A validator holds a 2.0 manifest to the served
-    document only when asked to, says it did, and never mistakes any unledgered version for
-    the staged one."""
-
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
@@ -224,8 +217,6 @@ class TheNamingRules(Case):
 
 
 class TheOneXLayout(Case):
-    """The 2.0 rules are the 2.0 layout's. A 1.x bundle is held to its own version."""
-
     def test_a_1x_bundle_is_not_held_to_the_2_0_rules(self) -> None:
         report = self.folder({"Extras/dem_v1.tif": b"x", "LICENSE.txt": b"x"}, manifest())
         self.assertEqual(set(), self.layout_codes(report))

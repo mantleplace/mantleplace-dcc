@@ -2,10 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The road stamp: a re-import of the same bundle finds the centrelines it drew and draws only the
-/// rows that are missing, so the roads are no longer doubled.
-/// </summary>
 internal static class RoadIdentityTests
 {
     private const string Stem = "order-7f3a";
@@ -52,8 +48,6 @@ internal static class RoadIdentityTests
                 RoadIdentity.Stamp("order-other", 1),
                 TreeIdentity.Stamp(Stem, null, 1),
 
-                // A stem this one is a prefix of: without the separator in the comparison it would
-                // read as this order's row 1.
                 RoadIdentity.Stamp(Stem + "b", 1),
             ];
 
@@ -64,7 +58,6 @@ internal static class RoadIdentityTests
 
         run.Case("a stamp beyond the layer's rows is not counted as present", () =>
         {
-            // An earlier, longer layer of the same order: its row 9 exists, this layer has four rows.
             RoadDecision decision = RoadIdentity.Decide([RoadIdentity.Stamp(Stem, 9)], Stem, 4);
             run.Equal(decision.AlreadyPresent, 0, "row 9 is not one of these four");
             run.Equal(decision.RowsToCreate.Count, 4, "all four created");

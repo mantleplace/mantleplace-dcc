@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""`validate()` end to end: a bundle on disk in, a report out."""
 
 from __future__ import annotations
 

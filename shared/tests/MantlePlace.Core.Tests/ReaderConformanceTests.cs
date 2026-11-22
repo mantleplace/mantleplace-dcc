@@ -6,27 +6,10 @@ namespace MantlePlace.Core.Tests;
 
 using CorpusCase = ConformanceCorpus.CorpusCase;
 
-/// <summary>
-/// Drives the shared corpus' <c>reader</c> group against <see cref="BundleReader"/>: for each case,
-/// build the bundle its case file names, read it, and compare what was found with the case's result.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The cases are the answer sheet every reader of either major runs (<c>corpus/README.md</c>, "The
-/// reader group"), so this suite transcribes nothing: it iterates <c>index.json</c> and builds each
-/// bundle from the <c>bundle</c> case file it names (HPS-40). Each bundle is built three ways, as the
-/// group says: a folder, a zip, and a zip whose every entry sits in one wrapper folder. The two zips
-/// are read through <see cref="LocalBundleArchive.ReadBundle"/>, the path a host takes.
-/// </para>
-/// <para>
-/// Internal so the AutoCAD suite, which compiles these sources in, runs the same cases as AutoCAD.
-/// </para>
-/// </remarks>
 internal static class ReaderConformanceTests
 {
     private const string Group = "reader";
 
-    /// <summary>The folder a wrapped zip puts every entry under, as a re-zipped download does.</summary>
     private const string Wrapper = "mantleplace_2026-11-15_corpus/";
 
     private static readonly string[] Forms = ["folder", "zip", "wrapped"];
@@ -131,7 +114,6 @@ internal static class ReaderConformanceTests
                 StringComparer.Ordinal));
     }
 
-    /// <summary>Builds the bundle in <paramref name="form"/> and reads it; the reader's answer, or null.</summary>
     private static BundleManifest? Build(Dictionary<string, byte[]> files, string form)
     {
         string where = Path.Combine(Path.GetTempPath(), "MantlePlace.ReaderCases", Guid.NewGuid().ToString("N")[..8]);
@@ -178,15 +160,10 @@ internal static class ReaderConformanceTests
             }
             catch (IOException)
             {
-                // A scratch folder a virus scanner still holds is left to the temp sweep.
             }
         }
     }
 
-    /// <summary>
-    /// A case's <c>files</c> as bytes: a string is the file's text, and anything else is a JSON
-    /// document written out, as the corpus's own builder writes a manifest.
-    /// </summary>
     private static Dictionary<string, byte[]> Materialise(JsonElement files)
     {
         Dictionary<string, byte[]> bytes = new(StringComparer.Ordinal);
@@ -201,11 +178,6 @@ internal static class ReaderConformanceTests
         return bytes;
     }
 
-    /// <summary>
-    /// The frames the case states, against the frames the reader put on the result: both present and
-    /// the same, or neither. The case states them as the manifest does, with <c>geoid_model</c> always
-    /// there and <c>null</c> where the manifest names none.
-    /// </summary>
     private static void CompareFrames(TestRun run, BundleFrames? actual, JsonElement expected)
     {
         bool stated = expected.TryGetProperty("frames", out JsonElement frames);

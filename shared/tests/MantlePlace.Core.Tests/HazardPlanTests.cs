@@ -2,16 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Flood zones and steep ground, drawn as context on a hazard plan: what the reader takes from the
-/// manifest, what the planner makes of it, and the plan's identity, styles and zone key.
-/// </summary>
-/// <remarks>
-/// MPB 1.4.0 hands this host its own copy of both hazard layers in <c>hosts.revit.vectors</c>, beside
-/// the GeoPackages every earlier bundle carried and this host could not read. The decisions these
-/// cases pin are the ones settled for issues 159 and 239: a 2D plan per build, never the terrain; the
-/// published wording verbatim; context, never a determination.
-/// </remarks>
 internal static class HazardPlanTests
 {
     private const string Stem = "order-7f3a";
@@ -48,9 +38,6 @@ internal static class HazardPlanTests
 
         run.Case("a copy carrying only the hazards, with the shared layers withheld, keeps the shared set", () =>
         {
-            // MPB 1.4.0: a layer from another source is converted on its own, so the block can be
-            // present while readiness.vectors says the shared set's copies were not produced. Those
-            // layers then fall back to the shared lon/lat set rather than reading "none in this area".
             BundleManifest withheld = Parse(Manifest(
                 ownLayers: ["flood_zones", "steep_slope"],
                 vectorsReadiness: "{ \"present\": false, \"reason\": \"not_produced\" }"));
@@ -63,8 +50,6 @@ internal static class HazardPlanTests
 
         run.Case("a shared layer of the same name is never read as a hazard layer", () =>
         {
-            // The shared set is lon/lat, and flood zones are not in it by the schema's own words; a
-            // bundle that put one there anyway must not be placed as though it were this host's.
             BundleManifest manifest = Parse(Manifest(ownLayers: ["land_use"], sharedFlood: true));
             run.True(manifest.FloodZones is null, "no own copy, no flood zones");
         });
@@ -98,7 +83,6 @@ internal static class HazardPlanTests
 
         run.Case("the steep-ground threshold is kept as the manifest wrote the number", () =>
         {
-            // 35.0 printed as a double is "35". The key shows the manifest's own number.
             run.Equal(Parse(Manifest()).SteepGroundThreshold, "35.0", "the raw token");
         });
 
@@ -141,9 +125,6 @@ internal static class HazardPlanTests
 
         run.Case("every drawn view comes before the road and water subdivisions, and the drape stays last", () =>
         {
-            // In 2027 a plan or a 3D view made over a terrain with subdivisions costs more the more
-            // subdivisions there are, so the views are drawn first. Nothing a view draws depends on a
-            // subdivision: the plans are filled regions, and the context view's filter is a rule.
             string[] layers = ["land_use", "land_cover", "road_splines", "water", "road_polygons", "flood_zones", "steep_slope"];
             BundleImportPlan plan = BundleImportPlanner.Plan(
                 Parse(Manifest(ownLayers: layers)),
@@ -178,7 +159,6 @@ internal static class HazardPlanTests
 
         run.Case("a hazard layer is placed only in this host's frame, like every own-block layer", () =>
         {
-            // A foot layer in a metre frame: the file contradicts the frame its block declares.
             SkippedImport? skip = Skip(Plan(Manifest(floodUnits: "ft")), ImportStepKind.FloodZones);
             run.Equal(skip?.ReasonCode ?? SkipReasonCode.LeftOutByChoice, SkipReasonCode.CoordinateSystemNotSupported, "refused");
         });
@@ -540,8 +520,6 @@ internal static class HazardPlanTests
         });
     }
 
-    // ---- fixtures -------------------------------------------------------------------------------
-
     private static readonly SiteFrame LocalFrame = new()
     {
         Origin = new GeoOrigin { Epsg = 32613, Easting = 0.0, Northing = 0.0, LinearUnit = LinearUnit.Metre },
@@ -580,10 +558,6 @@ internal static class HazardPlanTests
         .. new[] { "land_use", "flood_zones", "steep_slope" }.Select(OwnPath),
     ];
 
-    /// <summary>
-    /// A 1.4.0 manifest on a metre UTM delivery whose Revit block carries the named own layers and a
-    /// drape 600 × 300 m about the origin, offset north by 50 m.
-    /// </summary>
     private static string Manifest(
         string[]? ownLayers = null,
         string floodUnits = "m",

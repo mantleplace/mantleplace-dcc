@@ -3,44 +3,25 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Client;
 
-/// <summary>
-/// The vault routes and the cache an export's bundle is fetched through: the same ones the vault
-/// browser's Import uses. The seam exists so the fetch's order is asserted without a platform.
-/// </summary>
 public interface IExportVault
 {
-    /// <summary>The curator's bundles, with each one's manifest version and integrity facts.</summary>
     Task<(VaultListing? Listing, string? Error)> ListAsync(CancellationToken cancellationToken);
 
-    /// <summary>The cached zip when the cache holds a valid copy of <paramref name="bundle"/> (fully hashed), else <c>null</c>.</summary>
     string? CachedZip(VaultBundle bundle);
 
-    /// <summary>One materialize start, read as the route an Import press takes.</summary>
     Task<ImportRouteDecision> RouteImportAsync(string orderId, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Fetches a complete order's Revit view, or the whole bundle, into the cache; a 3.0 order's
-    /// download at the platform's recommendation, since an export names no level.
-    /// </summary>
     Task<CompleteDownload> DownloadCompleteAsync(
         VaultBundle bundle,
         IReadOnlyCollection<string>? delivered,
         CancellationToken cancellationToken);
 }
 
-/// <summary>
-/// A sent order downloaded again at the level the curator chose: ready with the slot's zip, or the
-/// reason it is not (the slot then still holds the level it had).
-/// </summary>
-/// <param name="Ready">Whether the slot holds the chosen level, fully checked.</param>
-/// <param name="ZipPath">The slot's zip when ready.</param>
-/// <param name="Message">Why not, when not ready.</param>
 public readonly record struct LevelFetch(bool Ready, string ZipPath, string Message)
 {
     internal static LevelFetch Failed(string message) => new(false, string.Empty, message);
 }
 
-/// <summary>The real vault and the real cache.</summary>
 public sealed class VaultExportSource : IExportVault
 {
     private static readonly IProgress<string> Quiet = new Progress<string>(_ => { });
@@ -66,17 +47,9 @@ public sealed class VaultExportSource : IExportVault
         return (listing, error);
     }
 
-    /// <summary>
-    /// The row the last fetch listed for <paramref name="orderId"/>, or <c>null</c>: what the window a send
-    /// opens builds its level control from (<see cref="LevelControl.For"/>), without a second listing.
-    /// </summary>
     public VaultBundle? Listed(string orderId)
         => _listed.TryGetValue(orderId, out VaultBundle? row) ? row : null;
 
-    /// <summary>
-    /// Downloads a sent 3.0 order at the level the curator chose in the window the send opened, into the
-    /// host's slot at that level, and answers the slot's zip once it is fully checked. Never throws.
-    /// </summary>
     public async Task<LevelFetch> FetchLevelAsync(
         string orderId,
         FidelityLevel level,
@@ -113,7 +86,7 @@ public sealed class VaultExportSource : IExportVault
         {
             return LevelFetch.Failed("the download was stopped");
         }
-#pragma warning disable CA1031 // The window must go on at the level it holds, whatever the fault was.
+#pragma warning disable CA1031
         catch (Exception ex)
 #pragma warning restore CA1031
         {
@@ -125,8 +98,6 @@ public sealed class VaultExportSource : IExportVault
     {
         ArgumentNullException.ThrowIfNull(bundle);
 
-        // The full hash, as the vault browser's pre-import gate does: once per import. An export names
-        // no level, so a 3.0 order's slot is the one at the platform's recommendation.
         CacheEntry entry = _cache.Inspect(
             bundle.OrderId, bundle.SizeBytes, bundle.Sha256, bundle.ManifestVersion, DownloadLevels.SlotLevel(bundle));
         return entry.State == CacheState.CachedValid ? entry.Layout.BundleZipPath : null;
@@ -142,27 +113,6 @@ public sealed class VaultExportSource : IExportVault
         => _vault.DownloadCompleteAsync(bundle, delivered, _cache, Quiet, cancellationToken);
 }
 
-/// <summary>
-/// Fetches the bundle an export names into the cache, the way the vault browser's Import does, and
-/// says how it went in the terms the export desk reads (<see cref="ExportFetchResult"/>).
-/// </summary>
-/// <remarks>
-/// <para>
-/// In order: the listing (the bundle must be the curator's, and its manifest version must be one the
-/// reader takes, checked before a byte is downloaded); the cache (a valid copy is used as it is); one
-/// materialize start, which tells a complete order from an on-demand one (<see cref="CompleteOrders"/>);
-/// then the complete order's download, or the Prepare's materialize, poll, re-list and download.
-/// </para>
-/// <para>
-/// The moment it knows it must wait for a build, it says so (<c>onBuilding</c>), so the export moves
-/// to <c>waiting_for_bundle</c> while the build runs rather than after it. A build that outlasts the
-/// poll's budget (<c>HPS-25</c>) ends <see cref="ExportFetchKind.StillBuilding"/>: the order row's
-/// change is then what wakes the next fetch.
-/// </para>
-/// <para>
-/// Never throws: any fault is a failure with its message, so the export can say what happened.
-/// </para>
-/// </remarks>
 public sealed class ExportBundleFetcher
 {
     private readonly IExportVault _vault;
@@ -185,7 +135,7 @@ public sealed class ExportBundleFetcher
         {
             return ExportFetchResult.Failed(ExportReasons.DownloadFailed, "The fetch was stopped: Revit left the connection.");
         }
-#pragma warning disable CA1031 // The export must end with a reason, whatever the fault was.
+#pragma warning disable CA1031
         catch (Exception ex)
 #pragma warning restore CA1031
         {
@@ -245,7 +195,6 @@ public sealed class ExportBundleFetcher
         return await PrepareAsync(bundle, onBuilding, token).ConfigureAwait(false);
     }
 
-    // The Prepare's halves, in the watcher's order: start (or join), poll, re-list, download.
     private async Task<ExportFetchResult> PrepareAsync(VaultBundle bundle, Action onBuilding, CancellationToken token)
     {
         onBuilding();
@@ -282,7 +231,6 @@ public sealed class ExportBundleFetcher
             return ExportFetchResult.Failed(ExportReasons.DownloadFailed, download.Message);
         }
 
-        // The re-listed row's manifest version is the built bundle's, which the pre-build row may not have known.
         if (!ExportBundles.CanRead(download.Bundle.ManifestVersion))
         {
             return ExportFetchResult.Unreadable(download.Bundle.ManifestVersion);

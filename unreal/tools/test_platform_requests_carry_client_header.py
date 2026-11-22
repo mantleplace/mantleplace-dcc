@@ -1,15 +1,4 @@
 # Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
-"""Every Platform API request the plugin's auth and vault clients make carries the client header.
-
-`Mantle-Place-Client: unreal/<plugin version>` goes on every call because the clients create their
-requests through `FMantlePlaceClientHttp::CreateRequest`, which sets it. CI never compiles this
-plugin, so nothing but this text check stops a later edit from calling `FHttpModule::CreateRequest`
-directly in one of the two clients and quietly sending a call that names no client. The factory's
-own behaviour is asserted by the `MantlePlace.Client.Header` automation test, where an engine exists.
-
-A request that is not a Platform API call (the ranged probe of a presigned storage URL) marks its
-line `// not a Platform API call`; nothing else may bypass the factory.
-"""
 
 import re
 import unittest
@@ -20,7 +9,6 @@ PRIVATE = (
     / "MantlePlace" / "Source" / "MantlePlaceRuntime" / "Private"
 )
 
-# The two clients that talk to the Platform API. The bundle cache downloads from a presigned URL.
 CLIENTS = ("MantlePlaceAuthSystemBase.cpp", "MantlePlaceVaultClient.cpp")
 
 DIRECT = re.compile(r"FHttpModule::Get\(\)\s*\.\s*CreateRequest\s*\(")
@@ -58,12 +46,10 @@ class ClientHeaderIsOnEveryRequest(unittest.TestCase):
                 self.assertTrue(uses, f"{name} no longer goes through the client factory")
 
     def test_the_vault_client_sends_one_per_platform_call(self):
-        # list, mint (download), materialize start, materialize status: four Platform API calls.
         uses = [line for line in lines_of("MantlePlaceVaultClient.cpp") if FACTORY.search(line)]
         self.assertEqual(len(uses), 4)
 
     def test_the_gate_sees_a_bypass(self):
-        # The check itself: an unmarked direct call is found, a marked one is not.
         self.assertEqual(
             bypasses(["ok();", "A = FHttpModule::Get().CreateRequest();"]), [2])
         self.assertEqual(

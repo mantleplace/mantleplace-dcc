@@ -2,14 +2,6 @@ using System.Globalization;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Import policy for Revit: which topo path wins, what happens when a pointer names an entry the
-/// bundle does not carry, and when shared coordinates may be published.
-/// </summary>
-/// <remarks>
-/// These are host semantics, not contract semantics, so they live here rather than in the shared
-/// corpus — what a toposurface is belongs to Revit's own suite (<c>HPS-03</c>).
-/// </remarks>
 internal static class ImportPlannerTests
 {
     private const string RevitLayout = """
@@ -22,15 +14,6 @@ internal static class ImportPlannerTests
         }
         """;
 
-    /// <summary>
-    /// A <c>hosts.revit</c> block complete enough for the TIN tier to win: an origin to reduce the
-    /// DXF's absolute coordinates against, and the DXF declaring the frame it is measured in.
-    /// </summary>
-    /// <remarks>
-    /// The origin is the real one from order <c>f93bc782</c> — Mantle Place's own first-party test
-    /// site, not a customer's, which is what licenses committing it — so the numbers here and the
-    /// ones pinned in <see cref="SurfaceTinTests"/> describe the same site.
-    /// </remarks>
     private const string TinHostBlock = """
         "hosts": {
           "revit": {
@@ -101,10 +84,6 @@ internal static class ImportPlannerTests
 
         run.Case("no topo artifact surfaces the manifest's own reason, TRANSLATED (HPS-36)", () =>
         {
-            // Surfaced, not echoed. HPS-36 requires the manifest's reason rather than a generic
-            // one; it does not require the producer's token. That distinction is the whole of the
-            // defect this guards — `dcc_readiness` reasons are an open vocabulary until v19 and
-            // include `emit_threw:<stage>`, so echoing put internal stage identifiers in dialogs.
             BundleImportPlan plan = PlanFor(
                 """
                 {
@@ -136,8 +115,6 @@ internal static class ImportPlannerTests
                 true,
                 "the skip is classified for anything that needs to branch rather than print");
 
-            // The generic sentence is what the reason REPLACES. Seeing both would mean the
-            // translation ran and then got appended to the fallback.
             run.False(
                 skip?.Reason.Contains("add the Revit deliverables", StringComparison.Ordinal) ?? true,
                 "the generic fallback did not also fire");
@@ -162,8 +139,6 @@ internal static class ImportPlannerTests
 
         run.Case("a stale copy under a non-root folder is NOT resolved", () =>
         {
-            // Regression: a plain "any entry ending in /<pointer>" rule reached into Backup/ and
-            // imported last month's terrain. Only a single archive-wide root folder is tolerated.
             string[] withBackupOnly =
             [
                 "README.md",
@@ -197,8 +172,6 @@ internal static class ImportPlannerTests
                 "cubit",
                 "the skip names the unit it could not read");
 
-            // Regression: the DXF fallback used to defeat the fail-closed check outright — same
-            // terrain, same emitter, same suspect scale, imported anyway.
             run.False(
                 HasStep(plan, ImportStepKind.ToposurfaceFromSurfaceDxf),
                 "and the DXF is not used as a fallback around it");
@@ -240,10 +213,6 @@ internal static class ImportPlannerTests
 
         run.Case("the placement's elevation and angle are DERIVED, not literal zeros", () =>
         {
-            // The shim used to pass `0.0, 0.0`. Both were right for the bundles on hand and neither
-            // came from anywhere, so a rotated grid would have been placed wrong with nothing to
-            // catch it. The fixture states a rotation the ETL does not emit today for exactly that
-            // reason: a hardcoded zero passes a zero-rotation fixture.
             BundleImportPlan plan = PlanFor(
                 $$"""
                 {
@@ -319,9 +288,6 @@ internal static class ImportPlannerTests
                 """,
                 FullBundle);
 
-            // Bound per artifact, not per bundle: a planner that resolved one hash and reused it
-            // would check the IFC's bytes against the CSV's digest and report a corruption that is
-            // not there.
             run.Equal(
                 FindStep(plan, ImportStepKind.ToposurfaceFromPointsFile)?.ExpectedSha256,
                 "3faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -394,10 +360,6 @@ internal static class ImportPlannerTests
         return run.Report("import planner");
     }
 
-    /// <summary>
-    /// The site model is copied, not linked: its buildings are a checklist row that starts checked,
-    /// and the link is a row that starts unchecked, both planned and checked like every other step.
-    /// </summary>
     private static void RunSiteModelCases(TestRun run)
     {
         ImportLayerChoice byDefault = ImportLayerChoice.Only(Enum.GetValues<ImportLayer>().Where(ImportLayers.OnByDefault));
@@ -475,10 +437,6 @@ internal static class ImportPlannerTests
         });
     }
 
-    /// <summary>
-    /// The attribution view and the provenance record: written on every import, and never the thing
-    /// that makes a bundle count as importable.
-    /// </summary>
     private static void RunAttributionCases(TestRun run)
     {
         run.Case("every import writes attribution and provenance, carried on the step", () =>
@@ -535,7 +493,6 @@ internal static class ImportPlannerTests
             List<ImportStepKind> kinds = [.. plan.Steps.Select(step => step.Kind)];
             int attribution = kinds.IndexOf(ImportStepKind.AttributionAndProvenance);
 
-            // Not "second to last": the site context view sits between it and the drape.
             run.True(attribution > kinds.IndexOf(ImportStepKind.ToposurfaceFromPointsFile), "after the layer it credits");
             run.True(attribution >= 0 && attribution < kinds.Count - 1, "before the drape");
             run.Equal(plan.Steps[^1].Kind.ToString(), "ImageryDrape", "the drape still last");
@@ -543,10 +500,6 @@ internal static class ImportPlannerTests
     }
 
 
-    /// <summary>
-    /// Tier 1 — the surface DXF's TIN vertices — and the four ways it stands aside for the points
-    /// file rather than placing a site half a world from the project origin.
-    /// </summary>
     private static void RunTinTierCases(TestRun run)
     {
         run.Case("the surface TIN is the preferred toposurface path", () =>
@@ -576,8 +529,6 @@ internal static class ImportPlannerTests
 
         run.Case("a bundle that does not say what frame its DXF is in still gets its terrain", () =>
         {
-            // ⛔ Not a refusal to import — a fall-through. Guessing the frame is how a site lands
-            // 500 km away looking like a successful import.
             string withoutFrame = TinHostBlock.Replace(
                 "\"horizontal_frame\": \"absolute_projected\",",
                 string.Empty,
@@ -610,8 +561,6 @@ internal static class ImportPlannerTests
 
         run.Case("a bundle publishing no origin falls back to the points file", () =>
         {
-            // The points file is local_enu and needs no origin, which is exactly why it stays as
-            // tier 2 rather than being retired.
             BundleImportPlan plan = PlanFor($$"""{"version": "1.0.0", {{RevitLayout}}}""", FullBundle);
 
             run.True(HasStep(plan, ImportStepKind.ToposurfaceFromPointsFile), "the points file is used");
@@ -638,16 +587,6 @@ internal static class ImportPlannerTests
         });
     }
 
-    /// <summary>
-    /// The satellite drape — Forma's last parity row, and the only artifact whose
-    /// placement this host declines to take on the manifest's word alone.
-    /// </summary>
-    /// <remarks>
-    /// The drape's declared extent lives in a sibling host's block, and the host-neutral field
-    /// carrying the same numbers is undeclared by the published schema. So the planner corroborates
-    /// the inferred extent against the image's own pixel grid, and these cases are mostly about the
-    /// refusals — which is the half that would otherwise only exist inside Revit.
-    /// </remarks>
     private static void RunDrapeCases(TestRun run)
     {
         run.Case("the DEM's bounds place the drape when the image's own grid backs them up", () =>
@@ -673,10 +612,6 @@ internal static class ImportPlannerTests
 
         run.Case("a drape block states its own extent, and is NOT second-guessed", () =>
         {
-            // Deliberately a rectangle the pixel grid would REJECT if it were checked: 1000 m wide
-            // against 4767 px at 0.3 m. A contract is applied verbatim (HPS-33); corroboration is
-            // what an inference gets, and re-deriving the declared value is the habit this host is
-            // built to avoid.
             BundleImportPlan plan = PlanFor(
                 DrapeManifest(
                     MetricGeoreference,
@@ -727,8 +662,6 @@ internal static class ImportPlannerTests
 
         run.Case("a drape this bundle publishes no readable extent for is refused", () =>
         {
-            // Today's real bundles, if `elevation.dem.bounds_target_crs` ever stops being emitted:
-            // the only remaining extent is `unreal.imagery_drape`, which this host may not read.
             BundleImportPlan plan = PlanFor(
                 DrapeManifest(
                     MetricGeoreference,
@@ -847,8 +780,6 @@ internal static class ImportPlannerTests
                 "the shim textures a toposolid that exists, and risks nothing queued behind it");
         });
 
-        // A terrain-plus-drape bundle whose drape can be switched off by what the manifest says about
-        // the imagery, so the two cases below differ in the drape and nothing else.
         static string TerrainAndDrape(string imagery) => $$"""
             {
               "version": "1.0.0",
@@ -885,8 +816,6 @@ internal static class ImportPlannerTests
 
         run.Case("the TIN path takes the imagery type too, not only the points file", () =>
         {
-            // The preferred topo path, with a drape placed around the same origin the TIN is reduced
-            // against: 1,430 × 1,420 m either side of it, which is what the probe's pixel grid covers.
             string layout = RevitLayout.Replace(
                 "\"contours\": \"Surface/Contours.dxf\"",
                 "\"contours\": \"Surface/Contours.dxf\", \"imagery_drape\": \"Imagery/Drape.png\"",
@@ -908,8 +837,6 @@ internal static class ImportPlannerTests
 
         run.Case("a drape the planner refused leaves the terrain on the project's own type", () =>
         {
-            // The pointer is there and the image is not readable: the drape is skipped, not planned,
-            // and the decision follows the plan rather than the manifest's intent.
             BundleImportPlan plan = PlanFor(TerrainAndDrape(ImageryWithGsd), terrainAndDrapeBundle, _ => null);
 
             run.False(HasStep(plan, ImportStepKind.ImageryDrape), "the drape is skipped");
@@ -918,8 +845,6 @@ internal static class ImportPlannerTests
                 "only a drape that will run earns the imagery type");
         });
 
-        // The parity bundle with a drape beside it, so the polygon steps and the drape are planned
-        // together and the cases below differ in whether the drape runs and nothing else.
         string parityAndDrape = ParityManifest(MetricGeoreference)
             .Replace(
                 "\"layout\": { \"tree_points\": \"Landcover/TreePoints.csv\" },",
@@ -938,8 +863,6 @@ internal static class ImportPlannerTests
             run.True(HasStep(plan, ImportStepKind.ImageryDrape), "the drape is planned");
             foreach (ImportStepKind kind in PolygonKinds)
             {
-                // Retyped by the drape instead, each cost a ChangeTypeId and the drape's commit then
-                // rebuilt every one of them (revit/CLAUDE.md).
                 run.True(FindStep(plan, kind)?.DrapePlanned == true, $"{kind} knows the drape follows");
             }
         });
@@ -953,8 +876,6 @@ internal static class ImportPlannerTests
             run.False(HasStep(plan, ImportStepKind.ImageryDrape), "the drape is not planned");
             foreach (ImportStepKind kind in PolygonKinds)
             {
-                // A type whose photograph layer nothing will fill would be a blank layer over the
-                // ground, the same reason the terrain keeps the project's type.
                 run.True(FindStep(plan, kind) is { DrapePlanned: false }, $"{kind} is cut as it always was");
             }
         });
@@ -970,18 +891,12 @@ internal static class ImportPlannerTests
         });
     }
 
-    /// <summary>The two kinds that cut subdivisions into the terrain (ADR 0015).</summary>
     private static readonly ImportStepKind[] PolygonKinds =
     [
         ImportStepKind.Water,
         ImportStepKind.RoadPolygons,
     ];
 
-    /// <summary>
-    /// The three Forma-parity layers: roads, land use and vegetation. Each is
-    /// placed against the bundle's own pre-derived origin, and each fails closed rather than being
-    /// placed in a frame nobody checked.
-    /// </summary>
     private static void RunParityCases(TestRun run)
     {
         run.Case("the parity layers are planned when the bundle carries them and states an origin", () =>
@@ -1022,9 +937,6 @@ internal static class ImportPlannerTests
 
         run.Case("the vegetation step carries the foliage vocabulary the manifest named", () =>
         {
-            // Carried on the step for the reason `Frame` and `Crop` are: the manifest is the
-            // authority on what the CSV's foliage values mean, and the shim must not have to go
-            // looking for it. MPB 1.2.0's key, optional and absent from every older bundle.
             BundleImportPlan withVocabulary = PlanFor(
                 $$"""
                 {
@@ -1062,9 +974,6 @@ internal static class ImportPlannerTests
 
         run.Case("the vegetation step carries the unit ground_z is published in", () =>
         {
-            // MPB 1.3.0 states the tree file's frame beside its path; `units` is the ground_z
-            // column's. Before it, the file stated none, and ground_z followed the delivered
-            // elevation — the same fallback the terrain's own points take.
             run.True(
                 FindStep(PlanFor(FootTreeManifest("\"units\": \"ftUS\", \"horizontal_units\": \"ftUS\"", delivery: false), FootTreeBundle), ImportStepKind.Vegetation)?.Units == LinearUnit.UsSurveyFoot,
                 "a stated unit is read");
@@ -1091,9 +1000,6 @@ internal static class ImportPlannerTests
 
         run.Case("on a local grid the plan is metres and ground_z is feet, and each is read as stated", () =>
         {
-            // local_ft: no projected foot zone exists, so x and y are metric UTM, beside the metric
-            // origin they are subtracted from, while ground_z is international feet (spec/format.md
-            // §6.6). The one tier where the two units differ.
             BundleImportPlan plan = PlanFor(
                 $$"""
                 {
@@ -1123,8 +1029,6 @@ internal static class ImportPlannerTests
                 FindSkip(unknownGround, ImportStepKind.Vegetation)?.ReasonCode == SkipReasonCode.UnitNotUnderstood,
                 "and says the unit was not understood");
 
-            // x and y are subtracted from the origin in the ORIGIN's unit. A file stating another
-            // contradicts its own CRS, and is refused rather than reconciled (HPS-35, HPS-53).
             BundleImportPlan otherPlan = PlanFor(
                 FootTreeManifest("\"units\": \"ftUS\", \"horizontal_units\": \"m\"", delivery: false),
                 FootTreeBundle);
@@ -1147,9 +1051,6 @@ internal static class ImportPlannerTests
 
         run.Case("a bundle carrying ONLY parity layers is still importable", () =>
         {
-            // The predicate that decides this deliberately excludes SetSharedCoordinates, because
-            // that step changes project settings and creates nothing. These three create elements,
-            // so a bundle with roads and no terrain is an import, not a blocked one.
             BundleImportPlan plan = PlanFor(
                 $$"""
                 {
@@ -1186,12 +1087,6 @@ internal static class ImportPlannerTests
 
         run.Case("a foot-tier origin refuses BOTH the geographic layers and the metric UTM one", () =>
         {
-            // The origin is State Plane feet; the GeoJSON layers are lon/lat and this fixture's tree
-            // CSV states metric UTM. Neither can be brought into that frame by the one forward
-            // projection HPS-45 permits, and subtracting a UTM easting from a State Plane one yields
-            // a number that looks like a coordinate and is ~2000 km wrong. A real bundle publishes
-            // its tree points in the delivery CRS (the next case); the refusal is what guards a
-            // host-neutral file that is not.
             BundleImportPlan plan = PlanFor(ParityManifest(FootGeoreference), ParityBundle);
 
             foreach (ImportStepKind kind in ParityKinds)
@@ -1210,9 +1105,6 @@ internal static class ImportPlannerTests
 
         run.Case("a foot-tier origin places tree points published in the delivery CRS", () =>
         {
-            // What a State Plane order ships: the tree CSV is published in the delivery CRS, which
-            // is this host's frame, so the trees import while every lon/lat layer is still refused.
-            // Nothing is projected — the CSV's stated CRS matches the origin's.
             BundleImportPlan plan = PlanFor(ParityManifest(FootGeoreference, treePointsCrs: "EPSG:2231"), ParityBundle);
 
             run.True(HasStep(plan, ImportStepKind.Vegetation), "the trees are planned");
@@ -1255,9 +1147,6 @@ internal static class ImportPlannerTests
 
         run.Case("roads with no road surfaces is a derived layer nobody produced, not an area without roads", () =>
         {
-            // road_polygons is derived from road and is best-effort (spec/format.md §6.3). Saying
-            // "no roads in this bundle" here would be a statement about the area, and a wrong one —
-            // and telling the curator to re-download would send them after something nobody has.
             BundleImportPlan plan = PlanFor(
                 ParityManifest(MetricGeoreference).Replace("road_polygons", "road_surfaces_someday", StringComparison.Ordinal),
                 ParityBundle);
@@ -1272,8 +1161,6 @@ internal static class ImportPlannerTests
 
         run.Case("no road layer either is the ordinary absence", () =>
         {
-            // Both layers gone: this AOI really may have no roads, so the ordinary "not in this
-            // bundle" reason stands rather than a sentence about a derivation that was never owed.
             BundleImportPlan plan = PlanFor(
                 ParityManifest(MetricGeoreference)
                     .Replace("\"name\": \"road_polygons\"", "\"name\": \"road_surfaces_someday\"", StringComparison.Ordinal)
@@ -1287,8 +1174,6 @@ internal static class ImportPlannerTests
 
         run.Case("land cover without land use is its own layer, not a renamed one", () =>
         {
-            // Two different Overture layers. A layer with no features in the area is left out of
-            // vector.layers entirely, so a bundle with land cover and no land use is ordinary.
             BundleImportPlan plan = PlanFor(
                 $$"""
                 {
@@ -1334,10 +1219,6 @@ internal static class ImportPlannerTests
         });
     }
 
-    /// <summary>
-    /// The project's place on Earth beyond the survey point, and the view and filter that let a
-    /// curator find what an import made.
-    /// </summary>
     private static void RunSiteLocationCases(TestRun run)
     {
         run.Case("the site location is the own block's lat and lon, verbatim (HPS-33)", () =>
@@ -1373,9 +1254,6 @@ internal static class ImportPlannerTests
 
         run.Case("no lat/lon in the own block is a named skip, and delivery's pair is not borrowed", () =>
         {
-            // delivery.local_origin carries a lon/lat too, and the survey point falls back to it. The
-            // site location does not: the issue that asked for it names the own block, and a sun
-            // placed from a value this host was not told to read is a sun nobody can audit.
             BundleImportPlan plan = PlanFor(
                 $$"""
                 {
@@ -1418,8 +1296,6 @@ internal static class ImportPlannerTests
 
         run.Case("a lat or lon off the globe is refused, not wrapped", () =>
         {
-            // Revit throws on a latitude past a pole and silently wraps a longitude past the
-            // antimeridian. Wrapping would put the sun over some other site with no word said.
             foreach ((string field, string bad) in (ReadOnlySpan<(string, string)>)
                 [("\"lat\": 38.46130517000308", "\"lat\": 91.0"), ("\"lon\": -105.32557885004304", "\"lon\": 254.67")])
             {
@@ -1474,8 +1350,6 @@ internal static class ImportPlannerTests
 
         run.Case("a zone east of +12 wraps a day back to fit Revit, and the log says what that costs", () =>
         {
-            // Revit's SiteLocation.TimeZone takes -12 to +12. Wrapping keeps the clock and moves the
-            // date a day; clamping would keep the date and put every hour of a sun study one out.
             foreach ((double published, double written) in (ReadOnlySpan<(double, double)>)
                 [(13.0, -11.0), (14.0, -10.0), (12.75, -11.25), (12.0, 12.0), (-12.0, -12.0)])
             {
@@ -1555,9 +1429,6 @@ internal static class ImportPlannerTests
 
         run.Case("placing the project and naming a view is not an import", () =>
         {
-            // The survey point, the site location and the context view change project settings and
-            // add an empty view. A bundle whose plan held only those would report "imported" over a
-            // model with nothing in it — and a view and filter for nothing to be found.
             BundleImportPlan plan = PlanFor(
                 $$"""{"version": "1.0.0", {{MetricGeoreference}}}""",
                 ["Metadata/manifest.json"]);
@@ -1609,10 +1480,6 @@ internal static class ImportPlannerTests
 
     private static readonly string[] DrapeBundle = ["Metadata/manifest.json", "Imagery/Drape.png"];
 
-    /// <summary>
-    /// A drape-only bundle: the layout pointer, a georeference, and whichever imagery/elevation
-    /// blocks the case is about.
-    /// </summary>
     private static string DrapeManifest(string georeference, string imagery, string elevation) =>
         $$"""
         {
@@ -1658,10 +1525,6 @@ internal static class ImportPlannerTests
 
     private static readonly string[] FootTreeBundle = ["README.md", "Landcover/TreePoints.csv"];
 
-    /// <summary>
-    /// A State Plane foot bundle carrying only tree points in the delivery CRS; <paramref name="stated"/>
-    /// is the tree entry's unit members as JSON, or <c>null</c> for a file that states none.
-    /// </summary>
     private static string FootTreeManifest(string? stated, bool delivery) =>
         $$"""
         {
@@ -1673,10 +1536,6 @@ internal static class ImportPlannerTests
         }
         """;
 
-    /// <summary>
-    /// <see cref="ParityManifest"/> at MPB 1.1.0, with a <c>location.time_zone</c> block;
-    /// <paramref name="observesDst"/> is the JSON literal, or <c>null</c> to leave the field out.
-    /// </summary>
     private static string WithTimeZone(double hours, string iana, string? observesDst) =>
         ParityManifest(MetricGeoreference).Replace(
             "\"version\": \"1.0.0\",",
@@ -1726,15 +1585,6 @@ internal static class ImportPlannerTests
         }
         """;
 
-    /// <summary>
-    /// The fixture bundle's real drape grid: 4767 × 4733 px at 0.3 m over a 1430 × 1420 m extent.
-    /// </summary>
-    /// <remarks>
-    /// Real numbers rather than round ones on purpose. 4767 × 0.3 is 1430.1 against a stated 1430.0,
-    /// so the corroboration is exercised against the third-of-a-pixel disagreement that is always
-    /// there — a tolerance tuned to invented round numbers would pass here and fail on every real
-    /// bundle.
-    /// </remarks>
     private static readonly ImageSize DrapePixels = new(4767, 4733);
 
     private static BundleImportPlan PlanFor(string manifestJson, IReadOnlyList<string> entries)

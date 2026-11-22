@@ -7,16 +7,6 @@
 #include "MantlePlaceImportManifest.h"
 #include "MantlePlaceIntegrityLogic.h"
 
-// What the integrity pre-check covers, asserted as a LIST rather than reviewed as a boolean
-// expression. The expression is how `Landcover/TreePoints.csv` came to be the one payload the
-// importer brought in unverified while the manifest had been publishing a digest for it: a payload
-// left out of a hand-written chain is invisible, nothing fails, and no test can see the hole.
-//
-// The corpus pins the two states on real manifests (manifest.foliagePointsVerified /
-// .foliagePointsUnverified, through `integrityVerifiedPaths`). What is asserted here is the
-// structural property those fixtures cannot state: that EVERY payload a manifest declares is in the
-// list, whichever combination of blocks a bundle happens to ship.
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMantlePlaceIntegrityLogicTest,
     "MantlePlace.Import.IntegrityLogic",
@@ -29,11 +19,10 @@ bool Covers(const TArray<FMantlePlaceDeclaredArtifact>& Artifacts, const TCHAR* 
 	return Artifacts.ContainsByPredicate(
 	    [Path](const FMantlePlaceDeclaredArtifact& Artifact) { return Artifact.Path == Path; });
 }
-} // namespace
+}
 
 bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 {
-	// --- Every declared payload is in the chain ------------------------------------------------
 	{
 		FMantlePlaceVaultManifest M;
 		M.Heightmap.bPresent = true;
@@ -75,7 +64,6 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("terrain mesh"), Covers(Artifacts, TEXT("Mesh/Terrain.glb")));
 		TestTrue(TEXT("buildings"), Covers(Artifacts, TEXT("Mesh/Buildings.glb")));
 		TestTrue(TEXT("road splines"), Covers(Artifacts, TEXT("Vector/RoadSplines.geojson")));
-		// The regression this whole unit exists for.
 		TestTrue(TEXT("tree points are no longer the exception"),
 			Covers(Artifacts, TEXT("Landcover/TreePoints.csv")));
 		TestTrue(TEXT("landscape layer source"), Covers(Artifacts, TEXT("Landcover/MaterialWeights.tif")));
@@ -86,9 +74,6 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 			FMantlePlaceIntegrityLogic::VerifiablePaths(M).Num(), 8);
 	}
 
-	// --- A payload with no published digest is listed, and reported unverified ------------------
-	// Dropping it here would make "valid but unverified" indistinguishable from "not shipped", and
-	// the third state is the whole point (spec/format.md section 5).
 	{
 		FMantlePlaceVaultManifest M;
 		M.Heightmap.bPresent = true;
@@ -96,8 +81,6 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 		M.Heightmap.Sha256 = TEXT("aa");
 		M.Foliage.bPresent = true;
 		M.Foliage.Path = TEXT("Landcover/TreePoints.csv");
-		// No FoliagePointsSha256: the schema keeps it optional, and the facts come from a
-		// best-effort sidecar.
 
 		const TArray<FMantlePlaceDeclaredArtifact> Artifacts =
 			FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(M);
@@ -111,15 +94,12 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 			Verifiable.Num() == 1 && Verifiable[0] == TEXT("Elevation/Heightmap.png"));
 	}
 
-	// --- A block the bundle does not ship contributes nothing -----------------------------------
-	// bHas* false, or a pointer that is empty, are both "not shipped". A path-less entry in the
-	// chain would abort every import of a bundle that simply has no tree points.
 	{
 		FMantlePlaceVaultManifest M;
 		M.Heightmap.bPresent = true;
 		M.Heightmap.Path = TEXT("Elevation/Heightmap.png");
 		M.Heightmap.Sha256 = TEXT("aa");
-		M.Foliage.bPresent = true; // claimed, but with no pointer to read
+		M.Foliage.bPresent = true;
 		M.Foliage.Sha256 = TEXT("ff");
 
 		const TArray<FMantlePlaceDeclaredArtifact> Artifacts =
@@ -127,9 +107,6 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("a pathless payload is not in the chain"), Artifacts.Num(), 1);
 	}
 
-	// --- What the archive's own `view` says it holds -------------------------------------------------
-	// A selection that leaves a part out is not corruption; a part the archive claims to hold and does
-	// not have is. The decision is the `view` and `files`, never the zip listing alone.
 	{
 		FMantlePlaceArchiveView View;
 		View.bDeclared = true;
@@ -166,7 +143,6 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 			FMantlePlaceIntegrityLogic::LeavesOut(FMantlePlaceArchiveView(), TEXT("Records/Parcels.gpkg")));
 	}
 
-	// --- An artifact is skipped only when every payload it makes from is left out ----------------------
 	{
 		FMantlePlaceVaultManifest M;
 		M.Archive.bDeclared = true;
@@ -184,9 +160,6 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 			FMantlePlaceIntegrityLogic::LeavesOutAll(M, {}));
 	}
 
-	// --- Whether the archive holds the Cesium terrain tileset ------------------------------------------
-	// The refusal's Cesium hint is a statement about the archive, so it is made only when the archive
-	// holds the `terrain.cesium` part (or, with no `view`, when the manifest points at the tileset).
 	{
 		FMantlePlaceVaultManifest M;
 		TestFalse(TEXT("no pointer to a tileset: nothing to stream"),
@@ -229,4 +202,4 @@ bool FMantlePlaceIntegrityLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

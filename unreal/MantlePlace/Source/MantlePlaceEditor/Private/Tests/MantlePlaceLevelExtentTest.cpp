@@ -15,25 +15,13 @@
 #include "EngineUtils.h"
 #include "HAL/FileManager.h"
 
-// Open in curator's engine reads, over a throwaway world: the Extent box actor (placed, scaled, read
-// in W,S,E,N degrees), the previous-import read (the actors' import tag, then the record under
-// Saved), and the two georeference reads, which reach Epic's GeoReferencing and Cesium for Unreal by
-// reflection. The decisions they feed are asserted headlessly in MantlePlace.CuratorExtent.Sources
-// and .Precedence.
-//
-// A georeference read is exercised only when its plugin is enabled in the project the test runs in
-// (the class is looked up, never loaded, and a plugin that is off has no class). With it off the test
-// asserts the other half of the contract: the read yields nothing, and the plugin loaded without it.
-
 namespace
 {
-	/** The throwaway world; the caller destroys it. */
 	UWorld* NewExtentTestWorld(const TCHAR* Name)
 	{
-		return UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false, FName(Name));
+		return UWorld::CreateWorld(EWorldType::Editor, false, FName(Name));
 	}
 
-	/** One degree is about 111 km, so this is about 2 km of slack on a read that is exact to metres. */
 	constexpr double GeoSlackDeg = 0.02;
 }
 
@@ -44,7 +32,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceLevelExtentTest::RunTest(const FString& Parameters)
 {
-	// --- The Extent box is a placeable actor with the two location properties, editor-only ------------
 	{
 		const UClass* BoxClass = AMantlePlaceExtentBox::StaticClass();
 		for (const TCHAR* Name : { TEXT("CenterLongitude"), TEXT("CenterLatitude") })
@@ -66,7 +53,6 @@ bool FMantlePlaceLevelExtentTest::RunTest(const FString& Parameters)
 		return true;
 	}
 
-	// --- The Extent box: placed, located, scaled and read ---------------------------------------------
 	{
 		UWorld* World = NewExtentTestWorld(TEXT("MantlePlaceExtentBoxTestWorld"));
 		if (!TestNotNull(TEXT("a throwaway world to spawn into"), World))
@@ -86,7 +72,6 @@ bool FMantlePlaceLevelExtentTest::RunTest(const FString& Parameters)
 			TestFalse(TEXT("a box nobody located reads as no extent"), Box->GetExtent(Extent));
 			TestFalse(TEXT("so the level has no source and the plain curator opens"), MantlePlaceLevelExtent::Resolve(World).IsSet());
 
-			// Placed at the default size: 1 km, before any scaling.
 			TestEqual(TEXT("default width is 1 km"), Box->GetState().WidthM, 1000.0, 1e-6);
 			TestEqual(TEXT("default depth is 1 km"), Box->GetState().DepthM, 1000.0, 1e-6);
 
@@ -101,7 +86,6 @@ bool FMantlePlaceLevelExtentTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("1 km is about 0.0104 degrees of longitude here"), BaseLongitudeSpan, 0.0104, 0.0001);
 			TestEqual(TEXT("1 km is about 0.0090 degrees of latitude"), BaseLatitudeSpan, 0.0090, 0.0001);
 
-			// Scaled: X is east-west, Y is north-south. Rotation does not move the extent.
 			Box->SetActorScale3D(FVector(2.0, 3.0, 1.0));
 			Box->SetActorRotation(FRotator(0.0, 45.0, 0.0));
 			TestEqual(TEXT("scaled X is the width"), Box->GetState().WidthM, 2000.0, 1e-6);
@@ -115,10 +99,9 @@ bool FMantlePlaceLevelExtentTest::RunTest(const FString& Parameters)
 			TestTrue(TEXT("a located box is the level's extent source"), Resolved.Source == EMantlePlaceExtentSource::ExtentBox);
 			TestEqual(TEXT("and the level resolves to the box's extent"), Resolved.Extent.West, Scaled.West, 1e-12);
 		}
-		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		World->DestroyWorld(false);
 	}
 
-	// --- A previous import: the tag finds the order, the record holds its extent ----------------------
 	{
 		UWorld* World = NewExtentTestWorld(TEXT("MantlePlaceImportExtentTestWorld"));
 		if (!TestNotNull(TEXT("a throwaway world to spawn into"), World))
@@ -126,7 +109,6 @@ bool FMantlePlaceLevelExtentTest::RunTest(const FString& Parameters)
 			return false;
 		}
 
-		// Two identities that share their first eight characters share a record file.
 		const FString Identity = TEXT("00000519-aaaa");
 		const FString Colliding = TEXT("00000519-bbbb");
 
@@ -155,12 +137,10 @@ bool FMantlePlaceLevelExtentTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("north"), Extents[0].North, 30.27);
 		}
 
-		// An older record with no extent says nothing, and the level falls through to the next source.
 		Record.bHasExtent = false;
 		MantlePlaceImportProvenance::Write(Record);
 		TestEqual(TEXT("a record from an earlier build has no extent"), MantlePlaceLevelExtent::ImportExtents(World).Num(), 0);
 
-		// The previous import outranks an Extent box in the same level.
 		Record.bHasExtent = true;
 		MantlePlaceImportProvenance::Write(Record);
 		AMantlePlaceExtentBox* Box = World->SpawnActor<AMantlePlaceExtentBox>();
@@ -170,35 +150,31 @@ bool FMantlePlaceLevelExtentTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the previous import wins over the Extent box"), Resolved.Source == EMantlePlaceExtentSource::PriorImport);
 		TestEqual(TEXT("with its own extent"), Resolved.Extent.East, -97.73);
 
-		IFileManager::Get().Delete(*MantlePlaceImportProvenance::RecordPath(Identity), /*bRequireExists*/ false, /*bEvenReadOnly*/ true);
-		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		IFileManager::Get().Delete(*MantlePlaceImportProvenance::RecordPath(Identity), false, true);
+		World->DestroyWorld(false);
 	}
 
-	// --- The georeferences, read by reflection --------------------------------------------------------
 	{
 		UWorld* World = NewExtentTestWorld(TEXT("MantlePlaceGeoreferenceTestWorld"));
 		if (!TestNotNull(TEXT("a throwaway world to spawn into"), World))
 		{
 			return false;
 		}
-		// A kilometre square about the world origin, where both systems anchor their origin.
 		const FBox Bounds(FVector(-50000.0, -50000.0, 0.0), FVector(50000.0, 50000.0, 0.0));
 
 		TestEqual(TEXT("no georeference actor in the level: no native read"),
-			MantlePlaceLevelExtent::ConvertCorners(World, Bounds, /*bNative*/ true).Num(), 0);
+			MantlePlaceLevelExtent::ConvertCorners(World, Bounds, true).Num(), 0);
 		TestEqual(TEXT("no georeference actor in the level: no Cesium read"),
-			MantlePlaceLevelExtent::ConvertCorners(World, Bounds, /*bNative*/ false).Num(), 0);
+			MantlePlaceLevelExtent::ConvertCorners(World, Bounds, false).Num(), 0);
 		TestEqual(TEXT("empty bounds read nothing"),
-			MantlePlaceLevelExtent::ConvertCorners(World, FBox(ForceInit), /*bNative*/ true).Num(), 0);
+			MantlePlaceLevelExtent::ConvertCorners(World, FBox(ForceInit), true).Num(), 0);
 
-		// Epic's GeoReferencing: the default system is EPSG:32631 with the origin at 500000 E, 5000000 N,
-		// which is 3.0 E, 45.1535 N.
 		if (const UClass* NativeClass = FindObject<UClass>(nullptr, MantlePlaceLevelExtent::NativeGeoreferenceClassPath()))
 		{
 			AActor* System = World->SpawnActor(const_cast<UClass*>(NativeClass));
 			if (TestNotNull(TEXT("the GeoReferencing system spawns"), System))
 			{
-				const TArray<FMantlePlaceGeoPoint> Corners = MantlePlaceLevelExtent::ConvertCorners(World, Bounds, /*bNative*/ true);
+				const TArray<FMantlePlaceGeoPoint> Corners = MantlePlaceLevelExtent::ConvertCorners(World, Bounds, true);
 				if (TestEqual(TEXT("the native read gives the four corners"), Corners.Num(), 4))
 				{
 					FMantlePlaceExtent Extent;
@@ -216,13 +192,12 @@ bool FMantlePlaceLevelExtentTest::RunTest(const FString& Parameters)
 			AddInfo(TEXT("The GeoReferencing plugin is not enabled in this project: the native read was not exercised, and the plugin loaded without it."));
 		}
 
-		// Cesium for Unreal: a default georeference puts the Unreal origin at -105.25737 E, 39.736401 N.
 		if (const UClass* CesiumClass = FindObject<UClass>(nullptr, MantlePlaceLevelExtent::CesiumGeoreferenceClassPath()))
 		{
 			AActor* Georeference = World->SpawnActor(const_cast<UClass*>(CesiumClass));
 			if (TestNotNull(TEXT("the Cesium georeference spawns"), Georeference))
 			{
-				const TArray<FMantlePlaceGeoPoint> Corners = MantlePlaceLevelExtent::ConvertCorners(World, Bounds, /*bNative*/ false);
+				const TArray<FMantlePlaceGeoPoint> Corners = MantlePlaceLevelExtent::ConvertCorners(World, Bounds, false);
 				if (TestEqual(TEXT("the Cesium read gives the four corners"), Corners.Num(), 4))
 				{
 					FMantlePlaceExtent Extent;
@@ -239,10 +214,10 @@ bool FMantlePlaceLevelExtentTest::RunTest(const FString& Parameters)
 		{
 			AddInfo(TEXT("Cesium for Unreal is not enabled in this project: the Cesium read was not exercised, and the plugin loaded without it."));
 		}
-		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		World->DestroyWorld(false);
 	}
 
 	return true;
 }
 
-#endif // WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
+#endif

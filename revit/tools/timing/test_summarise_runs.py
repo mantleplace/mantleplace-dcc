@@ -1,4 +1,3 @@
-"""Cases for summarise_runs.py: python -m unittest test_summarise_runs (from this folder)."""
 from __future__ import annotations
 
 import json

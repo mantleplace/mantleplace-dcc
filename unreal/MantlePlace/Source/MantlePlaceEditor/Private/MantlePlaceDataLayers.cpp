@@ -59,7 +59,6 @@ UDataLayerAsset* FindAssetNamed(const FString& ContentRoot, const FString& Famil
 	const FString PackageName = MantlePlaceImportNaming::DataLayerPackageName(ResolvedRoot(ContentRoot), FamilyName);
 	const FString ObjectPath = MantlePlaceImportNaming::ObjectPathOf(PackageName, AssetName);
 
-	// In memory first: an earlier import this session made it and nobody has saved it yet.
 	if (UDataLayerAsset* Loaded = FindObject<UDataLayerAsset>(nullptr, *ObjectPath))
 	{
 		return Loaded;
@@ -71,7 +70,7 @@ UDataLayerAsset* FindAssetNamed(const FString& ContentRoot, const FString& Famil
 
 UDataLayerInstance* MantlePlaceDataLayers::Find(UWorld* World, const FString& ContentRoot, EMantlePlaceLayerFamily Family)
 {
-	const AWorldDataLayers* WorldDataLayers = WorldDataLayersOf(World, /*bCreate*/ false);
+	const AWorldDataLayers* WorldDataLayers = WorldDataLayersOf(World, false);
 	const UDataLayerAsset* Asset = WorldDataLayers != nullptr ? FindAsset(ContentRoot, Family) : nullptr;
 	return Asset != nullptr ? const_cast<UDataLayerInstance*>(WorldDataLayers->GetDataLayerInstance(Asset)) : nullptr;
 }
@@ -85,14 +84,13 @@ namespace
 {
 UDataLayerInstance* FindOrCreateNamed(UWorld* World, const FString& ContentRoot, const FString& FamilyName)
 {
-	AWorldDataLayers* WorldDataLayers = FamilyName.IsEmpty() ? nullptr : WorldDataLayersOf(World, /*bCreate*/ true);
+	AWorldDataLayers* WorldDataLayers = FamilyName.IsEmpty() ? nullptr : WorldDataLayersOf(World, true);
 	UDataLayerEditorSubsystem* Subsystem = UDataLayerEditorSubsystem::Get();
 	if (WorldDataLayers == nullptr || Subsystem == nullptr)
 	{
 		return nullptr;
 	}
 
-	// The shared asset: reused when any import (this session or a saved one) already made it.
 	UDataLayerAsset* Asset = FindAssetNamed(ContentRoot, FamilyName);
 	if (Asset == nullptr)
 	{
@@ -108,13 +106,11 @@ UDataLayerInstance* FindOrCreateNamed(UWorld* World, const FString& ContentRoot,
 		{
 			return nullptr;
 		}
-		// Runtime, so a game can stream a family as well as the editor hide it.
 		Asset->SetType(EDataLayerType::Runtime);
 		FAssetRegistryModule::AssetCreated(Asset);
 		Package->MarkPackageDirty();
 	}
 
-	// The world's instance of it: one per world, made once.
 	if (const UDataLayerInstance* Existing = WorldDataLayers->GetDataLayerInstance(Asset))
 	{
 		return const_cast<UDataLayerInstance*>(Existing);
@@ -125,8 +121,6 @@ UDataLayerInstance* FindOrCreateNamed(UWorld* World, const FString& ContentRoot,
 	UDataLayerInstance* Instance = Subsystem->CreateDataLayerInstance(Parameters);
 	if (Instance != nullptr && Instance->IsRuntime())
 	{
-		// A Runtime layer starts Unloaded unless told otherwise, which would make an import vanish
-		// from every game run. Activated keeps it exactly as it was before layers existed.
 		Instance->SetInitialRuntimeState(EDataLayerRuntimeState::Activated);
 	}
 	return Instance;
@@ -135,7 +129,7 @@ UDataLayerInstance* FindOrCreateNamed(UWorld* World, const FString& ContentRoot,
 
 UDataLayerInstance* MantlePlaceDataLayers::FindOdbl(UWorld* World, const FString& ContentRoot)
 {
-	const AWorldDataLayers* WorldDataLayers = WorldDataLayersOf(World, /*bCreate*/ false);
+	const AWorldDataLayers* WorldDataLayers = WorldDataLayersOf(World, false);
 	const UDataLayerAsset* Asset = WorldDataLayers != nullptr
 		? FindAssetNamed(ContentRoot, MantlePlaceImportNaming::OdblLayerName()) : nullptr;
 	return Asset != nullptr ? const_cast<UDataLayerInstance*>(WorldDataLayers->GetDataLayerInstance(Asset)) : nullptr;

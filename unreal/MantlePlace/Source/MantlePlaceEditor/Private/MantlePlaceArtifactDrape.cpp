@@ -1,10 +1,5 @@
 // Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
-// The imagery drape: the aerial PNG as a texture and the drape material built from it. It runs
-// FIRST, because the landscape adopts the material only if it is set before ALandscape::Import
-// builds its components, and the terrain mesh is assigned it right after its own import. It spawns
-// no actor of its own; what it reports at the end (Finalize) is about the geometry that used it.
-
 #include "MantlePlaceArtifactHandler.h"
 
 #include "MantlePlaceDrape.h"
@@ -36,10 +31,7 @@ public:
 		const TSharedPtr<FJsonObject> D = *DrapePtr;
 		FMantlePlaceDrapeBlock& Drape = M.Drape;
 		Drape.Path = GetString(D, TEXT("source"));
-		Drape.Sha256 = GetString(D, TEXT("sha256")); // verified against the extracted bytes at import
-		// Kept verbatim; the prefix match that gives it meaning lives in the logic unit, and the
-		// self-consistency gate that can refuse it runs in CrossCheck, once the heightmap's AOI
-		// rectangle is known.
+		Drape.Sha256 = GetString(D, TEXT("sha256"));
 		Drape.Alignment = GetString(D, TEXT("alignment"));
 		const TArray<TSharedPtr<FJsonValue>>* Extent = nullptr;
 		if (D->TryGetArrayField(TEXT("extent"), Extent) && Extent != nullptr && Extent->Num() == 4)
@@ -51,7 +43,6 @@ public:
 			Drape.bPresent = !Drape.Path.IsEmpty() && (Drape.RightM > Drape.LeftM) && (Drape.TopM > Drape.BottomM);
 		}
 
-		// imagery_drape.sha256 is likewise schema-required — same fail-closed rule as the heightmap.
 		if (Drape.bPresent && Drape.Sha256.IsEmpty())
 		{
 			OutError = TEXT("manifest hosts.unreal.imagery_drape has no sha256 (schema-required); refusing to import unverifiable bytes.");
@@ -62,10 +53,6 @@ public:
 
 	bool CrossCheck(const FMantlePlaceVaultManifest& M, FString& OutError) const override
 	{
-		// The drape's alignment descriptor against the two rectangles the manifest publishes for
-		// itself. Nothing is re-derived here: both rectangles are published values, and this only asks
-		// whether the bundle's own claim about them is true. A "matches" claim they refute is refused,
-		// because that bundle imports looking correct and is silently mis-draped.
 		const FMantlePlaceDrapeAlignment Alignment = FMantlePlaceDrapeAlignmentLogic::Classify(M.Drape.Alignment);
 		return FMantlePlaceDrapeAlignmentLogic::CheckAgainstExtents(M, Alignment, OutError);
 	}
@@ -80,8 +67,6 @@ public:
 		}
 	}
 
-	// Build the drape material up front: it depends only on the manifest + imagery texture, not the
-	// geometry, so the Landscape can be created with it already assigned. Non-fatal.
 	void Import(FMantlePlaceImportContext& Ctx) override
 	{
 		if (!Ctx.Manifest.Drape.bPresent)
@@ -100,13 +85,10 @@ public:
 		}
 		if (Ctx.DrapeMic == nullptr)
 		{
-			// Geometry still imports; it just won't get the auto-assigned imagery.
 			Ctx.Log.Add(Err);
 		}
 	}
 
-	// The Landscape adopted the material at creation and meshes were assigned it right after their
-	// import, so there is nothing left to assign here -- just report the outcome and sanity-check coverage.
 	void Finalize(FMantlePlaceImportContext& Ctx) override
 	{
 		const FMantlePlaceVaultManifest& Manifest = Ctx.Manifest;
@@ -122,9 +104,6 @@ public:
 		{
 			Ctx.Log.Add(TEXT("Imagery draped onto its geographic footprint."));
 
-			// The manifest's own alignment descriptor, branched on rather than skimmed past. The
-			// divergent shape carries the ETL's measured figures and produces a warning; the other
-			// shapes produce a note. A "matches" claim the extents refute never reaches here.
 			const FString AlignmentLine = FMantlePlaceDrapeAlignmentLogic::DescribeForLog(
 				FMantlePlaceDrapeAlignmentLogic::Classify(Manifest.Drape.Alignment));
 			if (!AlignmentLine.IsEmpty())
@@ -132,13 +111,8 @@ public:
 				Ctx.Log.Add(AlignmentLine);
 			}
 
-			// Sanity-check imagery coverage against the terrain. The drape is placed at its true
-			// geographic footprint; if the bundle's imagery spans only part of the AOI it will not
-			// blanket the terrain (a web-ETL data issue, not an import fault).
 			if (Manifest.Heightmap.bPresent)
 			{
-				// Both spans in UE axis order (X = North, Y = East) — GetAoiSizeUeCm owns the swap
-				// between the manifest's grid-axis naming and UE's, so this must not open-code it.
 				const FVector2D AoiSize = Manifest.GetAoiSizeUeCm();
 				const double SpanXcm = AoiSize.X;
 				const double SpanYcm = AoiSize.Y;
@@ -156,7 +130,6 @@ public:
 				}
 			}
 		}
-		// else: a drape was requested but the material failed to build — the error was logged by Import.
 	}
 };
 }

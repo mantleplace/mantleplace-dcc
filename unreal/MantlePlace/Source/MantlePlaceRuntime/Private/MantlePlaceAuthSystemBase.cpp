@@ -19,8 +19,6 @@
 #include "HttpResultCallback.h"
 #include "HttpRouteHandle.h"
 
-// The loopback callback port is probed on a plain socket before the HTTP server is asked to bind
-// it: FHttpListener asserts on port 0, so there is no way to ask IT for an OS-assigned port.
 #include "SocketSubsystem.h"
 #include "Sockets.h"
 #include "IPAddress.h"
@@ -30,9 +28,6 @@
 #include "GenericPlatform/GenericPlatformFile.h"
 #include "Containers/Ticker.h"
 
-// CSPRNG for the PKCE code_verifier + state. Windows uses CNG (BCryptGenRandom); other desktop
-// platforms read /dev/urandom. (We deliberately avoid OpenSSL here: its <openssl/...> headers
-// redefine the type `UI`, which collides with a `namespace UI` in this translation unit.)
 #if PLATFORM_WINDOWS
 #include "Windows/AllowWindowsPlatformTypes.h"
 #include <bcrypt.h>
@@ -43,10 +38,6 @@ DEFINE_LOG_CATEGORY_STATIC(LogMantlePlaceAuth, Log, All);
 
 namespace
 {
-	/** Secret-store key under which the refresh token is persisted. */
-	// The storage key, and therefore the file name. Spelled exactly as the Revit host spells it:
-	// both hosts read and write ONE credential per OS user, so a difference of one character here
-	// is two sessions that never see each other.
 	const FString GRefreshTokenKey(TEXT("refresh-token"));
 }
 
@@ -70,7 +61,6 @@ void UMantlePlaceAuthSystemBase::SignInWithBrowser()
 
 	EnsureSecretStore();
 
-	// Generate the PKCE verifier and a CSRF state from a CSPRNG (32 bytes each).
 	TArray<uint8> VerifierBytes;
 	TArray<uint8> StateBytes;
 	if (!GenerateRandomBytes(32, VerifierBytes) || !GenerateRandomBytes(32, StateBytes))
@@ -87,7 +77,6 @@ void UMantlePlaceAuthSystemBase::SignInWithBrowser()
 	bSignInCallbackConsumed = false;
 	const FString CodeChallenge = FMantlePlaceAuthLogic::MakeCodeChallengeS256(PendingCodeVerifier);
 
-	// Stand up the loopback redirect server before opening the browser.
 	FString ServerError;
 	if (!StartLoopbackServer(ServerError))
 	{
@@ -112,9 +101,6 @@ void UMantlePlaceAuthSystemBase::SignInWithBrowser()
 	}
 	else
 	{
-		// The URL carries only public OAuth material (client challenge, state,
-		// loopback redirect) — the secrets stay in this process. Logged whole so
-		// an external agent can complete the round-trip in a browser it manages.
 		UE_LOG(LogMantlePlaceAuth, Log, TEXT("Browser launch disabled; complete sign-in externally: %s"), *AuthorizeUrl);
 	}
 }
@@ -125,7 +111,7 @@ void UMantlePlaceAuthSystemBase::CancelSignIn()
 	{
 		return;
 	}
-	AbortBrowserSignIn(TEXT("Sign-in cancelled."), /*bUserAborted=*/true);
+	AbortBrowserSignIn(TEXT("Sign-in cancelled."), true);
 }
 
 void UMantlePlaceAuthSystemBase::TryRestoreSession()
@@ -140,7 +126,6 @@ void UMantlePlaceAuthSystemBase::TryRestoreSession()
 	FString StoredRefresh;
 	if (!SecretStore.IsValid() || !SecretStore->Load(GRefreshTokenKey, StoredRefresh) || StoredRefresh.IsEmpty())
 	{
-		// No stored session to restore — not an error.
 		NotifyTokenRefreshed(false);
 		return;
 	}
@@ -203,8 +188,6 @@ void UMantlePlaceAuthSystemBase::RefreshToken()
 		return;
 	}
 
-	// Take the freshest token before spending a round trip on it: the other host may have rotated
-	// since this process last refreshed, and the copy in memory would then already be dead.
 	Tokens.RefreshToken = ReadFreshestRefreshToken();
 	PresentedRefreshToken = Tokens.RefreshToken;
 
@@ -231,7 +214,6 @@ void UMantlePlaceAuthSystemBase::BeginDestroy()
 
 void UMantlePlaceAuthSystemBase::SendAuthRequest(const FString& Url, const FString& Body, ERequestKind Kind)
 {
-	// Defensively drop any stale request before launching a new one.
 	CancelActiveRequest();
 
 	ActiveRequest = FMantlePlaceClientHttp::CreateRequest(TEXT("POST"), Url);
@@ -239,8 +221,6 @@ void UMantlePlaceAuthSystemBase::SendAuthRequest(const FString& Url, const FStri
 	ActiveRequest->SetHeader(TEXT("Accept"), TEXT("application/json"));
 	ActiveRequest->SetContentAsString(Body);
 
-	// Capture a weak pointer, never raw `this`: the request completes across frames and the
-	// owning UObject may be GC'd mid-flight (PIE end, world teardown, BP actor destroyed).
 	TWeakObjectPtr<UMantlePlaceAuthSystemBase> WeakThis(this);
 	ActiveRequest->OnProcessRequestComplete().BindLambda(
 		[WeakThis, Kind](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
@@ -249,13 +229,11 @@ void UMantlePlaceAuthSystemBase::SendAuthRequest(const FString& Url, const FStri
 			{
 				Self->HandleAuthResponse(Request, Response, bConnectedSuccessfully, Kind);
 			}
-			// else: owner was GC'd — nothing to do, no use-after-free.
 		});
 
 	if (!ActiveRequest->ProcessRequest())
 	{
-		// The request never left the process, so nothing was rejected. Transient by definition.
-		HandleAuthFailure(TEXT("Could not start the request to mantle.place."), Kind, /*bDefinitive=*/false);
+		HandleAuthFailure(TEXT("Could not start the request to mantle.place."), Kind, false);
 	}
 }
 
@@ -264,33 +242,27 @@ void UMantlePlaceAuthSystemBase::HandleAuthResponse(
 	TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response,
 	bool bConnectedSuccessfully, ERequestKind Kind)
 {
-	// This request is finished; release our handle (the lambda is no longer needed).
 	ActiveRequest.Reset();
 
-	// Axis 1: transport failure (no response reached us).
 	if (!bConnectedSuccessfully || !Response.IsValid())
 	{
-		// No response at all: the platform never got the chance to reject anything.
-		HandleAuthFailure(TEXT("Could not reach mantle.place."), Kind, /*bDefinitive=*/false);
+		HandleAuthFailure(TEXT("Could not reach mantle.place."), Kind, false);
 		return;
 	}
 
 	const int32 ResponseCode = Response->GetResponseCode();
 	const FString Content = Response->GetContentAsString();
 
-	// Axis 1b: the platform answered, and what it said is "update the plugin". Not a verdict on the
-	// credential (so never definitive: the stored session survives) and not a connectivity problem.
 	FMantlePlaceClientUpdate Update;
 	if (FMantlePlaceClientLogic::ParseClientUpdateRequired(ResponseCode, Content, Update))
 	{
 		UE_LOG(LogMantlePlaceAuth, Warning, TEXT("The platform requires a newer plugin (sent %s, minimum %s)."),
 			*Update.SentVersion, *Update.MinimumVersion);
 		OnClientUpdateRequiredNative.Broadcast(Update);
-		HandleAuthFailure(Update.Message, Kind, /*bDefinitive=*/false);
+		HandleAuthFailure(Update.Message, Kind, false);
 		return;
 	}
 
-	// Axis 2: HTTP error code — surface the error message if present.
 	if (!EHttpResponseCodes::IsOk(ResponseCode))
 	{
 		FString Error;
@@ -302,18 +274,14 @@ void UMantlePlaceAuthSystemBase::HandleAuthResponse(
 		return;
 	}
 
-	// 2xx — parse the token payload (identical GoTrue token shape for every grant).
 	FMantlePlaceAuthTokens NewTokens;
 	FString ParseError;
 	if (!FMantlePlaceAuthLogic::ParseTokenResponse(Content, NewTokens, ParseError))
 	{
-		// A 2xx we could not parse is a platform-side surprise, not a verdict on the credential.
-		HandleAuthFailure(ParseError, Kind, /*bDefinitive=*/false);
+		HandleAuthFailure(ParseError, Kind, false);
 		return;
 	}
 
-	// Success — overwrite the token set, but keep the prior refresh_token when the response omits a
-	// new one, and stamp absolute expiry from wall-clock now.
 	LastAuthError.Reset();
 	bRotationRetryUsed = false;
 
@@ -328,7 +296,6 @@ void UMantlePlaceAuthSystemBase::HandleAuthResponse(
 	case ERequestKind::PkceExchange:
 		if (Kind == ERequestKind::PkceExchange)
 		{
-			// The redirect has been consumed and the code exchanged — the loopback server is done.
 			StopLoopbackServer();
 			StopSignInTimeout();
 			PendingCodeVerifier.Reset();
@@ -343,7 +310,6 @@ void UMantlePlaceAuthSystemBase::HandleAuthResponse(
 
 	case ERequestKind::Refresh:
 	case ERequestKind::Restore:
-		// Re-persist the (possibly rotated) refresh token so the stored copy never goes stale.
 		PersistRefreshToken();
 		SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::RefreshSucceeded));
 		UE_LOG(LogMantlePlaceAuth, Log, TEXT("Token %s succeeded."),
@@ -355,8 +321,6 @@ void UMantlePlaceAuthSystemBase::HandleAuthResponse(
 
 void UMantlePlaceAuthSystemBase::HandleAuthFailure(const FString& Message, ERequestKind Kind, bool bDefinitive)
 {
-	// Whatever happens below, the reason is now answerable. A surface that renders Failed as a
-	// plain "Sign In" button with nothing else to say is how this went unreported for months.
 	LastAuthError = Message;
 
 	switch (Kind)
@@ -384,16 +348,11 @@ void UMantlePlaceAuthSystemBase::HandleAuthFailure(const FString& Message, ERequ
 			Kind == ERequestKind::Restore ? TEXT("restore") : TEXT("refresh"),
 			bDefinitive ? TEXT("rejected") : TEXT("transient"), *Message);
 
-		// The in-memory token set goes either way - it is unusable now regardless.
 		Tokens.Reset();
 		ExpiresAtUtc = FDateTime(0);
 
 		if (bDefinitive && !bRotationRetryUsed)
 		{
-			// Before believing a rejection, check whether the other host rotated the credential
-			// between our read and this answer. If the store now holds something else, the
-			// platform rejected a token that is merely superseded - discarding the session here
-			// would sign the user out of both hosts because the other one refreshed first.
 			const FString Freshest = ReadFreshestRefreshToken();
 			if (!Freshest.IsEmpty() && Freshest != PresentedRefreshToken)
 			{
@@ -401,13 +360,8 @@ void UMantlePlaceAuthSystemBase::HandleAuthFailure(const FString& Message, ERequ
 				UE_LOG(LogMantlePlaceAuth, Log,
 					TEXT("Refresh rejected a superseded token; the other host rotated it. Retrying once."));
 
-				// Leave the in-flight renewal state before re-entering. TryRestoreSession declines
-				// while a renewal is running, and we are still inside the one that just failed --
-				// without this the retry would silently do nothing at all.
 				SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::SignOut));
 
-				// Deliberately no NotifyTokenRefreshed here: this renewal has not settled, it has
-				// been retried. Whoever is waiting hears about it when the retry finishes.
 				TryRestoreSession();
 				return;
 			}
@@ -415,21 +369,14 @@ void UMantlePlaceAuthSystemBase::HandleAuthFailure(const FString& Message, ERequ
 
 		if (bDefinitive)
 		{
-			// The platform says this refresh token will never work again. Keeping it produces a
-			// client that retries a dead credential on every launch, fails silently each time, and
-			// never asks for the sign-in that would fix it.
 			ForgetStoredSession();
 			LastAuthError = FString::Printf(
 				TEXT("%s Sign in again to continue."), *Message);
 
-			// Reuse SignOut rather than inventing an event: the session HAS ended, which is what
-			// that transition already means, and the state table is a cross-host corpus fixture
-			// that both plugins must move together.
 			SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::SignOut));
 		}
 		else
 		{
-			// Transient. The stored credential is untouched: a network blip must not cost a session.
 			SetAuthState(FMantlePlaceAuthLogic::NextState(AuthState, EMantlePlaceAuthEvent::RefreshFailed));
 		}
 
@@ -458,8 +405,8 @@ void UMantlePlaceAuthSystemBase::SetAuthState(EMantlePlaceAuthState NewState)
 		return;
 	}
 	AuthState = NewState;
-	OnAuthStateChanged(NewState);              // Blueprint child surface
-	OnAuthStateChangedNative.Broadcast(NewState); // native observers (editor orchestrator/panel)
+	OnAuthStateChanged(NewState);
+	OnAuthStateChangedNative.Broadcast(NewState);
 }
 
 bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
@@ -468,16 +415,6 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 
 	FHttpServerModule& ServerModule = FHttpServerModule::Get();
 
-	// ORDER IS LOAD-BEARING: enable listeners BEFORE probing candidate ports.
-	//
-	// GetHttpRouter(Port, bFailOnBindFailure=true) only attempts a real socket bind when the
-	// module-global "listeners enabled" flag is already set — and that flag is set by
-	// StartAllListeners(). Called the other way round (probe first, start after), the first
-	// sign-in of every process binds nothing, GetHttpRouter returns a valid router for whatever
-	// port we asked about, and the loop below "succeeds" on candidate #1 no matter what. The
-	// bind then fails inside StartAllListeners(), too late to fall back, and the browser opens
-	// on a dead port with no in-app failure at all. Starting first makes each probe an honest
-	// bind-or-null, which is exactly what the loop already assumes.
 	ServerModule.StartAllListeners();
 
 	FString CallbackPath = LoopbackCallbackPath;
@@ -490,10 +427,10 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 
 	auto TryAcquire = [this, &ServerModule, &CallbackPath, WeakThis](int32 Port) -> bool
 	{
-		TSharedPtr<IHttpRouter> Router = ServerModule.GetHttpRouter(static_cast<uint32>(Port), /*bFailOnBindFailure=*/true);
+		TSharedPtr<IHttpRouter> Router = ServerModule.GetHttpRouter(static_cast<uint32>(Port), true);
 		if (!Router.IsValid())
 		{
-			return false; // Port reserved or in use — try the next candidate.
+			return false;
 		}
 
 		FHttpRouteHandle Handle = Router->BindRoute(
@@ -505,14 +442,12 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 					UMantlePlaceAuthSystemBase* Self = WeakThis.Get();
 					if (!Self)
 					{
-						// Owner gone — answer the browser so the tab doesn't hang.
 						OnComplete(FHttpServerResponse::Create(
 							FMantlePlaceAuthLogic::BuildBrowserErrorHtml(TEXT("The application is no longer running.")),
 							TEXT("text/html")));
 						return true;
 					}
 
-					// Ignore a duplicate / late redirect once the first has been consumed.
 					if (Self->bSignInCallbackConsumed)
 					{
 						OnComplete(FHttpServerResponse::Create(
@@ -542,17 +477,12 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 
 					if (FailMessage.IsEmpty())
 					{
-						// Success: answer the browser first, then exchange the code for tokens. The
-						// loopback server is torn down when that exchange completes (a later tick) —
-						// never synchronously from inside its own route handler.
 						OnComplete(FHttpServerResponse::Create(
 							FMantlePlaceAuthLogic::BuildBrowserSuccessHtml(), TEXT("text/html")));
 						Self->BeginPkceTokenExchange(*CodePtr);
 					}
 					else
 					{
-						// Failure: answer the browser, then defer teardown to the next tick so we don't
-						// unbind this route while it is still executing.
 						OnComplete(FHttpServerResponse::Create(
 							FMantlePlaceAuthLogic::BuildBrowserErrorHtml(FailMessage), TEXT("text/html")));
 						const FString DeferredMessage = FailMessage;
@@ -561,7 +491,7 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 							{
 								if (UMantlePlaceAuthSystemBase* Late = WeakThis.Get())
 								{
-									Late->AbortBrowserSignIn(DeferredMessage, /*bUserAborted=*/false);
+									Late->AbortBrowserSignIn(DeferredMessage, false);
 								}
 								return false;
 							}), 0.0f);
@@ -571,7 +501,7 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 
 		if (!Handle.IsValid())
 		{
-			return false; // Couldn't bind the route here — try the next port.
+			return false;
 		}
 
 		LoopbackRouter = Router;
@@ -585,16 +515,6 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 	int32 SelectedPort = 0;
 	bool bAcquired = false;
 
-	// REUSE THIS PROCESS'S PORT IF WE ALREADY HAVE ONE, and note that this is not an optimisation.
-	//
-	// FHttpServerModule keeps every listener it ever created in a port-keyed map and removes an
-	// entry only at module shutdown; StopAllListeners() flips a flag, it does not free anything.
-	// So each DISTINCT port this process successfully binds costs a listening socket for the rest
-	// of the session. A fresh ephemeral port per sign-in would therefore leak one socket per
-	// sign-in — strictly worse than the fixed range it replaces. Asking for the same port again is
-	// free: GetHttpRouter finds the live listener and hands back its existing router without
-	// binding anything. One socket per editor process is the trade StopLoopbackServer already
-	// makes, and this keeps it.
 	if (SessionLoopbackPort != 0 && TryAcquire(SessionLoopbackPort))
 	{
 		SelectedPort = SessionLoopbackPort;
@@ -618,8 +538,6 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 	{
 		if (Mode == FMantlePlaceAuthLogic::ELoopbackPortMode::DeclaredList)
 		{
-			// Name the ports actually tried. "In use" would be a guess — and usually the wrong one:
-			// the common cause on Windows is a reserved range, where nothing is listening at all.
 			OutError = FString::Printf(
 			    TEXT("Could not start the local sign-in callback server: none of the loopback ports "
 			         "configured in LoopbackPorts could be bound (tried %s)."),
@@ -634,8 +552,6 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 		}
 		else
 		{
-			// No port list to name, and the netsh hint would mislead here: the OS does not hand out
-			// a port from its own reserved ranges, so a reserved range is not what went wrong.
 			OutError = FString::Printf(
 			    TEXT("Could not start the local sign-in callback server: the operating system offered "
 			         "%d ports and none could be bound. This is normally a firewall or endpoint-security "
@@ -650,9 +566,6 @@ bool UMantlePlaceAuthSystemBase::StartLoopbackServer(FString& OutError)
 	BoundLoopbackPort = SelectedPort;
 	SessionLoopbackPort = SelectedPort;
 
-	// LogMantlePlaceAuth, not LogTemp: this line is part of the sign-in
-	// narration, and category-filtered tooling (log scrapers, `log LogMantlePlaceAuth
-	// verbose`) should see the whole story in one category.
 	UE_LOG(LogMantlePlaceAuth, Log, TEXT("Sign-in callback listening on http://127.0.0.1:%d%s"),
 	       SelectedPort, *CallbackPath);
 
@@ -667,23 +580,16 @@ bool UMantlePlaceAuthSystemBase::ProposeEphemeralLoopbackPort(int32& OutPort) co
 		return false;
 	}
 
-	// The literal loopback, matching FHttpServerListenerConfig's own default bind address. Probing
-	// a different interface than the listener will use would make the answer meaningless.
 	TSharedRef<FInternetAddr> Addr = Sockets->CreateInternetAddr();
 	Addr->SetLoopbackAddress();
 	Addr->SetPort(0);
 
-	// Same two-argument form FHttpListener::StartListening uses, so the probe allocates the same
-	// kind of socket the real listener will.
 	FUniqueSocket Probe = Sockets->CreateUniqueSocket(NAME_Stream, TEXT("MantlePlaceLoopbackProbe"));
 	if (!Probe.IsValid())
 	{
 		return false;
 	}
 
-	// Explicit, not inherited: a project that turns on HTTPServer.DefaultReuseAddressAndPortEnabled
-	// would otherwise let this probe share a port with someone else, and it would be reporting a
-	// port it does not hold.
 	Probe->SetReuseAddr(false);
 
 	if (!Probe->Bind(*Addr))
@@ -691,7 +597,6 @@ bool UMantlePlaceAuthSystemBase::ProposeEphemeralLoopbackPort(int32& OutPort) co
 		return false;
 	}
 
-	// Listening is what actually commits the port, and it is what FHttpListener will do next.
 	if (!Probe->Listen(1))
 	{
 		return false;
@@ -727,7 +632,6 @@ void UMantlePlaceAuthSystemBase::AbortBrowserSignIn(const FString& Message, bool
 	PendingState.Reset();
 	bSignInCallbackConsumed = false;
 
-	// A user cancel / timeout returns to a clean Unauthenticated state; a genuine failure latches Failed.
 	const EMantlePlaceAuthEvent Event = bUserAborted
 		? EMantlePlaceAuthEvent::Cancel
 		: EMantlePlaceAuthEvent::SignInFailed;
@@ -748,7 +652,6 @@ bool UMantlePlaceAuthSystemBase::GenerateRandomBytes(int32 Count, TArray<uint8>&
 		BCRYPT_USE_SYSTEM_PREFERRED_RNG);
 	return BCRYPT_SUCCESS(Status);
 #else
-	// Portable CSPRNG: read raw bytes from /dev/urandom.
 	TUniquePtr<IFileHandle> Handle(IPlatformFile::GetPlatformPhysical().OpenRead(TEXT("/dev/urandom")));
 	return Handle.IsValid() && Handle->Read(OutBytes.GetData(), Count);
 #endif
@@ -764,8 +667,6 @@ void UMantlePlaceAuthSystemBase::EnsureSecretStore()
 
 void UMantlePlaceAuthSystemBase::NotifyTokenRefreshed(bool bSuccess)
 {
-	// One funnel, so the native listeners can never be forgotten at a new call site. The Blueprint
-	// event goes first to preserve the ordering the BP surface has always seen.
 	OnTokenRefreshed(bSuccess);
 	OnTokenRefreshedNative.Broadcast(bSuccess);
 }
@@ -777,10 +678,6 @@ FString UMantlePlaceAuthSystemBase::ReadFreshestRefreshToken()
 	FString Stored;
 	if (SecretStore.IsValid() && SecretStore->Load(GRefreshTokenKey, Stored) && !Stored.IsEmpty())
 	{
-		// The store wins when they disagree. One machine identity means the other host may have
-		// rotated since we last read, and presenting the token we happen to be holding would be
-		// presenting a superseded one - which a rotating platform rejects, and which we would then
-		// have to distinguish from a genuinely dead session.
 		return Stored;
 	}
 
@@ -822,12 +719,12 @@ void UMantlePlaceAuthSystemBase::StopSignInTimeout()
 	}
 }
 
-bool UMantlePlaceAuthSystemBase::OnSignInTimeout(float /*DeltaTime*/)
+bool UMantlePlaceAuthSystemBase::OnSignInTimeout(float)
 {
-	SignInTimeoutTicker.Reset(); // Returning false unregisters us; drop the handle too.
+	SignInTimeoutTicker.Reset();
 	if (AuthState == EMantlePlaceAuthState::Authenticating)
 	{
-		AbortBrowserSignIn(TEXT("Sign-in timed out. Please try again."), /*bUserAborted=*/true);
+		AbortBrowserSignIn(TEXT("Sign-in timed out. Please try again."), true);
 	}
 	return false;
 }

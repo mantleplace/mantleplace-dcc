@@ -5,37 +5,37 @@
 #if WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
 
 #include "MantlePlaceArtifactHandler.h"
-#include "MantlePlaceBundleReaderLogic.h" // FindManifest: which manifest generation a bundle is  // the importer's own handlers: what it can place from this archive
-#include "MantlePlaceEditorSettings.h"   // the generated content root (the refusal touches nothing under it)
-#include "MantlePlaceImportOrchestration.h" // ExplainNothingToImport: the refusal this test checks when it applies
-#include "MantlePlaceIntegrityLogic.h"   // HoldsCesiumTerrain: whether the refusal may offer the stream
+#include "MantlePlaceBundleReaderLogic.h"
+#include "MantlePlaceEditorSettings.h"
+#include "MantlePlaceImportOrchestration.h"
+#include "MantlePlaceIntegrityLogic.h"
 #include "MantlePlaceImporterLibrary.h"
-#include "MantlePlaceImportManifest.h" // FMantlePlaceVaultManifest (base-bundle skip + layer presence)
-#include "MantlePlaceImportNaming.h"   // subfolder layout, so this asserts the standard not a copy of it
-#include "MantlePlaceVaultTypes.h"     // MantlePlaceMinSupportedManifestVersion (stale-fixture skip)
+#include "MantlePlaceImportManifest.h"
+#include "MantlePlaceImportNaming.h"
+#include "MantlePlaceVaultTypes.h"
 #include "MantlePlaceImportTypes.h"
-#include "MantlePlaceLiveGateLogic.h"   // the placement gate's unit factors and tolerances; the drape check's verdict
-#include "MantlePlaceRoadSplinesLogic.h" // the importer's own datum decision, asked not recomputed
-#include "MantlePlaceRoadSpline.h"       // the road gate reads the placed splines back
-#include "MantlePlaceCoverageRasterLogic.h"  // IsCoverageRaster (which layers to expect)
-#include "MantlePlaceCoverageRasterTypes.h"  // runtime: UMantlePlaceCoverageRasterData
+#include "MantlePlaceLiveGateLogic.h"
+#include "MantlePlaceRoadSplinesLogic.h"
+#include "MantlePlaceRoadSpline.h"
+#include "MantlePlaceCoverageRasterLogic.h"
+#include "MantlePlaceCoverageRasterTypes.h"
 
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Components/SplineComponent.h"
 #include "Editor.h"
-#include "Editor/Transactor.h" // the import must land as ONE undoable transaction
+#include "Editor/Transactor.h"
 #include "Engine/Texture2D.h"
 #include "HAL/PlatformMisc.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
-#include "FileUtilities/ZipArchiveReader.h" // orientation gate: re-read the source heightmap
+#include "FileUtilities/ZipArchiveReader.h"
 #include "HAL/PlatformFileManager.h"
 #include "IImageWrapper.h"
 #include "IImageWrapperModule.h"
 #include "Landscape.h"
 #include "LandscapeComponent.h"
-#include "LandscapeDataAccess.h" // FLandscapeComponentDataInterface (orientation gate)
+#include "LandscapeDataAccess.h"
 #include "LandscapeInfo.h"
 #include "LandscapeLayerInfoObject.h"
 #include "Materials/Material.h"
@@ -48,12 +48,6 @@
 
 namespace MantlePlaceImportLiveTest
 {
-	/**
-	 * Pearson correlation over two equal-length samples. Deliberately offset- and scale-invariant:
-	 * the source is raw uint16 and the landing is landscape height units through a Z scale and a
-	 * location offset, so a correlation cannot be faked or masked by any of that — only the
-	 * ORIENTATION is under test. Returns 0.0 for a degenerate (constant) input rather than NaN.
-	 */
 	double Correlation(const TArray<double>& A, const TArray<double>& B)
 	{
 		const int32 Num = FMath::Min(A.Num(), B.Num());
@@ -89,7 +83,6 @@ namespace MantlePlaceImportLiveTest
 		return Sab / FMath::Sqrt(Saa * Sbb);
 	}
 
-	/** The dihedral group of a square grid — every way an orientation bug can present. */
 	enum class EDihedral : uint8
 	{
 		Identity = 0, Rot90CCW, Rot180, Rot270CCW, Transpose, FlipNorthSouth, FlipEastWest, AntiTranspose, Count
@@ -110,7 +103,6 @@ namespace MantlePlaceImportLiveTest
 		}
 	}
 
-	/** Re-index a row-major NxN grid by one of the eight dihedral transforms. */
 	TArray<double> TransformGrid(const TArray<double>& In, int32 N, EDihedral Which)
 	{
 		TArray<double> Out;
@@ -138,26 +130,11 @@ namespace MantlePlaceImportLiveTest
 		return Out;
 	}
 
-	/** Centre-of-cell index for bucket Index of Count, over Extent samples. */
 	int32 CellCentre(int32 Index, int32 Count, int32 Extent)
 	{
 		return FMath::Clamp(FMath::RoundToInt32((Index + 0.5) * Extent / Count), 0, Extent - 1);
 	}
 
-	/**
-	 * Every landscape component of `Landscape`, wherever the world happened to put it.
-	 *
-	 * Deliberately NOT `ALandscape::LandscapeComponents`. That array holds only the components
-	 * owned by the ALandscape actor itself, and a World Partition world distributes them across
-	 * ALandscapeStreamingProxy actors instead -- so reading the actor's own array there yields an
-	 * empty set and every readback below silently measures nothing. ULandscapeInfo is the
-	 * whole-landscape view: ForAllLandscapeComponents walks the ALandscape *and* every loaded
-	 * streaming proxy, making it a superset of the actor array in both world configurations. It
-	 * also null-filters, so what comes back needs no further guarding.
-	 *
-	 * "Loaded" is the standing caveat: an unloaded World Partition cell contributes components to
-	 * nobody, so a caller needing the whole landscape must keep its cells loaded.
-	 */
 	TArray<ULandscapeComponent*> GatherLandscapeComponents(ALandscape* Landscape)
 	{
 		TArray<ULandscapeComponent*> Components;
@@ -175,21 +152,11 @@ namespace MantlePlaceImportLiveTest
 		return Components;
 	}
 
-	/**
-	 * Is this a CI run? Keyed on `CI`, which every mainstream CI provider sets and which no
-	 * developer shell sets by accident; presence is the signal, the value is not read.
-	 *
-	 * Strictness matters because a warn-and-pass skip and a gate that ran and passed are the same
-	 * green. That is not hypothetical: the orientation gate below shipped unable to run on CI and
-	 * went unnoticed until it was audited. Under CI a skip is therefore an error — the same rule
-	 * the conformance corpus already lives by, where a missing corpus is a failure and never a skip.
-	 */
 	bool IsCi()
 	{
 		return !FPlatformMisc::GetEnvironmentVariable(TEXT("CI")).IsEmpty();
 	}
 
-	/** One published ground point, in this host's frame: world X north, world Y east, Z in the landscape's datum. */
 	struct FCheckPoint
 	{
 		double XCm = 0.0;
@@ -197,31 +164,8 @@ namespace MantlePlaceImportLiveTest
 		double ExpectedZCm = 0.0;
 	};
 
-	/** The datum of every height the landscape carries; a check point stated in another is shifted into it. */
 	const TCHAR* const LandscapeDatum = TEXT("EGM2008-orthometric");
 
-	/**
-	 * The bundle's own surface points (`elevation.points_csv`), as check points for the landscape.
-	 *
-	 * Read from the manifest this test re-opens, not from the importer's parse: the importer never reads
-	 * these points, so they are an independent statement of where the ground is, cut from the DEM rather
-	 * than from the heightmap the landscape is built from. They are local ENU offsets from the AOI
-	 * centroid, which is the world origin here, so the expected position is the published one with no
-	 * arithmetic but the axis order (north to +X, east to +Y) and the unit: the points are in the unit
-	 * `points_csv.units` states (absent means metres; `ftUS`, `ft` and `m` convert, any other leaves the gate
-	 * unrun), and each of x, y and z is scaled by that unit's exact factor before the datum shift, which is
-	 * stated in metres. A point stated in
-	 * NAVD88 is moved into the landscape's EGM2008 by the bundle's own `navd88_minus_egm2008_m`, verbatim;
-	 * a bundle that does not publish that difference has no check points this test can trust.
-	 *
-	 * `Wanted` points are taken evenly through the file. Returns false, with the reason, when the bundle
-	 * publishes no points this test can read.
-	 *
-	 * A 3.x bundle (Manifest.json at its root) states no `elevation.points_csv` or `navd88_minus_egm2008_m`:
-	 * its surface points file is derived from the terrain file, not stated, so there is nothing stated to
-	 * compare against and this derives nothing. That returns false with `bOutNotStatedBy3x` set, which the
-	 * caller logs as information, not as a skipped gate.
-	 */
 	bool ReadCheckPoints(FZipArchiveReader& Reader, int32 Wanted, TArray<FCheckPoint>& Out, FString& OutReason,
 		bool& bOutNotStatedBy3x)
 	{
@@ -269,7 +213,7 @@ namespace MantlePlaceImportLiveTest
 			return false;
 		}
 		FString Units;
-		(*Points)->TryGetStringField(TEXT("units"), Units); // absent means metres
+		(*Points)->TryGetStringField(TEXT("units"), Units);
 		double MetresPerUnit = 1.0;
 		if (!FMantlePlaceLiveGateLogic::TryUnitToMetres(Units, MetresPerUnit, OutReason))
 		{
@@ -313,8 +257,8 @@ namespace MantlePlaceImportLiveTest
 			}
 			FCheckPoint Point;
 			const double ToCm = MetresPerUnit * 100.0;
-			Point.YCm = FCString::Atod(*Cells[0]) * ToCm; // east
-			Point.XCm = FCString::Atod(*Cells[1]) * ToCm; // north
+			Point.YCm = FCString::Atod(*Cells[0]) * ToCm;
+			Point.XCm = FCString::Atod(*Cells[1]) * ToCm;
 			Point.ExpectedZCm = (FCString::Atod(*Cells[2]) * MetresPerUnit + DatumShiftM) * 100.0;
 			Out.Add(Point);
 		}
@@ -327,11 +271,6 @@ namespace MantlePlaceImportLiveTest
 	}
 }
 
-// Live end-to-end import against a real downloaded sample bundle. Runs in the editor
-// (needs an editor world). Skips (with a warning) when the sample isn't present, so it
-// stays portable — EXCEPT under CI, where every skip below is an error instead, because a
-// skipped gate and a passed gate are otherwise the same green. It intentionally leaves the
-// imported actors in the level so the result can be inspected / screenshotted.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceImportLiveTest,
 	"MantlePlace.Import.LiveFreeTier",
@@ -339,13 +278,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 {
-	// MP_LIVETEST_BUNDLE overrides; otherwise the in-tree live-test copy. No developer-machine
-	// fallback paths — a missing bundle is a warn-and-pass skip locally and an error on CI (below).
 	IPlatformFile& Platform = FPlatformFileManager::Get().GetPlatformFile();
 
-	// Every skip in this test routes through here: warn-and-pass locally, error on CI. Returning
-	// the value RunTest should return keeps each skip site a single line, so a future skip branch
-	// added without the strict path would stand out as the one that does not use it.
 	const bool bStrict = MantlePlaceImportLiveTest::IsCi();
 	auto SkipOrFail = [this, bStrict](const FString& Reason) -> bool
 	{
@@ -372,22 +306,11 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			FString::Printf(TEXT("Sample bundle not present (%s); skipping live import test."), *Zip));
 	}
 
-	// A base_on_demand bundle whose Unreal formats haven't materialized yet can't exercise the
-	// import — skip loudly rather than fail, so a freshly procured base bundle is usable as the
-	// fixture the moment its materialize completes.
 	FMantlePlaceVaultManifest Manifest;
 	{
 		FString ReadError;
 		const bool bRead = UMantlePlaceImporterLibrary::ReadVaultManifest(Zip, Manifest, ReadError);
 
-		// A fixture cut before the current clean-break floor is stale, not broken. Every floor bump
-		// invalidates every bundle downloaded before it, so failing here would turn a routine bump
-		// into a red local suite on every machine holding an older zip — the same warn-and-skip the
-		// missing-bundle and base_on_demand cases get, for the same portability reason.
-		// Through the version helper, never through FString's `<`. Both operands are strings now, so
-		// a raw comparison compiles and is lexicographic: the pre-history's "19" sorts ABOVE "1.0.0"
-		// on the second character, and exactly the stale fixture this branch exists to skip would
-		// fall through to a hard failure instead.
 		if (bRead && !Manifest.bValid
 		    && MantlePlaceIsManifestVersionBelowFloor(Manifest.Version, MantlePlaceMinSupportedManifestVersion))
 		{
@@ -405,11 +328,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// An archive that holds nothing the importer can place as terrain (a download selection cut without
-	// the heightmap, the terrain mesh and the Cesium tileset) is REFUSED by design, before anything is
-	// touched. For that archive the test checks the refusal and stops: running the placement, road,
-	// coverage and transaction checks below against an import that rightly placed nothing would report
-	// the correct refusal as a dozen failures. Every other archive runs the full test.
 	if (Manifest.bValid)
 	{
 		const FString ExpectedRefusal = MantlePlaceImportOrchestration::ExplainNothingToImport(
@@ -434,7 +352,7 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			const auto CountAssets = [&Registry, ContentRoot]()
 			{
 				TArray<FAssetData> Assets;
-				Registry.Get().GetAssetsByPath(ContentRoot, Assets, /*bRecursive*/ true);
+				Registry.Get().GetAssetsByPath(ContentRoot, Assets, true);
 				return Assets.Num();
 			};
 			const int32 ActorsBefore = CountActors();
@@ -471,17 +389,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("import reported success"), Result.bSuccess);
 	TestTrue(TEXT("created at least 2 actors (landscape + mesh)"), Result.CreatedActors.Num() >= 2);
 
-	// The import is one undoable transaction, and it is the one Ctrl+Z takes. The claim is in
-	// ImportVaultPackage's own doc comment, and it was false for as long as the importer renamed a
-	// freshly-imported asset inside its own FScopedTransaction: FAssetRenameManager deletes the
-	// object it moved away from, ObjectTools sees that object is referenced only by the undo buffer
-	// and resets the WHOLE buffer, and the half-built import transaction goes with it. Measured
-	// 2026-08-30 on a 523-actor bundle: Ctrl+Z moved nothing, twice, and the editor log carried
-	// "Non zero active count in UTransBuffer::Reset / Reason: Delete Selected Item".
-	//
-	// Asserted by TITLE rather than by undoing: the test deliberately leaves the actors in the level
-	// for inspection, and an assertion that has to mutate the thing it is inspecting is one nobody
-	// can run twice. GetUndoContext names exactly what the next Ctrl+Z would take.
 	if (GEditor != nullptr && GEditor->Trans != nullptr)
 	{
 		TestEqual(
@@ -490,10 +397,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			TEXT("Import Mantle Place Vault Package"));
 	}
 
-	// New-layer assertions fire only when the bundle actually ships the layer. Any source declares it:
-	// a 2.0 bundle publishes the road layer as a GeoPackage alone, with no GeoJSON row, and a check
-	// keyed on the GeoJSON row passed over every 2.0 bundle's roads without asserting anything. The
-	// Unreal block's own copy (MPB 1.16.0) is a source too, the one a US order's roads come from.
 	bool bRoadSplinesPlaceable = false;
 	if (Manifest.RoadSplines.bEnginePresent || Manifest.RoadSplines.bPresent || Manifest.RoadSplines.bGpkgPresent)
 	{
@@ -505,10 +408,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 				++NumSplineActors;
 			}
 		}
-		// Assert on what the importer decided, not on the layer being present: a source whose heights
-		// are not in this landscape's datum is a named skip (#278), never shifted, so it places nothing.
-		// The decision is asked of the importer's own plan, not re-derived here: the Unreal block's copy
-		// first, then the shared layer, the first placeable source being the one the roads come from.
 		const TArray<FMantlePlaceRoadSplinesCandidate> RoadPlan = Manifest.GetRoadSplinesPlan();
 		const FMantlePlaceRoadSplinesCandidate* RoadSource = RoadPlan.FindByPredicate(
 			[](const FMantlePlaceRoadSplinesCandidate& Candidate) { return Candidate.bPlaceable; });
@@ -516,9 +415,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		{
 			bRoadSplinesPlaceable = true;
 			TestTrue(TEXT("road-splines bundle produced at least one spline actor"), NumSplineActors >= 1);
-			// The source is read from its GeoPackage first; a bundle that declares one must have its roads
-			// from it, not from the GeoJSON fallback the importer takes when the GeoPackage fails. The
-			// engine copy, when the manifest publishes one, is the source and its line says so.
 			const bool bEngineCopy = RoadSource->Source == EMantlePlaceRoadSplinesSource::EngineCopy;
 			if (bEngineCopy || Manifest.RoadSplines.bGpkgPresent)
 			{
@@ -532,9 +428,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		else
 		{
 			TestEqual(TEXT("a road layer skipped for its datum produced no spline actors"), NumSplineActors, 0);
-			// The importer writes this same "Road splines skipped" prefix for a missing file and for a
-			// parse error, so the prefix alone would pass for the wrong reason. Match the datum reason
-			// each declared source was refused with, the exact entry the importer logs for the skip.
 			for (const FMantlePlaceRoadSplinesCandidate& Candidate : RoadPlan)
 			{
 				TestTrue(*FString::Printf(TEXT("the datum skip of the %s source is named in the import result, with its datum reason"),
@@ -570,10 +463,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a Landscape exists in the level"), NumLandscape >= 1);
 	TestTrue(TEXT("a StaticMeshActor exists in the level"), NumMesh >= 1);
 
-	// Material-weight layers: the bundle's `unreal.landscape_layers.material_weights` legend must
-	// arrive as named, layer-info-backed weightmap layers on the imported Landscape. This is the
-	// assertion guards — the block was published and produced nothing — so it checks the
-	// engine's own layer map rather than the importer's return value.
 	if (const FMantlePlaceLandscapeLayer* Weights = Manifest.FindLandscapeLayer(TEXT("material_weights")))
 	{
 		ULandscapeInfo* Info = Landscape != nullptr ? Landscape->GetLandscapeInfo() : nullptr;
@@ -592,10 +481,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// Coverage rasters: every landscape layer that is not material_weights must arrive as a texture
-	// carrying its meaning. Asserting the assets EXIST would not be worth running — a silently
-	// 8-bit `slope` passes that and is wrong in a way no consumer can see. So this reads the landed
-	// source format and the actual bytes.
 	{
 		TArray<FString> ExpectedLayers;
 		for (const FMantlePlaceLandscapeLayer& Layer : Manifest.LandscapeLayers.Layers)
@@ -609,15 +494,12 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		TMap<FString, UTexture2D*> ByLayer;
 		if (ExpectedLayers.Num() > 0)
 		{
-			// From the result, not rebuilt here: the import decides where its content went (the order,
-			// not the job, and beneath a configurable root), and a test that re-derives that path is a
-			// test that passes while the importer writes somewhere else.
 			const FString CoveragePath = MantlePlaceImportNaming::SubfolderPath(
 				Result.ContentPath, MantlePlaceImportNaming::ESubfolder::CoverageRasters);
 			FAssetRegistryModule& Registry =
 				FModuleManager::LoadModuleChecked<FAssetRegistryModule>(TEXT("AssetRegistry"));
 			TArray<FAssetData> Assets;
-			Registry.Get().GetAssetsByPath(FName(*CoveragePath), Assets, /*bRecursive*/ true);
+			Registry.Get().GetAssetsByPath(FName(*CoveragePath), Assets, true);
 			for (const FAssetData& Asset : Assets)
 			{
 				UTexture2D* Texture = Cast<UTexture2D>(Asset.GetAsset());
@@ -647,7 +529,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			const UMantlePlaceCoverageRasterData* Data = Cast<UMantlePlaceCoverageRasterData>(
 				Texture->GetAssetUserDataOfClass(UMantlePlaceCoverageRasterData::StaticClass()));
 
-			// The settings that make it readable as data rather than as colour.
 			TestFalse(*FString::Printf(TEXT("\"%s\" is not sRGB"), *LayerName), Texture->SRGB != 0);
 			TestEqual(*FString::Printf(TEXT("\"%s\" has no mips"), *LayerName),
 				Texture->MipGenSettings.GetValue(), TMGS_NoMipmaps);
@@ -661,8 +542,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 				continue;
 			}
 
-			// A 16-bit channel must have LANDED 16-bit. TC_Grayscale on anything else silently
-			// yields G8, and the values would look entirely plausible.
 			TestEqual(*FString::Printf(TEXT("\"%s\" landed as G16"), *LayerName),
 				Texture->Source.GetFormat(), TSF_G16);
 			TestEqual(*FString::Printf(TEXT("\"%s\" uses TC_Grayscale (-> PF_G16)"), *LayerName),
@@ -675,9 +554,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 				continue;
 			}
 
-			// The precision proof. Data that had been quantised to 8 bits and widened back would
-			// have a zero low byte in every sample; real 16-bit data does not. This is the
-			// assertion that an "assets exist" test would have let through.
 			const int64 NumSamples = Mip.Num() / 2;
 			bool bAnyLowByteSet = false;
 			double MinDecoded = TNumericLimits<double>::Max();
@@ -696,8 +572,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 					TEXT("\"%s\" carries true 16-bit precision (some sample has a non-zero low byte)"), *LayerName),
 				bAnyLowByteSet);
 
-			// And the mapping decodes those samples into the range the manifest declared — for
-			// `slope` and `aspect` that is degrees, for `canopy_height` metres.
 			TestTrue(*FString::Printf(TEXT("\"%s\" decodes within its declared range [%f, %f]"),
 					*LayerName, Data->MinValue, Data->MaxValue),
 				MinDecoded >= Data->MinValue - KINDA_SMALL_NUMBER
@@ -708,23 +582,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// Drape smoke check: when the import placed an imagery drape, its material must reach the landscape's
-	// render material -- the component must NOT be left on the engine default surface (the symptom of the
-	// "material needs a manual re-apply" bug). This guards the plumbing headlessly; pixel-accurate render
-	// timing (does it show on the import frame with no re-apply / refresh) is verified live in the editor.
-	//
-	// "When the import placed a drape" is the manifest's own answer (`Drape.bPresent`). A drape the import
-	// skipped by design -- imagery that states no rectangle cannot be placed (HPS-53), which is every 3.x
-	// bundle whose Imagery/Imagery.png carries none -- leaves the component on the default surface, so the
-	// check asserts the import reported the skip instead (MantlePlaceLiveGateLogic: JudgeDrape). A drape
-	// placed but absent from the material still fails. The decision is tested headless without a bundle
-	// (`MantlePlace.Import.LiveDrapeCheck`).
-	//
-	// The component set is ASSERTED, not used as a silent precondition. This block used to open
-	// `if (Landscape->LandscapeComponents.Num() > 0)` and fall straight through an empty array --
-	// so in exactly the world configuration that hides the components from that array (World
-	// Partition, which owns them via streaming proxies) the drape check went vacuous rather than
-	// red. A skipped gate and a passed gate are the same green; this one now fails loudly.
 	if (Landscape != nullptr)
 	{
 		const TArray<ULandscapeComponent*> Components =
@@ -733,7 +590,7 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 				Components.Num() > 0))
 		{
 			ULandscapeComponent* Component = Components[0];
-			UMaterialInstance* Instance = Component->GetMaterialInstance(0, /*InDynamic*/ false);
+			UMaterialInstance* Instance = Component->GetMaterialInstance(0, false);
 			UMaterial* Base = Instance ? Instance->GetMaterial() : nullptr;
 			TestNotNull(TEXT("landscape component has a material instance"), Instance);
 			const bool bMaterialIsDrape = Base != nullptr && Base != UMaterial::GetDefaultMaterial(MD_Surface);
@@ -754,29 +611,15 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// ---------------------------------------------------------------------------------------------
-	// Orientation gate (North -> +X, East -> +Y).
-	//
-	// Everything above this point passes just as happily on a mirrored, transposed or 180-rotated
-	// import: it asserts that assets exist and carry their meaning, never that they landed the right
-	// way round. That is the hole this closes.
-	//
-	// It compares an NxN downsample of the SOURCE heightmap, read in map order (row 0 north, column 0
-	// west), against the same downsample of the IMPORTED landscape, read in world order (landscape-
-	// local X north, local Y east). Scoring all eight dihedral transforms — not just the identity — is
-	// what makes it a gate: on near-symmetric terrain a merely-high identity score can sit underneath
-	// an even higher mirrored one, so "identity wins" is the assertion, and the runner-up is logged.
-	// ---------------------------------------------------------------------------------------------
 	if (Landscape != nullptr && !Manifest.Heightmap.Path.IsEmpty())
 	{
 		using namespace MantlePlaceImportLiveTest;
-		constexpr int32 GridN = 8; // 64 probes: enough to discriminate, cheap to read back
+		constexpr int32 GridN = 8;
 
-		// --- the source heightmap, in map order (I north->south, J west->east) ---
 		TArray<double> Source;
 		if (IFileHandle* Handle = Platform.OpenRead(*Zip))
 		{
-			FZipArchiveReader Reader(Handle); // takes ownership of the handle
+			FZipArchiveReader Reader(Handle);
 			TArray<uint8> Png;
 			if (!Reader.TryReadFile(Manifest.Heightmap.Path, Png))
 			{
@@ -805,7 +648,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 					{
 						for (int32 J = 0; J < GridN; ++J)
 						{
-							// I counts southward from the north edge; flip when row 0 is the SOUTH edge.
 							const int32 FromNorth = CellCentre(I, GridN, Height);
 							const int32 Row = Manifest.Heightmap.bRow0IsNorth ? FromNorth : (Height - 1 - FromNorth);
 							const int32 Col = CellCentre(J, GridN, Width);
@@ -821,26 +663,15 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			AddError(FString::Printf(TEXT("Orientation gate: could not reopen the bundle \"%s\"."), *Zip));
 		}
 
-		// --- the imported landscape, sampled in WORLD space ---
-		// Deliberately world-space rather than landscape-local: GetWorldVertex runs the engine's own
-		// transform, so the actor's rotation and any negative scale are inside what is being tested,
-		// not assumed away. Cells are then binned by world +X = North and +Y = East, which IS the
-		// claim under test.
 		TArray<double> Landed;
 		{
 			TArray<FVector> Samples;
 			constexpr int32 VertexStride = 8;
-			// Read through ULandscapeInfo, not ALandscape::LandscapeComponents -- see
-			// GatherLandscapeComponents. The two tallies below exist so that a failure says WHICH way it
-			// broke: no components reached us at all (they are owned somewhere this view cannot see, or
-			// the landscape never registered) versus components arrived but every one of them had no
-			// readable height data (an edit-layer / flush problem). Those two want opposite fixes, and
-			// the bare vertex count that used to be reported here could not tell them apart.
 			const TArray<ULandscapeComponent*> Components = GatherLandscapeComponents(Landscape);
 			int32 NumWithoutHeightData = 0;
 			for (ULandscapeComponent* Component : Components)
 			{
-				FLandscapeComponentDataInterface Data(Component, /*MipLevel*/ 0, /*WorkOnEditingLayer*/ false);
+				FLandscapeComponentDataInterface Data(Component, 0, false);
 				if (Data.GetRawHeightData() == nullptr)
 				{
 					++NumWithoutHeightData;
@@ -888,7 +719,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 					Count.SetNumZeroed(GridN * GridN);
 					for (const FVector& Sample : Samples)
 					{
-						// I counts southward from the north edge => descending world X.
 						const int32 I = FMath::Clamp(
 							FMath::FloorToInt32((MaxWorldX - Sample.X) / SpanX * GridN), 0, GridN - 1);
 						const int32 J = FMath::Clamp(
@@ -953,19 +783,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// ---------------------------------------------------------------------------------------------
-	// Placement gate: the landscape stands where the bundle says the ground is.
-	//
-	// The orientation gate above is offset- and scale-invariant on purpose, so a landscape that is the
-	// right way round but sits a hundred metres east, or a metre too low, passes it. This closes that:
-	// the bundle's own surface points, cut from the DEM and never read by the importer, are known check
-	// points. Each is compared with the landscape's nearest vertex at its published position, and the
-	// landscape is judged by two statistics over them, not by each point: the mean (a systematic offset,
-	// a datum, a post or a flip) and the RMS (the spread). `SurfacePoints.csv` is a decimated point
-	// set, not a copy of the DEM's cells, and the landscape's posts are about 1.2 m apart, so on a steep
-	// cell one point can sit metres off a correct landscape; a bound on every point fails a good import.
-	// The max |dz| is logged for information only.
-	// ---------------------------------------------------------------------------------------------
 	if (Landscape != nullptr)
 	{
 		using namespace MantlePlaceImportLiveTest;
@@ -977,7 +794,7 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		bool bNotStatedBy3x = false;
 		if (IFileHandle* Handle = Platform.OpenRead(*Zip))
 		{
-			FZipArchiveReader Reader(Handle); // takes ownership of the handle
+			FZipArchiveReader Reader(Handle);
 			bRead = ReadCheckPoints(Reader, WantedPoints, CheckPoints, NoPoints, bNotStatedBy3x);
 		}
 		else
@@ -991,7 +808,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		}
 		else if (!bRead)
 		{
-			// The skip rule the rest of this test lives by: a warning locally, an error under CI.
 			const FString Reason = FString::Printf(TEXT("Placement gate not run: %s."), *NoPoints);
 			if (bStrict)
 			{
@@ -1007,7 +823,7 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			TArray<FVector> Vertices;
 			for (ULandscapeComponent* Component : MantlePlaceImportLiveTest::GatherLandscapeComponents(Landscape))
 			{
-				FLandscapeComponentDataInterface Data(Component, /*MipLevel*/ 0, /*WorkOnEditingLayer*/ false);
+				FLandscapeComponentDataInterface Data(Component, 0, false);
 				if (Data.GetRawHeightData() == nullptr)
 				{
 					continue;
@@ -1027,7 +843,7 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 			{
 				Extent += FVector2D(Vertex.X, Vertex.Y);
 			}
-			const FBox2D Inner = Extent.ExpandBy(-100.0); // a point on the very edge has no ground on one side
+			const FBox2D Inner = Extent.ExpandBy(-100.0);
 
 			int32 Measured = 0;
 			int32 Outside = 0;
@@ -1078,18 +894,6 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// ---------------------------------------------------------------------------------------------
-	// Road gate: the road splines lie on the landscape.
-	//
-	// A spline actor existing says the GeoPackage was read; it does not say the roads stand on the
-	// ground. Their heights are the file's, placed with no conversion, so a road layer stated in one
-	// datum and cut in another (#278), or placed with the wrong origin, floats or sinks while every
-	// count above stays green. Spline points are taken evenly across every placed road, and each is
-	// measured against the nearest landscape vertex. The median is held to the placement gate's metre:
-	// a draped centreline sits on the DEM the landscape is built from, while a datum or origin error
-	// moves every point at once. The max is logged, not held, because a road on an embankment or a
-	// bridge deck can stand off the 1 m grid by more than a metre without anything being misplaced.
-	// ---------------------------------------------------------------------------------------------
 	if (Landscape != nullptr && bRoadSplinesPlaceable)
 	{
 		constexpr int32 WantedRoadPoints = 128;
@@ -1112,7 +916,7 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 		TArray<FVector> Vertices;
 		for (ULandscapeComponent* Component : MantlePlaceImportLiveTest::GatherLandscapeComponents(Landscape))
 		{
-			FLandscapeComponentDataInterface Data(Component, /*MipLevel*/ 0, /*WorkOnEditingLayer*/ false);
+			FLandscapeComponentDataInterface Data(Component, 0, false);
 			if (Data.GetRawHeightData() == nullptr)
 			{
 				continue;
@@ -1185,4 +989,4 @@ bool FMantlePlaceImportLiveTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
+#endif

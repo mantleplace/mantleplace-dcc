@@ -4,34 +4,16 @@ using System.Text.RegularExpressions;
 
 namespace MantlePlace.Core;
 
-/// <summary>
-/// Reads the <c>frames</c> member of a 3.x manifest (<c>spec/format.md</c> §9.4): the georeferenced
-/// frame and the local site frame, each stated once. Pure: JSON in, facts out.
-/// </summary>
-/// <remarks>
-/// <para>
-/// Every value is read from where the manifest states it, and none stands in for one it does not:
-/// the local frame's unit is read like any other. A value the reader does not understand fails the
-/// whole reading, naming it (<c>spec/format.md</c> §4), because a host would otherwise place
-/// geometry in a frame it could not name. This reader checks what a reader needs to apply the
-/// frames verbatim; it takes no CRS apart and derives no placement.
-/// </para>
-/// </remarks>
 internal static partial class ManifestFramesReader
 {
     private const string Frames = "frames";
 
-    /// <summary>The relative tolerance within which a stated factor is one this reader knows.</summary>
     private const double FactorTolerance = 1e-9;
 
     private const double InternationalFootToMetres = 0.3048;
 
     private const double UsSurveyFootToMetres = 1200.0 / 3937.0;
 
-    /// <summary>
-    /// Reads <c>frames</c> from <paramref name="root"/>. <c>null</c> with <paramref name="error"/> set
-    /// when the manifest states them in a way this reader cannot apply.
-    /// </summary>
     internal static BundleFrames? Read(JsonElement root, out string? error)
     {
         try
@@ -78,8 +60,6 @@ internal static partial class ManifestFramesReader
         FrameUnit unit = ReadUnit(Member(local, "unit", where), $"{where}.unit");
         ReadAxes(Member(local, "axes", where), $"{where}.axes");
 
-        // The local frame is in metres on every order (spec/format.md §9.4). It is read, and a unit
-        // that is anything else is refused rather than converted: no host re-derives a placement.
         if (unit.Unit != LinearUnit.Metre)
         {
             throw new FramesRefusedException(string.Format(
@@ -185,7 +165,6 @@ internal static partial class ManifestFramesReader
         return new FrameUnit(name, toMetres, known);
     }
 
-    /// <summary>The unit a stated factor to metres is, or <see cref="LinearUnit.Unspecified"/> for one this reader does not know.</summary>
     private static LinearUnit Classify(double toMetres)
     {
         if (!double.IsFinite(toMetres) || toMetres <= 0)
@@ -285,7 +264,6 @@ internal static partial class ManifestFramesReader
 
     private static string Factor(double toMetres) => toMetres.ToString("R", CultureInfo.InvariantCulture);
 
-    /// <summary>An authority code, the way the served schema words it: <c>EPSG:32618</c>.</summary>
     [GeneratedRegex("^[A-Z]+:[0-9A-Za-z.]+$", RegexOptions.CultureInvariant)]
     private static partial Regex CodePattern();
 

@@ -3,25 +3,6 @@ using System.Text.Json;
 
 namespace MantlePlace.Core;
 
-/// <summary>
-/// Total accessors over <see cref="JsonElement"/>: absent, null, or wrong-typed all yield the
-/// stated default instead of throwing.
-/// </summary>
-/// <remarks>
-/// The manifest reader must never throw on a malformed document — a refusal carries a message the
-/// user can act on, an exception carries a stack trace they cannot. Keeping the "did not throw"
-/// discipline in one place is what makes that reviewable.
-/// <para>
-/// Note the deliberate split between <see cref="Number"/> (absent ⇒ a stated fallback) and
-/// <see cref="OptionalInt"/> / <see cref="OptionalDouble"/> (absent ⇒ <c>null</c>, meaning
-/// <em>unknown</em>). Optional integrity and count facts use the second form: a <c>null</c> on the
-/// wire must not become a <c>0</c> that a later comparison treats as real (HPS-20).
-/// </para>
-/// <para>
-/// Public because a host's own pure core reads its own manifest block with the same accessors
-/// (the AutoCAD block reader does), and the discipline is worth exactly one copy.
-/// </para>
-/// </remarks>
 public static class JsonReading
 {
     public static JsonElement? Object(this JsonElement parent, string field)
@@ -60,22 +41,12 @@ public static class JsonReading
         return child.GetString() ?? string.Empty;
     }
 
-    /// <summary>A string field, or <c>null</c> when absent/blank — for "unknown" semantics.</summary>
     public static string? OptionalStr(this JsonElement parent, string field)
     {
         string value = parent.Str(field);
         return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
-    /// <summary>
-    /// An array field read as strings, skipping anything that is not one.
-    /// </summary>
-    /// <remarks>
-    /// Absent, null, not an array, or an array of mixed junk all yield an empty list rather than
-    /// throwing. Callers use the COUNT to decide meaning (an empty `delivered` means the bundle
-    /// carries none of what was asked for), so a partial read must never masquerade as a full one:
-    /// non-string members are skipped individually, not taken as a reason to abandon the array.
-    /// </remarks>
     public static IReadOnlyList<string> StringArray(this JsonElement parent, string field)
     {
         if (parent.Array(field) is not { } array)
@@ -95,14 +66,6 @@ public static class JsonReading
         return values;
     }
 
-    /// <summary>
-    /// A number field exactly as the document wrote it — <c>35.0</c> stays <c>35.0</c> — or
-    /// <c>null</c> when the field is absent or not a number.
-    /// </summary>
-    /// <remarks>
-    /// For a value this host quotes rather than computes with: printing a parsed double would turn
-    /// the manifest's <c>35.0</c> into <c>35</c>, which is a restatement, not the published words.
-    /// </remarks>
     public static string? RawNumber(this JsonElement parent, string field)
         => parent.ValueKind == JsonValueKind.Object
            && parent.TryGetProperty(field, out JsonElement value)
@@ -113,7 +76,6 @@ public static class JsonReading
     public static bool Bool(this JsonElement parent, string field, bool fallback = false)
         => parent.OptionalBool(field) ?? fallback;
 
-    /// <summary>A boolean field, or <c>null</c> when absent or not a boolean — unknown, not false.</summary>
     public static bool? OptionalBool(this JsonElement parent, string field)
     {
         if (parent.ValueKind != JsonValueKind.Object
@@ -146,8 +108,6 @@ public static class JsonReading
             return value;
         }
 
-        // The ETL occasionally serialises a numeric as a string; parse invariantly rather than
-        // silently reading zero.
         if (child.ValueKind == JsonValueKind.String
             && double.TryParse(child.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed))
         {
@@ -166,11 +126,6 @@ public static class JsonReading
     public static int Int(this JsonElement parent, string field, int fallback = 0)
         => parent.OptionalInt(field) ?? fallback;
 
-    /// <summary>
-    /// An integer field read by TRUNCATION, clamped to <see cref="int"/>. Used for the manifest
-    /// version, where the Unreal reference truncates and the two hosts must not disagree about
-    /// which side of the floor a non-integral value falls on.
-    /// </summary>
     public static int TruncatedInt(this JsonElement parent, string field, int fallback = 0)
     {
         double? value = parent.OptionalDouble(field);
@@ -188,7 +143,6 @@ public static class JsonReading
         return truncated >= int.MaxValue ? int.MaxValue : (int)truncated;
     }
 
-    /// <summary>True when <paramref name="field"/> exists and is an object (empty counts).</summary>
     public static bool HasObject(this JsonElement parent, string field)
         => parent.Object(field) is not null;
 }

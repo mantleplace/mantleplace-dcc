@@ -6,14 +6,8 @@
 
 #include "MantlePlaceRoofTraceLogic.h"
 
-// How the live terrain-collision test judges one trace down onto the building massing, asserted headless.
-// The motive is a real 3.0 bundle: a 49 m by 16 m building on a slope whose ground rises 5 m along it, so
-// at its uphill end the drawn ground lies 0.22 m over its flat roof. A default trace there correctly meets
-// the ground first, and the test, which expected the roof at every roof point, failed on it.
-
 namespace MantlePlaceRoofTraceLogicTest
 {
-/** The sample measured on that bundle, in centimetres: the roof 21.6 cm under the Landscape. */
 FMantlePlaceRoofSample Measured()
 {
 	FMantlePlaceRoofSample Sample;
@@ -29,7 +23,6 @@ FMantlePlaceRoofSample Measured()
 	return Sample;
 }
 
-/** An open roof 5 m over the ground, hit where it is. */
 FMantlePlaceRoofSample Open()
 {
 	FMantlePlaceRoofSample Sample;
@@ -56,7 +49,6 @@ bool FMantlePlaceRoofTraceLogicTest::RunTest(const FString& Parameters)
 	using namespace MantlePlaceRoofTraceLogicTest;
 	using Logic = FMantlePlaceRoofTraceLogic;
 
-	// --- An open roof: the trace must meet the buildings at the roof. ---------------------------------
 	TestFalse(TEXT("a roof over the ground is open"), Logic::IsCovered(Open()));
 	TestEqual(TEXT("an open roof hit at the roof passes"), Logic::Judge(Open()), EMantlePlaceRoofTraceVerdict::AtRoof);
 	{
@@ -84,7 +76,6 @@ bool FMantlePlaceRoofTraceLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("and is judged as a roof"), Logic::Judge(OffTerrain), EMantlePlaceRoofTraceVerdict::AtRoof);
 	}
 
-	// --- The measured case: the ground drawn over the roof. -------------------------------------------
 	TestTrue(TEXT("the measured roof, 21.6 cm under the drawn ground, is covered"), Logic::IsCovered(Measured()));
 	TestEqual(TEXT("and the trace meeting the ground over it passes"), Logic::Judge(Measured()),
 		EMantlePlaceRoofTraceVerdict::AtCoveringGround);
@@ -110,10 +101,7 @@ bool FMantlePlaceRoofTraceLogicTest::RunTest(const FString& Parameters)
 			EMantlePlaceRoofTraceVerdict::Missed);
 	}
 
-	// --- Defects that the judgement must not excuse. -------------------------------------------------
 	{
-		// (a) The drawn ground is 21.6 cm over the roof, but the terrain's collision sinks 30 cm below it, under
-		// the roof: a trace then meets the roof through ground that is drawn but does not collide.
 		FMantlePlaceRoofSample Sunk = Measured();
 		Sunk.TerrainZ = Sunk.GroundZ - 30.0;
 		Sunk.bHitBuildings = true;
@@ -128,7 +116,6 @@ bool FMantlePlaceRoofTraceLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("and so does a trace that meets that sunk collision"), Logic::Judge(Sunk), EMantlePlaceRoofTraceVerdict::Missed);
 	}
 	{
-		// (b) An open roof 1 cm over the drawn ground, with the terrain's collision raised 30 cm over the roof.
 		FMantlePlaceRoofSample Raised = Open();
 		Raised.GroundZ = Raised.RoofZ - 1.0;
 		Raised.GroundReliefCm = 40.0;
@@ -152,7 +139,6 @@ bool FMantlePlaceRoofTraceLogicTest::RunTest(const FString& Parameters)
 			EMantlePlaceRoofTraceVerdict::AtCoveringGround);
 	}
 
-	// --- A tie: the ground level with the roof, within the slack. -------------------------------------
 	{
 		FMantlePlaceRoofSample Tie = Open();
 		Tie.TerrainZ = Tie.RoofZ + 1.0;
@@ -164,7 +150,6 @@ bool FMantlePlaceRoofTraceLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("and a trace meeting that ground is at the roof's height"), Logic::Judge(Tie), EMantlePlaceRoofTraceVerdict::AtRoof);
 	}
 
-	// --- How many roof points may lie under the drawn ground. ---------------------------------------
 	TestTrue(TEXT("1 buried point of 622 (the 3.0 bundle) is within the bound"), Logic::IsBuriedWithinBound(1, 621));
 	TestTrue(TEXT("no buried point is within the bound"), Logic::IsBuriedWithinBound(0, 10));
 	TestFalse(TEXT("roofs mostly under the ground fail"), Logic::IsBuriedWithinBound(500, 122));
@@ -175,4 +160,4 @@ bool FMantlePlaceRoofTraceLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

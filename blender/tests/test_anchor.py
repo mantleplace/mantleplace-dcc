@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The scene's anchor and the offset a later bundle takes from it. No Blender here.
-
-Each test hands the core the anchor record the scene holds (or none) and the site origin one more
-import applies, and asserts whether that import becomes the anchor, how far it moves, and the one
-sentence it owes the curator where it cannot be moved.
-"""
 
 import copy
 import unittest
@@ -18,10 +12,9 @@ from .test_bundle import manifest
 
 
 def origin(**projected):
-    """The Georeference one bundle applies, with its projected point changed by `projected`."""
     document = manifest()
     document["location"]["site_origin"]["projected"].update(projected)
-    if "crs" in projected:  # the Context file is in the origin's CRS, or no origin applies at all
+    if "crs" in projected:
         for entry in document["file_entries"].values():
             entry["frame"]["horizontal_crs"] = projected["crs"]
     georeference = plan_import(document).georeference
@@ -30,11 +23,10 @@ def origin(**projected):
 
 
 def record(georeference):
-    """The anchor record the scene holds after `georeference` was imported first."""
     return copy.deepcopy(scene_properties(georeference)["mantleplace_site_origin"])
 
 
-FIRST = origin()  # easting 620050.0, northing 3348864.5, height 110.672, EPSG:32614, metres
+FIRST = origin()
 STAYS = Placement(anchor=False, offset=(0.0, 0.0, 0.0), note=None)
 
 
@@ -44,7 +36,6 @@ class AnchorTests(unittest.TestCase):
                          Placement(anchor=True, offset=(0.0, 0.0, 0.0), note=None))
 
     def test_a_bundle_without_an_applied_origin_neither_anchors_nor_moves(self):
-        # plan_import has already said why the origin was not applied: one warning, not two.
         self.assertEqual(decide_placement(None, None), STAYS)
         self.assertEqual(decide_placement(record(FIRST), None), STAYS)
 
@@ -73,8 +64,6 @@ class OffsetTests(unittest.TestCase):
         self.assertEqual(decide_placement(record(FIRST), origin(x=619950.0)).offset[0], -100.0)
 
     def test_each_side_is_read_in_its_own_unit(self):
-        # §6: units are read from each side. An anchor in US survey feet and a bundle in metres
-        # (same CRS code) are subtracted after each is taken to metres, never assumed alike.
         anchor = record(origin(unit="usft", x=1000.0, y=2000.0, z=10.0))
         metres = origin(x=1000.0 * 1200 / 3937 + 50.0, y=2000.0 * 1200 / 3937, z=10.0 * 1200 / 3937)
         placement = decide_placement(anchor, metres)
@@ -100,8 +89,6 @@ class OffsetTests(unittest.TestCase):
 
 
 class RefusalTests(unittest.TestCase):
-    """Every refusal leaves the bundle at its own offsets, not the anchor, with one sentence."""
-
     def assertRefused(self, placement, *words):
         self.assertEqual(placement.offset, (0.0, 0.0, 0.0))
         self.assertFalse(placement.anchor)

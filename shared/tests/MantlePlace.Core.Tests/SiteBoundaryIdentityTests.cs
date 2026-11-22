@@ -2,10 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The re-import identity: which site boundaries a re-import creates and which it recognises, all
-/// decided from the stamps the previous import wrote.
-/// </summary>
 internal static class SiteBoundaryIdentityTests
 {
     private const string Stem = "3f285101-0310-425b-b06b-bdb73b025b6a";
@@ -80,8 +76,6 @@ internal static class SiteBoundaryIdentityTests
 
         run.Case("a duplicated name never collides with a literal name that looks suffixed", () =>
         {
-            // "Zone A" at position 2 would naively suffix to "Zone A 2", the third feature's literal
-            // name — the disambiguation must resolve that too, deterministically.
             IReadOnlyList<NewSiteBoundary> created =
                 SiteBoundaryIdentity.NewFeatures(GroundLayer.LandUse, [], ["Zone A", "Zone A", "Zone A 2"], Stem);
             HashSet<string> stamps = new(StringComparer.Ordinal);
@@ -137,9 +131,6 @@ internal static class SiteBoundaryIdentityTests
 
         run.Case("IsStampFor recognises this bundle's own subdivisions", () =>
         {
-            // The drape's re-find. The material goes on each subdivision itself — on the instance in
-            // Revit 2025, where a subdivision is typeless, and through its own type from 2026 —
-            // and the instance has to be located on a RE-import where nothing was created.
             run.True(SiteBoundaryIdentity.IsStampFor($"Mantle Place Site Boundary {Stem}/Zone A", Stem),
                 "a stamp this plugin wrote for this bundle");
             run.True(SiteBoundaryIdentity.IsStampFor($"Mantle Place Site Boundary {Stem}/3", Stem),
@@ -148,8 +139,6 @@ internal static class SiteBoundaryIdentityTests
 
         run.Case("IsStampFor refuses anything this import does not own", () =>
         {
-            // ⛔ The trespass rule, as assertions. Draping a curator's subdivision is the same
-            // trespass this plugin refuses when it declines to edit the project's own toposolid type.
             run.False(SiteBoundaryIdentity.IsStampFor(null, Stem), "no comments at all");
             run.False(SiteBoundaryIdentity.IsStampFor(string.Empty, Stem), "empty comments");
             run.False(SiteBoundaryIdentity.IsStampFor("Ridge line, do not move", Stem),
@@ -160,8 +149,6 @@ internal static class SiteBoundaryIdentityTests
 
         run.Case("IsStampFor does not let one stem claim another's", () =>
         {
-            // Cache-key stems are truncated hashes. One being a prefix of another is a collision
-            // waiting, not a hypothetical, and without the separator "abc" would claim "abcdef".
             run.False(SiteBoundaryIdentity.IsStampFor("Mantle Place Site Boundary abcdef/Zone A", "abc"),
                 "a longer stem is not this one");
             run.False(SiteBoundaryIdentity.IsStampFor("Mantle Place Site Boundary abc/", "abc"),
@@ -170,7 +157,6 @@ internal static class SiteBoundaryIdentityTests
 
         run.Case("the token is the part of an owned stamp after the stem, and nothing else's", () =>
         {
-            // What names a subdivision's own drape material, so a re-import finds it by name.
             string stamp = SiteBoundaryIdentity.Stamp(GroundLayer.LandUse, "eb00f56f", "Zone A", 1);
 
             run.True(SiteBoundaryIdentity.Parse(stamp, "eb00f56f")?.Token == "Zone A", "the feature token");
@@ -198,9 +184,6 @@ internal static class SiteBoundaryIdentityTests
 
         run.Case("a layer nobody worded throws rather than borrowing land use's stamp", () =>
         {
-            // The stamp's kind IS the identity. A default arm would give a new layer the land-use
-            // prefix, so Parse would read its subdivisions as land use and a re-import would leave
-            // them alone as something else's.
             bool threw = false;
             try
             {
@@ -228,8 +211,6 @@ internal static class SiteBoundaryIdentityTests
 
         run.Case("a road surface's stamp is not a road centreline's", () =>
         {
-            // Both say "Mantle Place Road", and a stamp that one step reads as the other's would
-            // have a re-import skip a surface it never cut — or a centreline it did.
             string surface = SiteBoundaryIdentity.Stamp(GroundLayer.RoadSurface, Stem, null, 1);
             run.Equal(
                 RoadIdentity.Decide([surface], Stem, 1).RowsToCreate.Count,
@@ -249,8 +230,6 @@ internal static class SiteBoundaryIdentityTests
 
         run.Case("the two layers' positional stamps never suppress one another", () =>
         {
-            // Both layers stamp an unnamed feature by position, so each has a "1". Without the kind
-            // in the stamp, the land-use subdivision 1 would read as land-cover 1 already cut.
             IReadOnlyList<NewSiteBoundary> created = SiteBoundaryIdentity.NewFeatures(
                 GroundLayer.LandCover,
                 [$"Mantle Place Site Boundary {Stem}/1", $"Mantle Place Site Boundary {Stem}/2"],
@@ -272,8 +251,6 @@ internal static class SiteBoundaryIdentityTests
 
         run.Case("Stamps names every feature, present or not, in layer order", () =>
         {
-            // What the drape pairs with each feature's subtype, whether this run cut it or an earlier
-            // import did.
             IReadOnlyList<string> stamps = SiteBoundaryIdentity.Stamps(GroundLayer.LandUse, ["Zone A", null, "Zone A"], Stem);
             run.Equal(stamps.Count, 3, "one per feature");
             run.Equal(stamps[0], $"Mantle Place Site Boundary {Stem}/Zone A 1", "the disambiguated first");
@@ -305,9 +282,6 @@ internal static class SiteBoundaryIdentityTests
                 SiteBoundaryIdentity.NamingStamp(cover, other, 4242, Stem) == new GroundStamp(GroundLayer.LandCover, "7"),
                 "the stamp it carries wins, as it always has");
 
-            // A cut whose Comments refused the stamp is still named by the feature it was cut from,
-            // so a later import that cuts the same feature again finds the type and material this
-            // one made rather than leaving them behind, named by an element id nobody reuses.
             run.True(
                 SiteBoundaryIdentity.NamingStamp(null, cover, 4242, Stem) == new GroundStamp(GroundLayer.LandCover, "7"),
                 "an unstamped cut takes the stamp it was cut with");

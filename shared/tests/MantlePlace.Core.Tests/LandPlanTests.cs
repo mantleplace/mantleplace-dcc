@@ -2,12 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Land use and land cover, drawn as filled regions on a land plan of their own, one per layer per
-/// build (<c>docs/adr/0015-revit-subdivisions-are-for-built-surfaces.md</c>): what the planner makes
-/// of the two layers, the plans' identity and the never-redraw rule they share with the hazard plan,
-/// how a published class is typed, and the key that quotes the classes.
-/// </summary>
 internal static class LandPlanTests
 {
     private const string Stem = "order-7f3a";
@@ -51,7 +45,6 @@ internal static class LandPlanTests
                 run.Equal(step.LandPlan!.Build, Build, $"{kind}: the job's token");
                 run.True(step.LandPlan.Crop is { IsMeasurable: true }, $"{kind}: a crop");
 
-                // The drape is 600 x 300 m about the origin, offset north by 50 m.
                 FootprintExtent crop = step.LandPlan.Crop!.Value;
                 run.Within(crop.MinEastM, -300.0, 1e-6, $"{kind}: west edge, local metres");
                 run.Within(crop.MaxEastM, 300.0, 1e-6, $"{kind}: east edge");
@@ -186,8 +179,6 @@ internal static class LandPlanTests
 
         run.Case("a region's stamp is never mistaken for a subdivision an earlier build cut", () =>
         {
-            // Land cover subdivisions were stamped "Mantle Place Land Cover {stem}/{feature}", and the
-            // drape still recognises them on a model imported before ADR 0015.
             foreach (LandLayer layer in Enum.GetValues<LandLayer>())
             {
                 run.True(SiteBoundaryIdentity.Parse(LandPlan.Stamp(layer, Stem, Build), Stem) is null, $"{layer}'s region stamp");
@@ -302,7 +293,6 @@ internal static class LandPlanTests
 
         run.Case("every class the bundles on hand publish is in the table", () =>
         {
-            // The two reference orders (Jackson, Savannah) and the platform's documented values.
             foreach (string word in (string[])["forest", "barren", "shrub", "urban", "grass", "crop", "wetland", "moss", "snow", "mangrove"])
             {
                 run.True(LandStyles.Knows(LandLayer.LandCover, word), $"land cover {word}");
@@ -357,8 +347,6 @@ internal static class LandPlanTests
         });
     }
 
-    // ---- fixtures -------------------------------------------------------------------------------
-
     private static SiteFeature Polygon(int ordinal, string subtype, bool hole = false, string classification = "") => new()
     {
         Vertices = [new(0, 0, null), new(1, 0, null), new(1, 1, null)],
@@ -380,10 +368,6 @@ internal static class LandPlanTests
         .. Layers.Select(OwnPath),
     ];
 
-    /// <summary>
-    /// A 1.4.0 manifest on a metre UTM delivery whose Revit block carries both land layers, the water
-    /// and the flood zones, and a drape 600 × 300 m about the origin, offset north by 50 m.
-    /// </summary>
     private static string Manifest(bool drape = true)
     {
         IEnumerable<string> layers = Layers.Select(name =>

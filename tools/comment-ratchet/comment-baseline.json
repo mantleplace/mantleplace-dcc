@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "exclude": [
+    "shared/src/MantlePlace.PlatformApi/Generated/**"
+  ],
+  "directives": [
+    "^\\s*naming-gate:\\s*allow\\s+\\S",
+    "^\\s*not a Platform API call$"
+  ],
+  "keepDocstrings": false,
+  "total": 38,
+  "files": {
+    "shared/tests/MantlePlace.Core.Tests/SharedWindowsTests.cs": 38
+  }
+}

@@ -4,18 +4,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The TIN topo path: reading <c>3DFACE</c>s, reducing them to the site's own frame, and telling a
-/// producer's nodata fill from genuinely flat ground.
-/// </summary>
-/// <remarks>
-/// The numbers pinned in the frame case are measured off a real bundle
-/// (<c>Surface/Surface.dxf</c> of order <c>f93bc782</c> — Mantle Place's own first-party test site,
-/// not a customer's, which is what licenses committing it — EPSG:32610), not invented: its first face's
-/// first corner is 545177.5 E / 4187930.5 N against a published origin of 545888.5 / 4187221.5, and
-/// the points file's first row for the same ground is −712.0 / 709.0. Two independent artifacts
-/// agreeing to the metre is what says the subtraction is the right one.
-/// </remarks>
 internal static class SurfaceTinTests
 {
     private static readonly SiteFrame MetricFrame = new()
@@ -55,8 +43,6 @@ internal static class SurfaceTinTests
 
         run.Case("a fourth corner repeating the third stays one triangle", () =>
         {
-            // DXF has no triangle primitive, so this is how every TIN emitter writes one. Reading it
-            // as a quad would add a degenerate face and a phantom vertex.
             string dxf = Entities(Face([0, 0, 1], [10, 0, 2], [0, 10, 3], [0, 10, 3]));
 
             run.Equal(SurfaceTinReader.TryParse(new StringReader(dxf), out SurfaceTin? tin), null, "read");
@@ -75,8 +61,6 @@ internal static class SurfaceTinTests
 
         run.Case("a 3DFACE outside the ENTITIES section is not terrain", () =>
         {
-            // ⛔ Geometry in BLOCKS is a definition placed by an INSERT with its own transform.
-            // Reading its corners as world coordinates scatters the site.
             StringBuilder dxf = new();
             Section(dxf, "BLOCKS", Face([0, 0, 1], [10, 0, 2], [0, 10, 3]));
             Section(dxf, "ENTITIES", string.Empty);
@@ -142,8 +126,6 @@ internal static class SurfaceTinTests
             run.Within(local![0].X, -711.0, 0.001, "east of the origin");
             run.Within(local[0].Y, 709.0, 0.001, "north of the origin");
 
-            // ⛔ Z is an ABSOLUTE orthometric height on every artifact, so nothing is subtracted
-            // from it. Reducing it against the origin would put the terrain underground.
             run.Within(local[0].Z, 134.1718, 0.0001, "Z is left absolute");
         });
 
@@ -188,14 +170,9 @@ internal static class SurfaceTinTests
 
         run.Case("flat water on the edge is kept even with a cliff on one side of it", () =>
         {
-            // ⛔ The Bay case, and the reason the discriminator is a MEDIAN. Genuinely flat ground at
-            // the edge of a site routinely has a headland somewhere along it; a rule keyed on the
-            // largest neighbouring drop would condemn the water along with the fill. Measured on the
-            // real bundle the two separate by two orders of magnitude — 152.3 m against 0.000 m.
             (SurfaceTin tin, List<SurfacePoint> vertices) = Mesh(12, 20);
             Flatten(vertices, [0, 1, 2, 3, 4, 5], -0.406);
 
-            // Everything the patch touches is shoreline, except one vertex that is a cliff.
             foreach (int neighbour in new[] { 20, 21, 22, 23, 24, 25, 6 })
             {
                 vertices[neighbour] = With(vertices[neighbour], -0.30);
@@ -212,8 +189,6 @@ internal static class SurfaceTinTests
 
         run.Case("a bit-identical patch away from every edge is terrain", () =>
         {
-            // A reservoir, a car park, a flat roof. The defect this guards is a raster sliver
-            // overhanging the AOI, so it reaches an edge by construction.
             (SurfaceTin tin, List<SurfacePoint> vertices) = Mesh(12, 20);
             Flatten(vertices, [105, 106, 107], 9.372);
 
@@ -226,8 +201,6 @@ internal static class SurfaceTinTests
 
         run.Case("a fill larger than the cap is reported rather than removed", () =>
         {
-            // ⛔ A guard that can eat the terrain is worse than the artefact it removes, so above
-            // SurfaceGrid.MaxDroppedFraction it drops nothing and says so.
             (SurfaceTin tin, List<SurfacePoint> vertices) = Mesh(12, 20);
             Flatten(vertices, [.. Enumerable.Range(0, 20)], 9.372);
 
@@ -244,7 +217,6 @@ internal static class SurfaceTinTests
             (SurfaceTin tin, List<SurfacePoint> vertices) = Mesh(12, 20);
             Flatten(vertices, [0, 1, 2], 9.372);
 
-            // The window starts east of column 0, so the fill patch is outside it as well as on it.
             SurfaceCropWindow window = new(WestM: 5.0, SouthM: -1000.0, EastM: 1000.0, NorthM: 1000.0);
 
             IReadOnlyList<SurfacePoint> kept = SurfaceTinSanitiser.Clean(
@@ -268,14 +240,6 @@ internal static class SurfaceTinTests
         });
     }
 
-    /// <summary>
-    /// A rectangular mesh of <paramref name="columns"/> × <paramref name="rows"/> vertices, 10 m
-    /// apart, each cell split into two triangles.
-    /// </summary>
-    /// <remarks>
-    /// Every Z is distinct, so any bit-identical group in a case is one the case put there. Column 0
-    /// is the western edge, which is where the real defect lives.
-    /// </remarks>
     private static (SurfaceTin Tin, List<SurfacePoint> Vertices) Mesh(int columns, int rows)
     {
         List<SurfacePoint> vertices = new(columns * rows);

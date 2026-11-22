@@ -1,4 +1,3 @@
-// UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
 using System.Diagnostics;
 using System.IO;
 using Autodesk.Revit.DB;
@@ -6,21 +5,14 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// What every step shares: the log, the transaction that will not stop for a dialog, finding the
-// ground, and the metre conversion.
 internal sealed partial class RevitBundleImporter
 {
-    /// <summary>Adds a line to the summary, and streams it out as it happens.</summary>
     private void Say(string line)
     {
         _log.Add(line);
         Trace(line);
     }
 
-    /// <summary>
-    /// Says a <see cref="SlowStepNotice"/> line, and hands it to whoever is showing the run, to show
-    /// beside the step's clock while the wait it describes goes on.
-    /// </summary>
     private void Announce(string? notice)
     {
         if (notice is null)
@@ -32,13 +24,8 @@ internal sealed partial class RevitBundleImporter
         Announced?.Invoke(notice);
     }
 
-    /// <summary>
-    /// Says how far a step that does its work in one slice has got, for the window to show: such a
-    /// step cannot yield inside its open transaction, so it counts instead (<see cref="StagedImport.ReportProgress"/>).
-    /// </summary>
     private void Count(int done, int total) => Counted?.Invoke(new StepProgress(done, total));
 
-    /// <summary>The same, for a batch the swallower already worded.</summary>
     private void SayAll(IEnumerable<string> lines)
     {
         foreach (string line in lines)
@@ -47,10 +34,6 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>
-    /// Diagnostics only — the streamed log, never the curator's dialog. Best-effort by contract:
-    /// a sink that throws must not take the import down with it.
-    /// </summary>
     private void Trace(string line)
     {
         try
@@ -65,32 +48,15 @@ internal sealed partial class RevitBundleImporter
     private static double MetresToInternal(double metres)
         => UnitUtils.ConvertToInternalUnits(metres, UnitTypeId.Meters);
 
-    /// <summary>
-    /// Where this bundle stands against the shared coordinates the project already holds, decided
-    /// when the import was opened (<see cref="AdjacentBundle"/>). Every site-frame position is
-    /// built at this offset from the project origin; it is zero unless the project already held a
-    /// Mantle Place import.
-    /// </summary>
     internal AnchorDecision Anchoring { get; set; } = new() { Kind = AnchorDecisionKind.FirstBundle };
 
-    /// <summary>The bundle's survey point, for the check that the decision still holds when the import runs.</summary>
     internal SurveyPointPlacement? IncomingSurveyPoint { get; set; }
 
     private bool _anchorConfirmed;
 
-    /// <summary>
-    /// A point in the bundle's own frame (metres east and north of its site origin) as a point in the
-    /// document: offset by <see cref="Anchoring"/>, with <paramref name="z"/> left as it is because
-    /// every height is absolute.
-    /// </summary>
     private XYZ SitePoint(double eastM, double northM, double z)
         => new(MetresToInternal(eastM + Anchoring.OffsetEastM), MetresToInternal(northM + Anchoring.OffsetNorthM), z);
 
-    /// <summary>
-    /// Moves an element the import placed at the project origin (a link, which Revit puts there) to
-    /// where <see cref="Anchoring"/> says this bundle stands. A refused move is said, not hidden: the
-    /// element would otherwise sit under the first bundle with the log reading like a clean import.
-    /// </summary>
     private void MoveToAnchor(ElementId id, string what)
     {
         if (!Anchoring.MovesGeometry || _document.GetElement(id) is not { } element)
@@ -125,11 +91,6 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>
-    /// Before the first step creates anything: the project must still hold what it held when the
-    /// import was opened. Two import windows can be open at once, and the second would otherwise be
-    /// placed against a position the first has since set.
-    /// </summary>
     private void ConfirmAnchor()
     {
         if (_anchorConfirmed)
@@ -157,26 +118,8 @@ internal sealed partial class RevitBundleImporter
     private static double InternalToMetres(double internalUnits)
         => UnitUtils.ConvertFromInternalUnits(internalUnits, UnitTypeId.Meters);
 
-    /// <summary>Revit's short-curve tolerance in metres: Revit states it in its internal unit, Core works in metres.</summary>
     private double ShortCurveToleranceM => InternalToMetres(_document.Application.ShortCurveTolerance);
 
-    /// <summary>
-    /// Opens a transaction that will not stop for a dialog.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// ⛔ Every transaction this importer opens goes through here, not just the terrain one. Any of
-    /// them can post a warning — the subdivision step posts one per overlapping ring, the drape's
-    /// <c>ChangeTypeId</c> can post a slope warning — and a run driven by
-    /// <c>MANTLEPLACE_BUNDLE_ZIP</c> has nobody to dismiss it. Uniformity is the only way to
-    /// guarantee that.
-    /// </para>
-    /// <para>
-    /// <c>SetClearAfterRollback(true)</c> matters on the retry path: without it a rolled-back
-    /// transaction leaves its failures posted, and the next attempt starts in a document Revit
-    /// already considers to be in failure mode.
-    /// </para>
-    /// </remarks>
     private Transaction BeginTransaction(string name, ImportFailureSwallower swallower)
     {
         Transaction transaction = new(_document, name);
@@ -191,25 +134,8 @@ internal sealed partial class RevitBundleImporter
         return transaction;
     }
 
-    /// <summary>
-    /// Commits, appends whatever the swallower absorbed to the log, and says whether it stood.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ The return value of <c>Transaction.Commit</c> used to be discarded at every one of these
-    /// sites. That is how the first real import ended up reading <c>terrain.Id</c> off an element
-    /// Revit had just rolled back: the step reported success, remembered a dead <c>ElementId</c>, and
-    /// the drape and boundary steps then chased it.
-    /// </remarks>
     private bool CommitAndReport(Transaction transaction, ImportFailureSwallower swallower)
     {
-        // Timed separately from the step that owns it. Revit does its element-relation bookkeeping
-        // at commit, not at the API call, so "the step took N seconds" and "the commit took N
-        // seconds" point at completely different levers — and only the second one was ever the
-        // problem for the subdivisions.
-        //
-        // ⛔ Said either side of the call, and the far side in a finally: this is the last thing the
-        // import window hears before Revit's thread stops answering, and a commit that throws must
-        // not leave it saying Revit is still committing.
         Stopwatch clock = Stopwatch.StartNew();
         TransactionStatus status;
         CommitStarting?.Invoke();
@@ -235,8 +161,6 @@ internal sealed partial class RevitBundleImporter
         _stepRolledBack = true;
         if (!swallower.SawError)
         {
-            // Rolled back with nothing posted. Rare, and worth saying so rather than reporting a
-            // silent success.
             Say($"Revit did not accept \"{transaction.GetName()}\" ({status}). Nothing from that "
                 + "step was left in the project.");
         }
@@ -251,11 +175,6 @@ internal sealed partial class RevitBundleImporter
         return collector.OfClass(typeof(T)).FirstElementId();
     }
 
-    /// <summary>
-    /// Every toposolid that is a TERRAIN — a subdivision is itself a <see cref="Toposolid"/>, so a
-    /// bare collector hands back site-limit patches alongside the ground they sit on. Anything
-    /// listed in another toposolid's <c>GetSubDivisionIds()</c> is excluded.
-    /// </summary>
     private List<Toposolid> GroundToposolids()
     {
         List<Toposolid> toposolids = new FilteredElementCollector(_document)
@@ -275,21 +194,11 @@ internal sealed partial class RevitBundleImporter
         return [.. toposolids.Where(toposolid => !subdivisionIds.Contains(toposolid.Id))];
     }
 
-    /// <summary>Every ground toposolid, as the pure core reads one: its id and its Comments.</summary>
     private List<ExistingTerrain> ExistingGrounds()
         => [.. GroundToposolids().Select(ground => new ExistingTerrain(
             ground.Id.Value,
             ground.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString()))];
 
-    /// <summary>
-    /// Whether <paramref name="step"/>'s heights are in another vertical datum than the ground they
-    /// would land on, saying so by name when they are (<c>HPS-53</c>).
-    /// </summary>
-    /// <remarks>
-    /// Asked first, before the step extracts or reads anything, so a refused step costs nothing. The
-    /// decision is <see cref="HeightDatums"/>'s; the shim supplies the two facts only a document has —
-    /// the grounds and their stamps — and the ground this import has already settled on.
-    /// </remarks>
     private bool HeightsRefused(ImportStep step)
     {
         if (step.HeightDatum is not { } content)
@@ -307,16 +216,6 @@ internal sealed partial class RevitBundleImporter
         return true;
     }
 
-    /// <summary>
-    /// The ground a step works on when this run did not build one — a bundle whose plan carries
-    /// boundaries or a drape but no surface.
-    /// </summary>
-    /// <remarks>
-    /// This bundle's own stamped terrain first. A project can legitimately hold more than one ground
-    /// — a curator's, an adjacent order's — and "whichever the collector enumerated first" is a coin
-    /// toss dressed as a lookup. The unstamped fallback stays for the project whose terrain predates
-    /// stamping, where a coin toss with one coin is the right answer.
-    /// </remarks>
     private ElementId TerrainToposolidId()
     {
         List<Toposolid> grounds = GroundToposolids();

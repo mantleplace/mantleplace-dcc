@@ -2,15 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The two guards that keep a producer's nodata fill out of the model, and the limits on both.
-/// </summary>
-/// <remarks>
-/// The fixture is the real shape of the defect: a regular 5 m grid with the two westernmost columns
-/// pinned to one identical elevation while the ground beside them climbs past 200 m. What matters
-/// most here are the NEGATIVE cases — a genuine cliff must survive, and neither guard may ever eat
-/// the site.
-/// </remarks>
 internal static class SurfaceSanitiserTests
 {
     private const double Spacing = 5.0;
@@ -23,8 +14,6 @@ internal static class SurfaceSanitiserTests
 
         run.Case("the real defect: two filled edge columns are dropped, nothing else is", () =>
         {
-            // 150 columns keeps two filled ones at 1.3% of the surface — the real bundle's two
-            // columns are 400 of 80,940 points, 0.49%, comfortably under the cap.
             IReadOnlyList<SurfacePoint> points = Grid(columns: 150, rows: 20, filledColumns: 2);
             IReadOnlyList<SurfacePoint> cleaned = SurfacePointsSanitiser.Clean(points, null, out SurfaceCleanReport report);
 
@@ -35,9 +24,6 @@ internal static class SurfaceSanitiserTests
 
         run.Case("a genuine cliff column with distinct values is KEPT", () =>
         {
-            // This is the case a magnitude threshold would fail. The column is 200 m from its
-            // neighbour, which on this site is real ground — what makes a fill a fill is that every
-            // point in the line carries the same bits.
             List<SurfacePoint> points = [.. Grid(columns: 30, rows: 20, filledColumns: 0)];
             double edgeX = 0.0;
             for (int i = 0; i < points.Count; i++)
@@ -54,8 +40,6 @@ internal static class SurfaceSanitiserTests
 
         run.Case("a flat edge that JOINS its neighbour is kept", () =>
         {
-            // A lake, a runway or the Bay. Identical values are not enough on their own; the line
-            // also has to be somewhere its neighbour is not.
             List<SurfacePoint> points = [];
             for (int cx = 0; cx < 30; cx++)
             {
@@ -72,8 +56,6 @@ internal static class SurfaceSanitiserTests
 
         run.Case("the guard refuses rather than removing more than 2% of the surface", () =>
         {
-            // Three filled columns out of a hundred is 3%. A guard that can eat the terrain is worse
-            // than the artefact, so above the cap it drops nothing and says so.
             IReadOnlyList<SurfacePoint> points = Grid(columns: 100, rows: 20, filledColumns: 3);
             IReadOnlyList<SurfacePoint> cleaned = SurfacePointsSanitiser.Clean(points, null, out SurfaceCleanReport report);
 
@@ -85,7 +67,6 @@ internal static class SurfaceSanitiserTests
         run.Case("the crop drops points outside the window and keeps the boundary itself", () =>
         {
             IReadOnlyList<SurfacePoint> points = Grid(columns: 30, rows: 20, filledColumns: 0);
-            // Exclude the westernmost column only; the window's west edge sits ON the second column.
             SurfaceCropWindow window = new(WestM: Spacing, SouthM: -1.0, EastM: 1000.0, NorthM: 1000.0);
             IReadOnlyList<SurfacePoint> cleaned = SurfacePointsSanitiser.Clean(points, window, out SurfaceCleanReport report);
 
@@ -95,15 +76,6 @@ internal static class SurfaceSanitiserTests
 
         run.Case("the crop takes the AOI's BOUNDING box, not the rectangle inscribed in it", () =>
         {
-            // ⛔ The regression, with the real numbers. The first version took the inner extremes of
-            // the four projected corners, reasoning that a window strictly inside the published AOI
-            // was conservative. Convergence tilts the quadrilateral by about 8 m over this AOI, so
-            // that rectangle cut two extra rows off the north and south edges of good terrain: it
-            // dropped 1,980 of 80,940 points (2.45%) to remove 400 bad ones. The bounding box drops
-            // 852 and still removes every one of them, because the defect lives in the raster's
-            // overhang and the overhang is outside either rectangle.
-            //
-            // Simulated here on the real lattice: 285 x 284 at 5 m, spanning -712..708 by -706..709.
             const double west = -703.76, east = 703.81, south = -708.81, north = 708.60;
 
             List<SurfacePoint> points = [];
@@ -117,10 +89,6 @@ internal static class SurfaceSanitiserTests
 
             SurfacePointsSanitiser.Clean(points, new SurfaceCropWindow(west, south, east, north), out SurfaceCleanReport report);
 
-            // 3 columns of 284 (x = -712, -707, 708) + 1 row of 285 (y = 709), less the 3 they share.
-            // The row at y = 709 is only 0.4 m outside the AOI; it goes because the tolerance stays
-            // tight on purpose. Widening it to keep that row would have to reach 3.3 m, which would
-            // re-admit the x = -707 column — and that column carries 116 of the 400 filled points.
             run.Equal(report.DroppedOutsideAoi, 1134, "one outer ring, no more");
             run.True(
                 report.DroppedOutsideAoi < 80_940 * 2 / 100,
@@ -181,12 +149,6 @@ internal static class SurfaceSanitiserTests
         return run.Report("surface sanitiser");
     }
 
-    /// <summary>
-    /// Why there is no crop window, said in the log rather than "no area of interest this plugin can
-    /// project" — which fired on both 2026-10-03 imperial reference bundles (EPSG:6616 and
-    /// EPSG:6445, ftUS) and read as a defect. It is not one: the manifest publishes the AOI only as
-    /// lon/lat, and projecting that into a State Plane frame is CRS machinery a host never carries.
-    /// </summary>
     private static void RunCropUnavailableCases(TestRun run)
     {
         run.Case("an ftUS State Plane bundle has no crop window, and the reason names its frame and why", () =>
@@ -246,7 +208,6 @@ internal static class SurfaceSanitiserTests
         return manifest;
     }
 
-    /// <summary>A real imperial reference bundle's frame: State Plane EPSG:6616 in US survey feet.</summary>
     private static string ImperialManifest(bool withBbox)
         => Manifest(
             withBbox ? "\"bbox\": { \"west\": -110.769253195258, \"south\": 43.4681979807655, \"east\": -110.751746804742, \"north\": 43.4809020192345 }," : string.Empty,
@@ -280,10 +241,6 @@ internal static class SurfaceSanitiserTests
             }
             """;
 
-    /// <summary>
-    /// A regular grid whose ground climbs steeply west-to-east, with the westernmost
-    /// <paramref name="filledColumns"/> pinned to one identical elevation — the shape of the defect.
-    /// </summary>
     private static IReadOnlyList<SurfacePoint> Grid(int columns, int rows, int filledColumns)
     {
         List<SurfacePoint> points = new(columns * rows);

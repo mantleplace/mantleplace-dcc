@@ -3,14 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The next Revit picking back up a Prepare an earlier one was watching when it closed or crashed.
-/// </summary>
-/// <remarks>
-/// Driven through a real record in a temp folder, the real background checker over a scripted vault,
-/// and scripted Prepare steps, so no request leaves the machine (<c>HPS-42</c>). The crashed Revit is
-/// an owner the liveness check says is gone.
-/// </remarks>
 internal static class PrepareRejoinerTests
 {
     private const string Email = "curator@example.com";
@@ -36,7 +28,6 @@ internal static class PrepareRejoinerTests
             }
             catch (IOException)
             {
-                // A leftover temp folder is not a test failure.
             }
         }
 
@@ -226,7 +217,6 @@ internal static class PrepareRejoinerTests
 
             run.Equal(own.Ending == PrepareEnding.Interrupted, true, "interrupted, not cancelled");
 
-            // The next Revit: this one is gone.
             InterruptedPrepareStore next = new(rig.Path, new PrepareOwner(9, 9), _ => false, () => Email);
             run.Equal(next.Claim(Now).Count, 1, "left for it");
         });
@@ -246,10 +236,6 @@ internal static class PrepareRejoinerTests
         }
     }
 
-    /// <summary>
-    /// A record, a vault, the background checker, a watcher and a re-joiner, wired as the add-in wires
-    /// them, in one Revit that has just started.
-    /// </summary>
     private sealed class Rig
     {
         internal Rig(string sandbox, string name, ScriptedSteps? steps = null)
@@ -283,7 +269,6 @@ internal static class PrepareRejoinerTests
 
         internal List<PrepareRun> Ended { get; } = [];
 
-        /// <summary>A Prepare the crashed Revit was watching, and the order's row in the vault.</summary>
         internal void Interrupt(string orderId, double hoursAgo = 1, BundleStatus? listed = BundleStatus.Available)
         {
             new InterruptedPrepareStore(Path, Crashed, _ => false, () => Email).Started(orderId, Now.AddHours(-hoursAgo));
@@ -293,14 +278,12 @@ internal static class PrepareRejoinerTests
             }
         }
 
-        /// <summary>What the add-in does on a sign-in: arm, then wake the listing.</summary>
         internal void SignIn()
         {
             Rejoiner.Arm();
             List();
         }
 
-        /// <summary>One background listing, as the checker's loop makes it.</summary>
         internal void List() => Checker.CheckAsync(CancellationToken.None).GetAwaiter().GetResult();
 
         internal PrepareRun WaitForEnd()
@@ -333,7 +316,6 @@ internal static class PrepareRejoinerTests
         }
     }
 
-    /// <summary>Prepare steps that succeed unless told otherwise.</summary>
     private sealed class ScriptedSteps : IPrepareSteps
     {
         private int _starts;

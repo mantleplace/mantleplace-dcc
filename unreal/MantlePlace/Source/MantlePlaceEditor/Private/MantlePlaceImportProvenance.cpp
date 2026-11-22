@@ -32,31 +32,21 @@ namespace MantlePlaceImportProvenance
 		const FRecord& Found,
 		const FString& IncomingIdentity)
 	{
-		// No content means nothing to protect, whatever a leftover record says. A user who deleted
-		// the folder by hand meant for the next import to be a fresh one.
 		if (!bContentFolderExists)
 		{
 			return EVerdict::NoPriorImport;
 		}
 
-		// Content with no record predates the record. Refuse rather than adopt it: the folder was
-		// keyed on a job id, so it is content for some build of some order, and this importer
-		// cannot tell whether it is a build of THIS order without the record it does not have.
 		if (!bRecordFound)
 		{
 			return EVerdict::LegacyUnrecorded;
 		}
 
-		// A record from a scheme this build does not know describes a layout it cannot predict, so
-		// it cannot know what deleting would destroy.
 		if (Found.SchemeVersion > CurrentSchemeVersion)
 		{
 			return EVerdict::NewerScheme;
 		}
 
-		// The comparison the truncation makes necessary. Case-sensitive: an order id and a hex
-		// digest are both case-significant as delivered, and treating two identities that differ
-		// only in case as the same one would be inventing an equivalence nobody stated.
 		if (Found.Identity.Equals(IncomingIdentity, ESearchCase::CaseSensitive))
 		{
 			return EVerdict::SameIdentity;
@@ -133,8 +123,6 @@ namespace MantlePlaceImportProvenance
 		FRecord Parsed;
 		if (!Root->TryGetStringField(KeyIdentity, Parsed.Identity) || Parsed.Identity.IsEmpty())
 		{
-			// A record with no identity cannot answer the only question it exists to answer, so it
-			// is not a record. Treated as absent, which refuses rather than deletes.
 			return false;
 		}
 		int32 Scheme = 0;
@@ -145,8 +133,6 @@ namespace MantlePlaceImportProvenance
 		Root->TryGetStringField(KeyContentRoot, Parsed.ContentRoot);
 		Root->TryGetStringField(KeyJobId, Parsed.JobId);
 
-		// The extent is optional and never makes a record unreadable: a record from an earlier build
-		// has none, and a bad one reads as none rather than as a refusal to re-import.
 		const TSharedPtr<FJsonObject>* BboxObject = nullptr;
 		if (Root->TryGetObjectField(KeyBbox, BboxObject) && BboxObject != nullptr && BboxObject->IsValid())
 		{
@@ -168,8 +154,6 @@ namespace MantlePlaceImportProvenance
 
 	FString RecordPath(const FString& Identity)
 	{
-		// Keyed on the SHORT identity, deliberately: the folder is named by the short form, so the
-		// record has to be findable from the folder. Its contents are what disambiguate.
 		return FPaths::ProjectSavedDir() / TEXT("MantlePlace") / TEXT("Imports")
 			/ (MantlePlaceImportNaming::ShortIdentity(Identity) + TEXT(".json"));
 	}

@@ -16,14 +16,6 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
-// Timing exists to be compared between two runs, so the properties worth asserting are the ones a
-// comparison depends on: every phase produces exactly one row, an import produces exactly one
-// block, the total is wall time rather than a sum of the parts, and a call from outside an import
-// does nothing at all.
-//
-// `BuildSummary()` returns lines rather than logging them precisely so this can assert the block's
-// shape headlessly. A test that grepped UE_LOG output would be testing the log system.
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMantlePlaceImportTimingTest,
     "MantlePlace.Import.Timing",
@@ -31,7 +23,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 namespace
 {
-/** Count the summary rows that carry a given phase label. */
 int32 RowsMentioning(const TArray<FString>& Lines, const TCHAR* Needle)
 {
 	int32 Count = 0;
@@ -45,7 +36,6 @@ int32 RowsMentioning(const TArray<FString>& Lines, const TCHAR* Needle)
 	return Count;
 }
 
-/** Parse a record, or return null. A record that does not parse is the failure worth naming. */
 TSharedPtr<FJsonObject> ParseRecord(const FString& Json)
 {
 	TSharedPtr<FJsonObject> Object;
@@ -53,7 +43,6 @@ TSharedPtr<FJsonObject> ParseRecord(const FString& Json)
 	return FJsonSerializer::Deserialize(Reader, Object) ? Object : nullptr;
 }
 
-/** A directory under this machine's temp tree that no other test writes into. */
 FString ScratchDirectory()
 {
 	return FPaths::Combine(FPlatformProcess::UserTempDir(),
@@ -66,7 +55,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 {
 	using namespace MantlePlaceImportTiming;
 
-	// --- One phase, one row ---------------------------------------------------------------------
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -78,9 +66,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("one row per phase: integrity"), RowsMentioning(Summary, Phase::IntegrityPrecheck), 1);
 	}
 
-	// --- Exactly one block ----------------------------------------------------------------------
-	// The opening rule and the TOTAL row are what a reader scans for; two of either means two
-	// imports got interleaved, which is the state a baseline cannot be taken in.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -91,9 +76,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("one total"), RowsMentioning(Summary, TEXT("TOTAL (wall)")), 1);
 	}
 
-	// --- A repeated phase is distinguished by its detail, not by a second phase name -------------
-	// Per-artifact lines all share one phase name on purpose: the vocabulary stays small enough to
-	// diff, and which artifact it was is data rather than a new phase.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -106,9 +88,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the second names its artifact"), RowsMentioning(Summary, TEXT("buildings mesh")), 1);
 	}
 
-	// --- The three hotspots each get their own row ----------------------------------------------
-	// The whole reason the baseline is being taken: their share of the total has to be readable
-	// without a profiler.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -122,8 +101,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("weight resample row"), RowsMentioning(Summary, Phase::WeightResample), 1);
 	}
 
-	// --- A phase that did not run has no row ----------------------------------------------------
-	// An absent row means "not reached", which is information. A zero would read as "instant".
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -133,35 +110,22 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("an unrun phase has no row"), RowsMentioning(Summary, Phase::ShaderStall), 0);
 	}
 
-	// --- The total is wall time, not the sum of the phases ---------------------------------------
-	// The phases do not tile the import, so printing their sum as the total would quietly claim
-	// everything is accounted for. The unmeasured remainder is printed instead, and said out loud.
-	//
-	// ⚠ The sleep is load-bearing and was added after this block failed once in three runs. The
-	// remainder row is printed only when the wall time is above zero — a share needs a denominator —
-	// and `Start()` followed immediately by `BuildSummary()` can read the same QPC tick twice, which
-	// makes `ElapsedSeconds()` exactly 0.0 and suppresses the row this asserts. One millisecond is
-	// enough to guarantee a tick boundary; the assertion is about the row existing, not its value.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
 		FPlatformProcess::Sleep(0.001f);
-		Timeline.Record(Phase::ZipAndManifest, 1000.0); // far more than the wall time of this test
+		Timeline.Record(Phase::ZipAndManifest, 1000.0);
 
 		const TArray<FString> Summary = Timeline.BuildSummary();
 		TestEqual(TEXT("the remainder is named"), RowsMentioning(Summary, TEXT("unmeasured")), 1);
 		TestTrue(TEXT("wall time is not the sum"), Timeline.ElapsedSeconds() < 1000.0);
 	}
 
-	// --- RecordOnCurrent outside an import is a no-op --------------------------------------------
-	// The landscape importer is also driven by tests, where no import is running. A timing call
-	// must never be the reason one of those crashes.
 	{
 		TestNull(TEXT("no import is current here"), Current());
-		RecordOnCurrent(Phase::ShaderStall, 1.0); // must not crash
+		RecordOnCurrent(Phase::ShaderStall, 1.0);
 	}
 
-	// --- FScopedCurrent publishes, and restores rather than clearing -----------------------------
 	{
 		FTimeline Outer;
 		Outer.Start();
@@ -176,8 +140,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 				TestEqual(TEXT("the inner timeline takes over"), Current(), &Inner);
 				RecordOnCurrent(Phase::ShaderStall, 3.0);
 			}
-			// Restoring rather than clearing is what keeps a nested import from silently
-			// un-instrumenting the one around it.
 			TestEqual(TEXT("the outer timeline is restored"), Current(), &Outer);
 			TestEqual(TEXT("the inner timeline got the record"), Inner.GetEntries().Num(), 1);
 		}
@@ -185,10 +147,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the outer timeline got nothing"), Outer.GetEntries().Num(), 0);
 	}
 
-	// --- FScopedCurrentPhase reaches the running import from another function -------------------
-	// The form a phase measured outside ImportVaultPackage's own scope must use. The first cut of
-	// the Cesium-streaming phase used the in-scope form in a function with no timeline in it and
-	// did not compile; this pins the working shape so a later edit cannot quietly swap it back.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -205,16 +163,11 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- And outside an import it is a no-op, not a crash ----------------------------------------
 	{
 		TestNull(TEXT("no import is current here"), Current());
 		const FScopedCurrentPhase Measured(Phase::CesiumAvailability);
 	}
 
-	// --- The out-of-scope form nests too ---------------------------------------------------------
-	// It reaches the running import through the same timeline, so it has to open a level on the
-	// same counter. A form that recorded without opening one would be the double-count again, just
-	// arriving from another translation unit.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -234,14 +187,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- A phase recorded inside another is marked as nested, and counted once -------------------
-	// The regression this pins: `transaction close` was declared at function scope and stayed alive
-	// to the end of it, so it enclosed every phase recorded after it. Those rows were counted
-	// twice — shares summed past 100% and the remainder printed negative — and a nested row moves
-	// whenever a row it encloses moves, which is what denies the hotspots an independent share.
-	//
-	// OpenPhase/ClosePhase are the guards' own bookkeeping, used directly here to build a nesting
-	// that is deterministic in seconds. A guard measures real time, which cannot be asserted on.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -257,15 +202,9 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("the enclosing row is top level"), Timeline.GetEntries()[1].Depth, 0);
 		}
 
-		// 10.0, not 13.0. The stall happened *inside* the landscape import; adding both would
-		// charge the import for it twice.
 		TestEqual(TEXT("an enclosed row is not counted again"), Timeline.AccountedSeconds(), 10.0);
 	}
 
-	// --- The block says which rows enclose which ------------------------------------------------
-	// A column that sums past 100% is unusable, but so is one that silently drops the nested rows:
-	// the shader stall is a hotspot and has to stay visible. It is printed, indented, and the row
-	// that encloses it says so — the reader can see both the part and the whole.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -281,8 +220,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the stall is still a row"), RowsMentioning(Summary, Phase::ShaderStall), 1);
 		TestEqual(TEXT("the enclosing row is named as such"), RowsMentioning(Summary, TEXT("encloses")), 1);
 
-		// Indented past the top-level rows, which is what makes a nested row readable as one at a
-		// glance rather than by counting percentages.
 		int32 StallIndent = -1;
 		int32 ArtifactIndent = -1;
 		for (const FString& Line : Summary)
@@ -300,11 +237,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the nested row is indented further"), StallIndent > ArtifactIndent);
 	}
 
-	// --- Nesting is measured, not declared -------------------------------------------------------
-	// Depth comes from how many guards are open when a row is recorded, so a call site does not
-	// have to know it is nested — which matters because the one that actually is does not use a
-	// guard at all: the shader stall is a bare RecordOnCurrent from the landscape importer, inside
-	// the artifact phase that encloses it.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -322,11 +254,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- The remainder is not negative, which is the symptom this all exists to remove -----------
-	// The named test from the report: one assertion over a timeline whose phases nest. It needs a
-	// real wall-time denominator, so it sleeps — the only number here that cannot be synthesised,
-	// since `ElapsedSeconds()` reads the clock. The assertion is one-sided and the sleep only ever
-	// makes the wall time longer, so a loaded machine cannot turn this red.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -337,17 +264,10 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		Timeline.ClosePhase();
 		Timeline.Record(Phase::Artifact, 0.04, TEXT("landscape 2017x2017"));
 
-		// 0.05 − 0.04, not 0.05 − 0.07. Counting the nested row here is what printed −44.2% under
-		// a line promising the remainder would be positive.
 		const double Remainder = Timeline.ElapsedSeconds() - Timeline.AccountedSeconds();
 		TestTrue(TEXT("the remainder is not negative"), Remainder >= 0.0);
 	}
 
-	// --- A guard that attached to no import must not close a level it never opened ---------------
-	// The asymmetry worth pinning: resolve the running import on the way in AND again on the way
-	// out, and a guard constructed before an import but destroyed during one pops a level it never
-	// pushed. `ClosePhase` clamps rather than complains, so the damage is silent — every row after
-	// it is stamped one level too shallow, and the double count returns.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -360,7 +280,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 			FScopedCurrent Publish(Timeline);
 			const FScopedPhase ArtifactPhase(Timeline, Phase::Artifact, TEXT("landscape 2017x2017"));
 
-			// Destroyed while an import IS running, unlike when it was constructed.
 			Straggler.Reset();
 
 			RecordOnCurrent(Phase::ShaderStall, 3.0);
@@ -375,9 +294,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- A guard closes its own level before recording -------------------------------------------
-	// Otherwise a phase would be stamped one level deeper than it ran, and every top-level row
-	// would read as nested inside nothing.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -396,7 +312,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- FScopedPhase records on the way out, on whichever path leaves the scope -----------------
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -412,11 +327,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- An accumulator sums many spans into one row ---------------------------------------------
-	// The shape the integrity pre-check's two halves need: reading and hashing happen once per
-	// declared payload, so "how long was spent hashing" is a total of N disjoint spans and no scope
-	// encloses them. One row per payload was the other option, and it makes the row count a property
-	// of the bundle.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -433,15 +343,10 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("three spans, one row"), Timeline.GetEntries().Num(), 1);
 		if (Timeline.GetEntries().Num() == 1)
 		{
-			// One-sided: three 10ms sleeps cannot take less than one, and a loaded machine only ever
-			// makes them longer. Asserting a window here would be asserting the scheduler.
 			TestTrue(TEXT("the seconds are a sum, not one span"), Timeline.GetEntries()[0].Seconds >= 0.01);
 		}
 	}
 
-	// --- An accumulator with no spans records nothing ---------------------------------------------
-	// The vocabulary's own rule, applied to a row that is a sum: an absent row means "not reached",
-	// where a 0.00s row would read as "instant" and quietly claim a loop ran.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -451,10 +356,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("no spans, no row"), Timeline.GetEntries().Num(), 0);
 	}
 
-	// --- Record() is idempotent, so the destructor cannot write the row twice ---------------------
-	// Recording explicitly is how a call site controls ROW ORDER — two accumulators in one block
-	// destruct in reverse declaration order, which would print the hashing row above the reading row
-	// that fed it. That control is only safe if the destructor then does nothing.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -483,10 +384,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- An accumulator opens no nesting level ----------------------------------------------------
-	// It is a row, not a scope. Opening a level would stamp anything recorded between its first span
-	// and its last one level too deep — and the integrity pre-check records its two accumulators
-	// side by side, so each would have nested inside the other.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -497,7 +394,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 			FAccumulatedPhase ReadPhase(Timeline, Phase::IntegrityEntryRead);
 			{
 				const FAccumulatedPhase::FSpan ReadSpan(ReadPhase);
-				// Recorded while a span is open: still one level inside the enclosing phase, not two.
 				RecordOnCurrent(Phase::ShaderStall, 1.0);
 			}
 			ReadPhase.Record();
@@ -510,17 +406,11 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("the accumulated row sits inside the enclosing phase"), Timeline.GetEntries()[1].Depth, 1);
 			TestEqual(TEXT("the enclosing phase is top level"), Timeline.GetEntries()[2].Depth, 0);
 
-			// And therefore it is not double counted: only the enclosing row is summed.
 			TestEqual(TEXT("only the enclosing row is accounted"), Timeline.AccountedSeconds(),
 			          Timeline.GetEntries()[2].Seconds);
 		}
 	}
 
-	// --- The landscape's sub-phases nest under the artifact row, not beside it --------------------
-	// The whole point of instrumenting inside the landscape: its steps have to be readable as parts
-	// of the 36% row rather than as new top-level rows that would push the accounted total past the
-	// wall clock. This is the arrangement the importer builds — the artifact phase in one translation
-	// unit, its steps reached through the running import from another.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -546,16 +436,11 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 			TestEqual(TEXT("the landscape artifact is inside the transaction"), Timeline.GetEntries()[3].Depth, 1);
 			TestEqual(TEXT("the transaction is top level"), Timeline.GetEntries()[4].Depth, 0);
 
-			// Three sub-phases plus the artifact that holds them: the transaction encloses four.
 			TestEqual(TEXT("the landscape encloses its three steps"), Timeline.EnclosedRowCount(3), 3);
 			TestEqual(TEXT("the transaction encloses all four"), Timeline.EnclosedRowCount(4), 4);
 		}
 	}
 
-	// --- Every phase name is distinct --------------------------------------------------------------
-	// The vocabulary's one job is that two runs line up, and two constants sharing a string collapse
-	// into one row that neither call site knows it is sharing. It is a copy-paste away from true and
-	// invisible in a diff, which is exactly the kind of thing to assert rather than to review.
 	{
 		const TCHAR* const Everything[] = {Phase::ZipAndManifest,
 		                                   Phase::IntegrityPrecheck,
@@ -585,9 +470,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- The record is valid JSON, and says which shape it is -----------------------------------
-	// A consumer has to be able to refuse a shape it does not know, rather than read a field that
-	// has moved. That is the whole job of the schema string.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -608,9 +490,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- One entry per recorded phase, in the order recorded, with its detail and seconds --------
-	// The same property the summary block has, asserted on the half a machine reads. A record that
-	// collapsed two artifact rows into one would still look plausible in a log.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -633,12 +512,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- Every entry carries the depth it ran at -------------------------------------------------
-	// The ledger and the summary block both know that a phase recorded inside another is already
-	// part of it. The record was the third consumer and did not: it wrote `phase`, `detail` and
-	// `seconds` and nothing else, so a program reading it could not tell an enclosing row from an
-	// enclosed one. Summing that array gives back the 144% total and the negative remainder — on
-	// the surface that exists precisely so a consumer need not grep the log.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -663,11 +536,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- Filtering the record on depth reaches the ledger's own accounted total -------------------
-	// The property that makes the record readable at all, and the one a consumer actually needs:
-	// summing the rows at depth 0 gives the same number `AccountedSeconds()` does, which is the
-	// number the block prints. Summing every row instead charges the import twice for the stall —
-	// asserted here as the difference, so this test fails if `depth` ever stops being written.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -699,14 +567,10 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- The total is wall time here too, not the sum of the phases ------------------------------
-	// The log block says this out loud in a comment column a machine cannot read. The record has to
-	// carry the same truth, because a consumer that summed `phases` would get a different number
-	// from the one printed and no way to tell which one is the import's cost.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
-		Timeline.Record(Phase::ZipAndManifest, 1000.0); // far more than this test's wall time
+		Timeline.Record(Phase::ZipAndManifest, 1000.0);
 
 		const TSharedPtr<FJsonObject> Record = ParseRecord(BuildRecord(Timeline, FRecordContext()));
 		TestNotNull(TEXT("the record parses as JSON"), Record.Get());
@@ -716,9 +580,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- A timeline with no phases is still a record ---------------------------------------------
-	// An import that died before its first phase took a measurable amount of time doing so, and a
-	// consumer told nothing at all cannot tell that from a run where no import happened.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -735,11 +596,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- The record carries no threshold, bar or target -------------------------------------------
-	// This plugin measures and reports; it does not judge. Asserted rather than left to review
-	// because the pressure to add an "expected" column to a timing record is constant, the edit
-	// that does it is one line, and a reviewer reading a diff of JSON field names will wave it
-	// through. What a good timeline is belongs to whoever consumes this file.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -753,9 +609,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- No directory, no file, no complaint -----------------------------------------------------
-	// The emitter is opt-in. A plugin that scatters JSON into a curator's project by default earns
-	// a bug report about a folder nobody asked for.
 	{
 		FTimeline Timeline;
 		Timeline.Start();
@@ -765,7 +618,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		          WriteRecord(Timeline, FRecordContext(), FString()), FString());
 	}
 
-	// --- Given a directory, it writes one file, and the file is the record ------------------------
 	{
 		const FString Directory = ScratchDirectory();
 
@@ -781,8 +633,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("it reports where it wrote"), !Written.IsEmpty());
 		if (!Written.IsEmpty())
 		{
-			// The directory is created rather than required: a consumer naming a path that does
-			// not exist yet is the normal case, not an error.
 			TestTrue(TEXT("the file is there"), FPaths::FileExists(Written));
 
 			FString Json;
@@ -796,9 +646,6 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 			}
 		}
 
-		// Two imports, two files. One import per run is today's shape, not a guarantee, and a
-		// second import overwriting the first would leave a consumer grading the wrong one with
-		// nothing to notice.
 		const FString Second = WriteRecord(Timeline, Context, Directory);
 		TestTrue(TEXT("the second import reports where it wrote"), !Second.IsEmpty());
 		TestTrue(TEXT("and it did not overwrite the first"), Second != Written);
@@ -813,4 +660,4 @@ bool FMantlePlaceImportTimingTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

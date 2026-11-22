@@ -1,13 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""A bundle on disk, as its zip or as an extracted folder, and one file taken out of it.
-
-Plain file I/O and the standard library, no Blender, so the headless suite runs it on any machine.
-The rules come from spec/format.md: the manifest is the one file found by its fixed name (§3), a
-manifest path matches an archive entry regardless of case (§10.3, rule 6), an archive path is
-untrusted and never leaves the extraction root (§3), and a stated sha256 is verified and fails
-closed while an absent one means unknown, never corrupt (§5).
-"""
 
 from __future__ import annotations
 
@@ -25,7 +17,6 @@ _CHUNK = 1 << 20
 
 
 def open_bundle(path: str) -> "ZipBundle | FolderBundle":
-    """Open the bundle a curator picked: its `.zip`, or the `manifest.json` of an extracted copy."""
     lowered = path.lower()
     if lowered.endswith(".zip"):
         return ZipBundle(path)
@@ -67,9 +58,6 @@ class ZipBundle(_Bundle):
 
     def materialise(self, archive_path: str, out_dir: str,
                     sha256: str | None) -> tuple[str, bool]:
-        """Extract one entry under `out_dir`, verified. Returns the path and whether a digest
-        was checked. The bytes go to a temporary name first and are renamed only once verified,
-        so a refused file leaves nothing a later import could mistake for good."""
         entry = self._names.get(archive_path.lower())
         if entry is None:
             raise BundleRefused(f"The manifest points at {archive_path}, and the zip does not "
@@ -99,13 +87,11 @@ class FolderBundle(_Bundle):
                 self.manifest = _parse(handle.read(), os.path.basename(manifest_path))
         except OSError as exc:
             raise BundleRefused(f"{manifest_path} cannot be read ({exc}).") from exc
-        # The manifest sits at its fixed name, so the bundle root is two folders up.
         self._root = os.path.dirname(os.path.dirname(os.path.abspath(manifest_path)))
 
     def materialise(self, archive_path: str, out_dir: str,
                     sha256: str | None) -> tuple[str, bool]:
-        """Find one file in the extracted bundle, verified. It is read in place, never copied."""
-        _inside(out_dir, archive_path)  # the same escape guard as the zip path
+        _inside(out_dir, archive_path)
         found = _find(self._root, archive_path)
         if found is None:
             raise BundleRefused(f"The manifest points at {archive_path}, and the extracted bundle "
@@ -144,7 +130,6 @@ def _inside(root: str, archive_path: str) -> str:
 
 
 def _find(root: str, archive_path: str) -> str | None:
-    """The file at `archive_path` under `root`, each part matched regardless of case."""
     here = root
     for part in archive_path.replace("\\", "/").split("/"):
         exact = os.path.join(here, part)
@@ -162,5 +147,4 @@ def _find(root: str, archive_path: str) -> str | None:
 
 
 def remove_tree(path: str) -> None:
-    """Remove a scratch folder the import made, ignoring a file the OS still holds open."""
     shutil.rmtree(path, ignore_errors=True)

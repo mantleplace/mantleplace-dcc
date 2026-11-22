@@ -3,29 +3,10 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// The hazard steps: the flood zones and the steep ground, drawn as filled regions on a plan of their
-// own, with a zone key beside them. What is drawn, where, and whether at all is HazardPlan's.
 internal sealed partial class RevitBundleImporter
 {
-    /// <summary>A drafting hatch's line spacing on paper, in millimetres.</summary>
     private const double HatchSpacingMm = 2.0;
 
-    /// <summary>
-    /// One hazard layer on its build's hazard plan: the plan made if it is not there, the layer's
-    /// regions drawn and stamped, and its rows added to the zone key.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A plan view, not the terrain: a flood zone overlaps land cover and roads, and coincident
-    /// subdivisions do not draw in cut order. Filled regions persist in the model, sit on a sheet as
-    /// they are, and leave the model a visualiser renders untouched — the Analysis Visualization
-    /// Framework's results would not survive the project being closed.
-    /// </para>
-    /// <para>
-    /// A region Revit refuses is skipped and counted, never repaired: repairing a published polygon is
-    /// derivation. An empty layer draws nothing and makes no plan.
-    /// </para>
-    /// </remarks>
     private void ImportHazardLayer(ImportStep step, HazardLayer layer)
     {
         if (step.Hazard is not { } facts)
@@ -61,7 +42,6 @@ internal sealed partial class RevitBundleImporter
 
         FootprintExtent? drawnExtent = HazardPlan.Around(regions.Cuts.Select(cut => FootprintExtent.Around(cut.Outer.Vertices)));
 
-        // What was measured is the flood zones making a new plan; the core decides from that fact.
         Announce(SlowStepNotice.ForHazardLayer(step.Kind, decision.CreateView, regions.Cuts.Count));
 
         ImportFailureSwallower swallower = new($"Drawing the {label}");
@@ -89,7 +69,6 @@ internal sealed partial class RevitBundleImporter
             types);
         List<SiteFeature> drawnOuters = drawn.Outers;
 
-        // The key names only what is on the plan: a zone whose every polygon was refused gets no row.
         IReadOnlyList<KeyRow> rows = drawnOuters.Count == 0
             ? []
             : flood
@@ -107,10 +86,6 @@ internal sealed partial class RevitBundleImporter
         Say(summary + $". The zone key gained {keyRows:N0} row(s). These are context, not a determination.");
     }
 
-    /// <summary>
-    /// The view named <paramref name="viewName"/>, what kind of view it is, and the filled regions
-    /// already on it when it is a plan — what <see cref="PlanDecision"/> is decided from.
-    /// </summary>
     private (View? Existing, PlanViewFound Found, List<FilledRegion> OnPlan) FindDrawnPlan(string viewName)
     {
         View? existing = NamedAs<View>(viewName).OrderBy(candidate => candidate.IsTemplate).FirstOrDefault();
@@ -124,20 +99,8 @@ internal sealed partial class RevitBundleImporter
         return (existing, found, existing is ViewPlan existingPlan ? RegionsIn(existingPlan) : []);
     }
 
-    /// <summary>What <see cref="DrawRegions"/> drew, refused and could not stamp.</summary>
     private sealed record DrawnRegions(int Count, int Declined, int Unstamped, List<SiteFeature> Outers);
 
-    /// <summary>
-    /// Each polygon of <paramref name="regions"/> drawn whole on <paramref name="plan"/> as a filled
-    /// region of the type its outer ring's style names, and stamped — the hazard plan and the land
-    /// plans alike.
-    /// </summary>
-    /// <remarks>
-    /// Every ring or none: a hole that cannot close would leave the region covering ground the
-    /// polygon does not, which is a repair by another name, so the polygon is refused whole instead.
-    /// A polygon Revit refuses — a ring that touches itself is common in outlines traced from a
-    /// raster — is one region lost, counted and said, never repaired into a shape nobody published.
-    /// </remarks>
     private DrawnRegions DrawRegions(
         ViewPlan plan,
         GroundCutPlan regions,
@@ -183,10 +146,6 @@ internal sealed partial class RevitBundleImporter
         return new DrawnRegions(drawn, declined, unstamped, outers);
     }
 
-    /// <summary>
-    /// The opening of a drawn plan step's summary: how many regions went on which plan, whether the
-    /// plan is new and how it was cropped, and what was refused, stranded or left unstamped.
-    /// </summary>
     private static string DescribeDrawnPlan(
         string label, string viewName, bool createdView, FootprintExtent? crop, DrawnRegions drawn, int strandedHoles)
     {
@@ -216,16 +175,6 @@ internal sealed partial class RevitBundleImporter
         return summary;
     }
 
-    /// <summary>
-    /// A floor plan on the lowest level, named for its build, at a scale that fits the site, cropped
-    /// to <paramref name="crop"/> when there is one — or <c>null</c> when the project has no level.
-    /// </summary>
-    /// <remarks>
-    /// The lowest level because an import that leaves the terrain out makes no level choice of its
-    /// own, and a plan cannot borrow one that was never made. The filled regions belong to the view,
-    /// so the level sets only the plan's name in the browser and its view range. The hazard plan and
-    /// the land plans are made alike.
-    /// </remarks>
     private ViewPlan? CreateDrawnPlan(string name, FootprintExtent? crop)
     {
         Level? lowest = new FilteredElementCollector(_document)
@@ -253,15 +202,6 @@ internal sealed partial class RevitBundleImporter
         return plan;
     }
 
-    /// <summary>The key's rows for this layer, added below any the plan already holds.</summary>
-    /// <param name="plan">The plan the key is drawn in.</param>
-    /// <param name="rows">The rows, swatch and text.</param>
-    /// <param name="keyStamp">What this build's swatches on this plan are stamped with, and found by.</param>
-    /// <param name="crop">The published rectangle the plan is cropped to, or <c>null</c>.</param>
-    /// <param name="drawnExtent">The box around what was drawn, the key's anchor when there is no crop.</param>
-    /// <param name="z">The plan's level elevation.</param>
-    /// <param name="types">The region types already found or made this step.</param>
-    /// <returns>How many rows were added.</returns>
     private int DrawKeyRows(
         ViewPlan plan,
         IReadOnlyList<KeyRow> rows,
@@ -313,7 +253,6 @@ internal sealed partial class RevitBundleImporter
             }
         }
 
-        // The crop takes the swatches in, or the crop region would hide the key that explains it.
         if (crop is { } published && plan.CropBoxActive)
         {
             SetCrop(plan, HazardPlan.CropWithKey(published, HazardPlan.Around(swatches)));
@@ -322,11 +261,6 @@ internal sealed partial class RevitBundleImporter
         return rows.Count;
     }
 
-    /// <summary>Sets a plan's crop to a rectangle in frame metres, with the annotation crop off.</summary>
-    /// <remarks>
-    /// Annotation crop off, so the key's text — annotation — shows beside the swatches the model crop
-    /// takes in. A plan's crop box is in model coordinates in plan, so the rectangle goes in as it is.
-    /// </remarks>
     private void SetCrop(ViewPlan plan, FootprintExtent rectangle)
     {
         BoundingBoxXYZ box = plan.CropBox;
@@ -338,10 +272,6 @@ internal sealed partial class RevitBundleImporter
         plan.get_Parameter(BuiltInParameter.VIEWER_ANNOTATION_CROP_ACTIVE)?.Set(0);
     }
 
-    /// <summary>
-    /// The filled region type a style names, found by name or made from the project's first — so a
-    /// curator who recoloured one keeps their colour on the next import.
-    /// </summary>
     private ElementId RegionType(RegionStyle style, Dictionary<string, ElementId> cache)
     {
         if (cache.TryGetValue(style.TypeName, out ElementId? known))
@@ -387,7 +317,6 @@ internal sealed partial class RevitBundleImporter
         return type.Id;
     }
 
-    /// <summary>The project's solid fill pattern.</summary>
     private ElementId SolidFill()
         => new FilteredElementCollector(_document)
             .OfClass(typeof(FillPatternElement))
@@ -395,7 +324,6 @@ internal sealed partial class RevitBundleImporter
             .FirstOrDefault(pattern => pattern.GetFillPattern().IsSolidFill)?.Id
             ?? ElementId.InvalidElementId;
 
-    /// <summary>A style's drafting hatch, found by name or made.</summary>
     private ElementId Hatch(RegionStyle style)
     {
         if (FillPatternElement.GetFillPatternElementByName(_document, FillPatternTarget.Drafting, style.HatchPatternName) is { } found)

@@ -2,35 +2,21 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Client;
 
-/// <summary>The download at the end of a Prepare.</summary>
-/// <param name="Bundle">The re-listed row, carrying the integrity facts the download was checked against.</param>
-/// <param name="Ready">Whether the cache now holds a valid zip — what Import requires.</param>
-/// <param name="Message">The cache's verdict, or why there is none.</param>
 public readonly record struct PreparedDownload(VaultBundle Bundle, bool Ready, string Message);
 
-/// <summary>The three network halves of a Prepare, apart from their order and their bookkeeping.</summary>
-/// <remarks>
-/// The seam exists so that <see cref="PrepareWatcher"/> — which Prepare runs, which ends how, which
-/// one a second click joins — is asserted without a network (<c>HPS-42</c>). The real steps are
-/// <see cref="VaultPrepareSteps"/>, a thin pass-through to <see cref="VaultClient"/>.
-/// </remarks>
 public interface IPrepareSteps
 {
-    /// <summary>Starts or joins the materialize (<c>HPS-23</c>, <c>HPS-24</c>).</summary>
     Task<VaultResult<MaterializeStart>> StartAsync(string orderId, CancellationToken cancellationToken);
 
-    /// <summary>Polls to a terminal state, within <c>HPS-25</c>'s bounds.</summary>
     Task<PollOutcome> PollAsync(
         string orderId,
         IReadOnlyCollection<string> requested,
         IProgress<MaterializeStatus> progress,
         CancellationToken cancellationToken);
 
-    /// <summary>Re-lists, then downloads into the cache (<c>HPS-18</c>, <c>HPS-26</c>).</summary>
     Task<PreparedDownload> DownloadAsync(VaultBundle bundle, IProgress<string> say, CancellationToken cancellationToken);
 }
 
-/// <summary>The steps against the real vault and the real cache.</summary>
 public sealed class VaultPrepareSteps : IPrepareSteps
 {
     private readonly VaultClient _vault;
@@ -52,11 +38,6 @@ public sealed class VaultPrepareSteps : IPrepareSteps
         CancellationToken cancellationToken)
         => _vault.PollToCompletionAsync(orderId, requested, progress, cancellationToken);
 
-    /// <remarks>
-    /// The re-list is not optional (<c>HPS-18</c>): it is where the integrity facts for the bundle as
-    /// it stands come from, and checking a download against a pre-materialize size and digest is
-    /// checking it against numbers that describe a different file.
-    /// </remarks>
     public async Task<PreparedDownload> DownloadAsync(
         VaultBundle bundle,
         IProgress<string> say,
@@ -89,9 +70,6 @@ public sealed class VaultPrepareSteps : IPrepareSteps
     }
 }
 
-/// <summary>
-/// One Prepare being watched: materialize → poll → <b>re-list</b> → download, for one order.
-/// </summary>
 public sealed class PrepareRun
 {
     private readonly CancellationTokenSource _cancel = new();
@@ -108,37 +86,24 @@ public sealed class PrepareRun
         _lastMessage = PrepareMessages.Starting(Label);
     }
 
-    /// <summary>The order being prepared.</summary>
     public string OrderId { get; }
 
-    /// <summary>When the curator pressed Prepare — in an earlier Revit, for a re-joined one.</summary>
     public DateTimeOffset StartedAt { get; }
 
-    /// <summary>Whether this is an interrupted Prepare picked back up, rather than one pressed in this session.</summary>
     public bool Rejoined { get; }
 
-    /// <summary>The bundle's name as the curator reads it.</summary>
     public string Label { get; }
 
-    /// <summary>
-    /// The bundle's row: the one Prepare was pressed on until the download, then the re-listed one,
-    /// whose size and digest are the ones the cache holds.
-    /// </summary>
     public VaultBundle Bundle { get; private set; }
 
-    /// <summary>The newest line this Prepare has said.</summary>
     public string LastMessage => _lastMessage;
 
-    /// <summary>How it ended; <c>null</c> while it runs.</summary>
     public PrepareEnding? Ending { get; private set; }
 
-    /// <summary>The reason, when it ended <see cref="PrepareEnding.Failed"/> or <see cref="PrepareEnding.StillPreparing"/>.</summary>
     public string Detail { get; private set; } = string.Empty;
 
-    /// <summary>Completes when the Prepare has ended and stopped being watched. Never faults.</summary>
     public Task Completion { get; internal set; } = Task.CompletedTask;
 
-    /// <summary>Stops watching, and leaves nothing half-downloaded (<c>HPS-26</c>).</summary>
     public void Cancel()
     {
         try
@@ -147,16 +112,13 @@ public sealed class PrepareRun
         }
         catch (ObjectDisposedException)
         {
-            // Already ended: there is nothing left to cancel.
         }
     }
 
     internal CancellationToken Token => _cancel.Token;
 
-    /// <summary>Whether Revit stopped watching this one rather than the curator cancelling it.</summary>
     internal bool WasInterrupted => _interrupted;
 
-    /// <summary>Stops watching because Revit is going, leaving the Prepare to be re-joined.</summary>
     internal void Interrupt()
     {
         _interrupted = true;
@@ -175,30 +137,6 @@ public sealed class PrepareRun
     }
 }
 
-/// <summary>
-/// Every Prepare this Revit session has running, and the one place that knows whether an order is
-/// already being watched.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <b>The Prepare outlives the vault window.</b> A materialize can take ten minutes, and closing the
-/// window is "I am done looking", not "throw away the thing I paid for". The window used to own the
-/// Prepare anyway: closed, it kept running with no owner, told nobody when it ended, and a reopened
-/// window knew nothing of it — so a second Prepare on the same order polled it twice. Owned here, a
-/// reopened window shows what is still running, and a second Prepare joins the first
-/// (<see cref="Prepare"/>).
-/// </para>
-/// <para>
-/// ⛔ <b>Events are raised on whichever thread finished the work</b>, a thread-pool thread for
-/// everything after the first line. Nothing here touches a window or the ribbon; a subscriber that
-/// does hops to Revit's UI thread itself, as <c>AuthSession.StateChanged</c>'s subscribers do.
-/// </para>
-/// <para>
-/// <b>The Prepare can outlive Revit too.</b> Each one is written to the ledger as it starts and
-/// struck off as it ends, unless Revit is what ended it (<see cref="InterruptAll"/>). What a closed or
-/// crashed Revit leaves there, the next one re-joins (<see cref="Rejoin"/>, <see cref="PrepareRejoiner"/>).
-/// </para>
-/// </remarks>
 public sealed class PrepareWatcher
 {
     private readonly IPrepareSteps _steps;
@@ -217,16 +155,10 @@ public sealed class PrepareWatcher
         _ledger = ledger;
     }
 
-    /// <summary>A Prepare said something new; read it from <see cref="PrepareRun.LastMessage"/>.</summary>
     public event EventHandler<PrepareRun>? Said;
 
-    /// <summary>
-    /// A Prepare ended. It is no longer watched when this is raised, and its
-    /// <see cref="PrepareRun.Ending"/> says how.
-    /// </summary>
     public event EventHandler<PrepareRun>? Ended;
 
-    /// <summary>Every Prepare still being watched, oldest first.</summary>
     public IReadOnlyList<PrepareRun> Runs
     {
         get
@@ -238,7 +170,6 @@ public sealed class PrepareWatcher
         }
     }
 
-    /// <summary>The Prepare watching <paramref name="orderId"/>, or <c>null</c>.</summary>
     public PrepareRun? Watching(string orderId)
     {
         lock (_gate)
@@ -247,34 +178,12 @@ public sealed class PrepareWatcher
         }
     }
 
-    /// <summary>The run for <paramref name="orderId"/>. Callers hold <see cref="_gate"/>.</summary>
     private PrepareRun? Find(string orderId)
         => _runs.Find(held => string.Equals(held.OrderId, orderId, StringComparison.Ordinal));
 
-    /// <summary>
-    /// Starts watching a Prepare of <paramref name="bundle"/>, or joins the one already watching it.
-    /// </summary>
-    /// <param name="bundle">The row Prepare was pressed on.</param>
-    /// <param name="joined">Whether an existing Prepare was joined rather than a new one started.</param>
-    /// <remarks>
-    /// Joining here is this host's half of single-flight. The platform's half is <c>HPS-24</c>: a
-    /// second start would be answered "joined", so no second job would be queued — but it would still
-    /// be a second poll loop, spending the rate budget twice on one order.
-    /// </remarks>
     public PrepareRun Prepare(VaultBundle bundle, out bool joined)
         => Watch(bundle, DateTimeOffset.UtcNow, rejoined: false, out joined);
 
-    /// <summary>
-    /// Re-joins an interrupted Prepare of <paramref name="bundle"/>, asked for at
-    /// <paramref name="startedAt"/> in an earlier Revit — or joins the watch already on it.
-    /// </summary>
-    /// <remarks>
-    /// The same start as a Prepare pressed now: the platform answers "joined" for a job still running
-    /// and "already delivered" for one that finished while Revit was closed (<c>HPS-24</c>), so no
-    /// second build is queued, and how it ends is announced as any Prepare's is. The one difference is
-    /// a start that fails: that ends <see cref="PrepareEnding.Interrupted"/>, silently, and is tried
-    /// again at the next sign-in. The curator did not press anything this session.
-    /// </remarks>
     public PrepareRun Rejoin(VaultBundle bundle, DateTimeOffset startedAt)
         => Watch(bundle, startedAt, rejoined: true, out _);
 
@@ -301,12 +210,6 @@ public sealed class PrepareWatcher
         return run;
     }
 
-    /// <summary>
-    /// Stops watching every Prepare, for shutdown, and leaves each one in the ledger to be re-joined.
-    /// It does not wait: a step already in flight finishes on its own thread, ends
-    /// <see cref="PrepareEnding.Interrupted"/>, and is never announced, because the shim has stopped
-    /// listening before it calls this.
-    /// </summary>
     public void InterruptAll()
     {
         foreach (PrepareRun run in Runs)
@@ -320,8 +223,6 @@ public sealed class PrepareWatcher
         PrepareEnding ending;
         string detail = string.Empty;
 
-        // Before the first request, off the caller's thread: the record may wait on a lock another
-        // Revit holds, and an entry written after the network would miss a crash during it.
         Record(() => _ledger.Started(run.OrderId, run.StartedAt));
 
         try
@@ -333,7 +234,7 @@ public sealed class PrepareWatcher
             ending = PrepareEnding.Cancelled;
             Say(run, PrepareMessages.Cancelled);
         }
-#pragma warning disable CA1031 // A watch that dies on a throw is a bundle watched forever, and a fault on a thread-pool thread nobody observes.
+#pragma warning disable CA1031
         catch (Exception ex)
 #pragma warning restore CA1031
         {
@@ -342,8 +243,6 @@ public sealed class PrepareWatcher
             Say(run, ex.Message);
         }
 
-        // ⛔ Whatever a step made of the cancel — a throw, or a failure it returned — an interrupted
-        // Prepare ends interrupted. Struck off the ledger as anything else, it is lost for good.
         if (run.WasInterrupted)
         {
             ending = PrepareEnding.Interrupted;
@@ -360,14 +259,13 @@ public sealed class PrepareWatcher
         Ended?.Invoke(this, run);
     }
 
-    /// <summary>A ledger that cannot be written costs a re-join, never a Prepare.</summary>
     private static void Record(Action write)
     {
         try
         {
             write();
         }
-#pragma warning disable CA1031 // The ledger is a convenience; the Prepare is what the curator asked for.
+#pragma warning disable CA1031
         catch (Exception)
 #pragma warning restore CA1031
         {
@@ -379,9 +277,6 @@ public sealed class PrepareWatcher
         VaultResult<MaterializeStart> start = await _steps.StartAsync(run.OrderId, token).ConfigureAwait(false);
         if (!start.Succeeded)
         {
-            // A re-join whose order is still listed and available was not refused for good (that is
-            // settled against the listing before it starts), so it is tried again rather than
-            // reported as a failure the curator did nothing this session to cause.
             if (run.Rejoined)
             {
                 Say(run, start.Error!);
@@ -393,11 +288,6 @@ public sealed class PrepareWatcher
 
         MaterializeStart begun = start.Value!.Value;
 
-        // ⛔ Nothing to build means there is NO JOB, so there is nothing to poll. Polling anyway would
-        // sit on "waiting for the platform to pick this up" for the whole budget and end in a timeout,
-        // for a bundle that was ready before the request was made. This is also the ONLY route from
-        // the vault to an import for an already-complete bundle: Import refuses unless the cache
-        // holds the zip, and nothing but a Prepare fills the cache.
         if (begun.Outcome == MaterializeStartOutcome.NothingToDo)
         {
             Say(run, PrepareMessages.NothingToDo(begun));
@@ -423,8 +313,6 @@ public sealed class PrepareWatcher
             return Fail(run, polled.Result.Error!);
         }
 
-        // A deliverable the platform will never produce for this area is a GAP, not a failure. Say so
-        // and carry on: waiting for one is waiting forever.
         if (polled.Result.Value!.Value.Unproducible is { Count: > 0 } gaps)
         {
             Say(run, PrepareMessages.Gaps(gaps));
@@ -456,16 +344,11 @@ public sealed class PrepareWatcher
         Said?.Invoke(this, run);
     }
 
-    /// <summary>
-    /// Reports on the calling thread. <c>Progress&lt;T&gt;</c> would post to whatever context built
-    /// it, and this is built on a thread-pool thread that has none — the hop to a window is its own.
-    /// </summary>
     private sealed class Relay<T>(Action<T> report) : IProgress<T>
     {
         public void Report(T value) => report(value);
     }
 
-    /// <summary>For a watcher nothing re-joins after: the tests' default.</summary>
     private sealed class NoLedger : IPrepareLedger
     {
         internal static readonly NoLedger Instance = new();

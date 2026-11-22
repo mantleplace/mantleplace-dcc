@@ -25,12 +25,6 @@ namespace
 {
 using namespace MantlePlaceFoliageScatterLogic;
 
-/**
- * One coverage raster's raw samples and its published mapping, from the texture's source data and
- * the UMantlePlaceCoverageRasterData the importer attached. False (an invalid raster, which filters
- * nothing) when the texture is absent, carries no mapping, or landed in a format the importer never
- * produces for a coverage raster.
- */
 bool ReadRaster(const TSoftObjectPtr<UTexture2D>& Pointer, FRaster& Out, FString& OutWhy)
 {
 	if (Pointer.IsNull())
@@ -77,7 +71,6 @@ bool ReadRaster(const TSoftObjectPtr<UTexture2D>& Pointer, FRaster& Out, FString
 		Out.FullScale = 65535.0;
 		break;
 	case TSF_BGRA8:
-		// An 8-bit raster the engine landed as colour: the value is the red channel (B, G, R, A).
 		for (int64 Index = 0; Index < Count && Index * 4 + 2 < Bytes.Num(); ++Index)
 		{
 			Out.Samples[Index] = Bytes[Index * 4 + 2];
@@ -185,7 +178,6 @@ bool FMantlePlaceTreeScatterElement::ExecuteInternal(FPCGContext* Context) const
 		return true;
 	}
 
-	// The cell this execution generates: on a partitioned component, one World Partition cell.
 	const FBox Cell = Context->ExecutionSource.IsValid() ? Context->ExecutionSource->GetExecutionState().GetBounds() : FBox(ForceInit);
 	const FBox* CellBounds = Cell.IsValid ? &Cell : nullptr;
 	UWorld* World = Context->ExecutionSource.IsValid() ? Context->ExecutionSource->GetExecutionState().GetWorld() : nullptr;
@@ -209,18 +201,17 @@ bool FMantlePlaceTreeScatterElement::ExecuteInternal(FPCGContext* Context) const
 			PCGE_LOG(Error, GraphAndLog, LOCTEXT("ColumnsMissing", "The input is not the tree-points table: a contract column is missing."));
 			continue;
 		}
-		// FoliageType is read where it binds; an input without it is all trees, as the contract says.
-		if (!ReadColumn(Points, MantlePlaceTreeScatterColumns::FoliageType(), FoliageTypes, Context, /*bQuiet*/ true))
+		if (!ReadColumn(Points, MantlePlaceTreeScatterColumns::FoliageType(), FoliageTypes, Context, true))
 		{
 			FoliageTypes.Init(0, Positions.Num());
 		}
 
 		UPCGBasePointData* Out = FPCGContext::NewPointData_AnyThread(Context);
-		Out->SetNumPoints(Positions.Num(), /*bInitializeValues*/ true);
+		Out->SetNumPoints(Positions.Num(), true);
 		Out->AllocateProperties(EPCGPointNativeProperties::Transform | EPCGPointNativeProperties::Seed | EPCGPointNativeProperties::MetadataEntry);
 		FPCGMetadataAttribute<FSoftObjectPath>* MeshAttribute =
 			Out->MutableMetadata()->FindOrCreateAttribute<FSoftObjectPath>(Settings->MeshAttribute, FSoftObjectPath(),
-				/*bAllowsInterpolation*/ false, /*bOverrideParent*/ false);
+				false, false);
 		TPCGValueRange<FTransform> Transforms = Out->GetTransformValueRange();
 		TPCGValueRange<int32> Seeds = Out->GetSeedValueRange();
 		TPCGValueRange<PCGMetadataEntryKey> Entries = Out->GetMetadataEntryValueRange();
@@ -234,7 +225,7 @@ bool FMantlePlaceTreeScatterElement::ExecuteInternal(FPCGContext* Context) const
 			Point.HeightCm = static_cast<float>(Heights[Index]);
 			Point.CrownRadiusCm = static_cast<float>(Crowns[Index]);
 			Point.bGroundKnown = GroundKnown[Index];
-			Point.bShrub = FoliageTypes.IsValidIndex(Index) && FoliageTypes[Index] == 1; // EMantlePlaceFoliageType::Shrub
+			Point.bShrub = FoliageTypes.IsValidIndex(Index) && FoliageTypes[Index] == 1;
 			if (Judge(Point, Inputs, Params, CellBounds) != EVerdict::Keep)
 			{
 				continue;
@@ -247,8 +238,6 @@ bool FMantlePlaceTreeScatterElement::ExecuteInternal(FPCGContext* Context) const
 				continue;
 			}
 
-			// The published ground where it was measured; elsewhere the ground under the point, found
-			// by a trace through the cell, since 0 is a real elevation and planting there is wrong.
 			double GroundZ = Point.PositionCm.Z;
 			if (!Point.bGroundKnown)
 			{

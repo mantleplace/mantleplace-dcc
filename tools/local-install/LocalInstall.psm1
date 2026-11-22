@@ -1,43 +1,11 @@
-<#
-    The shared half of every host's Check-<Host>Install.ps1: git facts in, one verdict line out.
-
-    Why a slot has to say what it holds, and the verdict contract every host prints, live in
-    README.md beside this file; the rule is HPS-50. This file is the one implementation of that
-    contract, so a host script never composes a verdict sentence of its own.
-
-    Windows PowerShell 5.1 compatible, deliberately: the Revit host script runs wherever the deploy
-    script runs, and that script's own header explains why 5.1 is the floor. No ternaries, no
-    null-coalescing, no pipeline chain operators. The Pester file beside this is pwsh-only and that
-    is fine; it is the test, not the code.
-#>
-
 Set-StrictMode -Version Latest
 
-<#
-.SYNOPSIS
-    Runs git with stderr discarded and returns stdout, leaving the exit code in $LASTEXITCODE.
-
-.DESCRIPTION
-    Windows PowerShell 5.1 turns a native command's stderr into an error record when the stream is
-    redirected, and under $ErrorActionPreference = 'Stop' that record terminates the script -- so a
-    plain `git rev-parse HEAD 2>$null` outside a repository is a crash, not a $null. The preference
-    is scoped to this function, which is the one place the scripts talk to git. Call it as
-    `Invoke-Git -C <path> rev-parse HEAD`; every token after the name goes to git.
-#>
 function Invoke-Git {
-    # A SIMPLE function on purpose: a [Parameter()] attribute or [CmdletBinding()] would make it
-    # advanced, and then git's own `-e`, `-c` and `-C` bind to PowerShell's common parameters
-    # (`-e` is ambiguous between -ErrorAction and -ErrorVariable). $args takes anything.
     $ErrorActionPreference = 'Continue'
     $output = & git @args 2>$null
     return $output
 }
 
-<#
-.SYNOPSIS
-    What a checkout is right now: its commit, its branch (or $null when detached), whether it has
-    uncommitted changes, and its top-level directory. Nothing when the path is not a repository.
-#>
 function Get-GitCheckoutState {
     [CmdletBinding()]
     param(
@@ -89,47 +57,6 @@ function New-Verdict {
     }
 }
 
-<#
-.SYNOPSIS
-    Turns the facts a host script gathered into one verdict line and an exit code.
-
-.PARAMETER HostName
-    The word the line opens with: Revit, Unreal.
-.PARAMETER Configured
-    False when the host script could not find what it checks (no consuming project configured).
-.PARAMETER Installed
-    False when the slot is empty (no add-in in the folder, no submodule checkout).
-.PARAMETER HasStamp
-    False when the slot has files but nothing says where they came from.
-.PARAMETER FromSourceTree
-    False when the stamp is a release install: nothing to compare against a tree.
-.PARAMETER Sha
-    The installed commit, full or short.
-.PARAMETER ShaKnown
-    Whether this repository has that commit at all (git cat-file -e).
-.PARAMETER Branch
-    The branch the install came from, or null for a detached head.
-.PARAMETER Dirty
-    Whether the tree was dirty when the install was made.
-.PARAMETER OnMain
-    Whether the installed commit is reachable from origin/main.
-.PARAMETER BehindMain
-    Commits in <sha>..origin/main touching the host's folder.
-.PARAMETER BranchExists
-    Whether origin/<branch> exists.
-.PARAMETER BehindBranch
-    Commits in <sha>..origin/<branch> touching the host's folder.
-.PARAMETER BranchMerged
-    Whether origin/<branch> is reachable from origin/main.
-.PARAMETER HostPath
-    The folder the counts were scoped to, for the sentence: revit/, unreal/.
-.PARAMETER Remedy
-    What to run when stale.
-.PARAMETER InstalledAt
-    When, as the stamp wrote it. Optional.
-.PARAMETER SourceTree
-    Where from. Optional.
-#>
 function Get-LocalInstallVerdict {
     [CmdletBinding()]
     param(
@@ -193,7 +120,6 @@ function Get-LocalInstallVerdict {
         return New-Verdict 'Current' 0 "${HostName}: current - main@$short$when$where"
     }
 
-    # A preview: a branch, or no branch at all.
     if ($onBranch -and $BranchExists -and $BranchMerged) {
         if ($BehindMain -gt 0) {
             $count = Get-CommitCountPhrase $BehindMain $HostPath
@@ -211,9 +137,6 @@ function Get-LocalInstallVerdict {
         return New-Verdict 'Preview' 0 "${HostName}: preview - $label$when, current with origin/$Branch. Not main."
     }
     if ($onBranch) {
-        # origin has no such branch. Either it was never pushed, or it merged and was deleted --
-        # and this repository squash-merges, so a merged preview's commit is never on main. The
-        # two cases cannot be told apart from here; what can be told is whether main moved.
         if ($BehindMain -gt 0) {
             $count = Get-CommitCountPhrase $BehindMain $HostPath
             return New-Verdict 'Stale' 1 "${HostName}: stale - preview $label, and origin has no such branch now (merged and deleted, or never pushed); origin/main has $count. Run $Remedy from main."
@@ -230,22 +153,6 @@ function Get-LocalInstallVerdict {
     return New-Verdict 'Preview' 0 "${HostName}: preview - $label, $notMain$when. Not main."
 }
 
-<#
-.SYNOPSIS
-    The git facts behind a verdict, read from this repository: is the commit known, is it on
-    origin/main, how far behind is it under the host's folder, and the same for its branch.
-
-.DESCRIPTION
-    Impure on purpose and shared on purpose. Every host asks the same four questions of the same
-    repository; only where the commit and branch come from differs (a stamp file for Revit, the
-    submodule checkout for Unreal). Counts are scoped to -HostPath so a docs-only merge never asks
-    for a redeploy. Fetches first unless -NoFetch: the whole point is comparing against what
-    origin has, in a tree other sessions move under you.
-
-.PARAMETER RepoRoot
-    A checkout of mantleplace-dcc whose origin is the repository. Worktrees share objects, so any
-    of them answers for a commit made in any other.
-#>
 function Get-GitInstallFacts {
     [CmdletBinding()]
     param(

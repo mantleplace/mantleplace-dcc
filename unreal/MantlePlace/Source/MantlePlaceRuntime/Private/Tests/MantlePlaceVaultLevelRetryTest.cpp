@@ -7,14 +7,6 @@
 #include "MantlePlaceVaultClient.h"
 #include "UObject/Package.h"
 
-// The vault client's answer to a refused 3.0 level request, driven at the highest seam a headless suite
-// reaches. The HTTP request itself cannot be sent here: the client has no transport seam, and with no
-// auth system or session it refuses a request before building one. So the test hands the client's answer handler
-// the platform's response (status and body) as if the first request had gone out, and reads what the
-// client does next: the request it asks for again (OnLevelRequestedNative fires before every level
-// request, signed in or not), the names it carries to the download, and the failure it reports.
-
-/** Reaches the client's private answer path; declared a friend by UMantlePlaceVaultClient for the suite only. */
 struct FMantlePlaceVaultClientTestAccess
 {
 	static void AsIfLevelRequestSent(UMantlePlaceVaultClient& Client, const FString& OrderId, const FString& Level,
@@ -53,7 +45,6 @@ struct FPresigned
 	FString Message;
 };
 
-/** A client with its level requests and presign results recorded. */
 struct FRetryFixture
 {
 	UMantlePlaceVaultClient* Client = nullptr;
@@ -104,7 +95,6 @@ bool FMantlePlaceVaultLevelRetryTest::RunTest(const FString& Parameters)
 {
 	const TArray<FString> Asked = { TEXT("Elevation/Elevation.png"), TEXT("Basemap/Roads.csv"), TEXT("Landcover/Trees.csv") };
 
-	// A refusal naming a requested file: the same order and level are asked for again without it.
 	{
 		FRetryFixture F;
 		FMantlePlaceVaultClientTestAccess::AsIfLevelRequestSent(*F.Client, RetryOrderId, TEXT("Min"), Asked);
@@ -119,20 +109,16 @@ bool FMantlePlaceVaultLevelRetryTest::RunTest(const FString& Parameters)
 		}
 		TestEqual(TEXT("the refused name is carried to the download, to be held against its manifest"),
 			FString::Join(FMantlePlaceVaultClientTestAccess::AbsentSoFar(*F.Client), TEXT(",")), FString(TEXT("Basemap/Roads.csv")));
-		// This client has no auth system, so the second request is refused before it is sent; signed in, it goes
-		// out. Either way the one result is the second request's, never the refusal of the first.
 		TestEqual(TEXT("one result"), F.Presigned->Count, 1);
 		TestFalse(TEXT("the refusal itself is not reported as the result"), F.Presigned->Message.Contains(TEXT("file_not_in_bundle")));
 	}
 
-	// A second refusal adds to the names carried; the list asked for keeps shrinking, so the retries end.
 	{
 		FRetryFixture F;
 		FMantlePlaceVaultClientTestAccess::AsIfLevelRequestSent(*F.Client, RetryOrderId, TEXT("Med"), Asked);
 		FMantlePlaceVaultClientTestAccess::Answer(*F.Client, 404, Refusal(TEXT("[\"Basemap/Roads.csv\"]")));
-		// As if the second request went out signed in and was refused for another file.
 		FMantlePlaceVaultClientTestAccess::AsIfLevelRequestSent(*F.Client, RetryOrderId, TEXT("Med"),
-			{ TEXT("Elevation/Elevation.png"), TEXT("Landcover/Trees.csv") }, /*bFresh*/ false);
+			{ TEXT("Elevation/Elevation.png"), TEXT("Landcover/Trees.csv") }, false);
 		FMantlePlaceVaultClientTestAccess::Answer(*F.Client, 404, Refusal(TEXT("[\"Landcover/Trees.csv\"]")));
 		if (TestEqual(TEXT("two requests in all"), F.Requests->Num(), 2))
 		{
@@ -144,7 +130,6 @@ bool FMantlePlaceVaultLevelRetryTest::RunTest(const FString& Parameters)
 			FString(TEXT("Basemap/Roads.csv,Landcover/Trees.csv")));
 	}
 
-	// A refusal naming a file never requested ends the request: no new request, a failure in the platform's words.
 	{
 		FRetryFixture F;
 		FMantlePlaceVaultClientTestAccess::AsIfLevelRequestSent(*F.Client, RetryOrderId, TEXT("Max"), Asked);
@@ -155,7 +140,6 @@ bool FMantlePlaceVaultLevelRetryTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("naming the platform's code"), F.Presigned->Message.Contains(TEXT("file_not_in_bundle")));
 	}
 
-	// A refusal that would leave nothing to ask for ends it too.
 	{
 		FRetryFixture F;
 		FMantlePlaceVaultClientTestAccess::AsIfLevelRequestSent(*F.Client, RetryOrderId, TEXT("Max"), { TEXT("Basemap/Roads.csv") });
@@ -164,8 +148,6 @@ bool FMantlePlaceVaultLevelRetryTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("a failure"), F.Presigned->bSuccess);
 	}
 
-	// An Extra the platform locks on a free bundle is the locked row's words, not an error: no request again,
-	// and no "HTTP 403" or code for the surface to show.
 	{
 		FRetryFixture F;
 		FMantlePlaceVaultClientTestAccess::AsIfLevelRequestSent(*F.Client, RetryOrderId, FString(), {});
@@ -177,7 +159,6 @@ bool FMantlePlaceVaultLevelRetryTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("the result is the locked row's words"), F.Presigned->Message, FString(MantlePlaceLockedExtrasWords()));
 	}
 
-	// Another 403 is still the platform's own refusal, code and all.
 	{
 		FRetryFixture F;
 		FMantlePlaceVaultClientTestAccess::AsIfLevelRequestSent(*F.Client, RetryOrderId, FString(), {});
@@ -185,7 +166,6 @@ bool FMantlePlaceVaultLevelRetryTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the platform's code is kept"), F.Presigned->Message.Contains(TEXT("forbidden")));
 	}
 
-	// A 2.x request (no level pending) is never asked again, whatever the refusal says.
 	{
 		FRetryFixture F;
 		FMantlePlaceVaultClientTestAccess::AsIfLevelRequestSent(*F.Client, RetryOrderId, FString(), Asked);
@@ -196,4 +176,4 @@ bool FMantlePlaceVaultLevelRetryTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

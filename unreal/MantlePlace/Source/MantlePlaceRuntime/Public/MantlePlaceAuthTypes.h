@@ -24,17 +24,11 @@ enum class EMantlePlaceAuthState : uint8
 	Failed
 };
 
-/**
- * Cached session tokens. Held in memory only for the lifetime of the auth object —
- * never serialized or written to disk. Plain struct (not a USTRUCT): raw JWTs are
- * intentionally not surfaced to Blueprint or the reflection system.
- */
 struct FMantlePlaceAuthTokens
 {
 	FString AccessToken;
 	FString RefreshToken;
 	FString UserId;
-	/** Lifetime of AccessToken in seconds, as reported by GoTrue (relative; clock-free). */
 	int32 ExpiresInSeconds = 0;
 
 	bool IsValid() const { return !AccessToken.IsEmpty(); }

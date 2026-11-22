@@ -2,38 +2,14 @@ using System.Buffers.Binary;
 
 namespace MantlePlace.Core;
 
-/// <summary>One position as a GeoPackage wrote it: x first, whatever the frame; Z when there is one.</summary>
 public readonly record struct GeoPackagePosition(double X, double Y, double? Z);
 
-/// <summary>One line or ring out of a GeoPackage geometry, before it is placed in a frame.</summary>
-/// <param name="Positions">As written; a ring repeats its first position at the end, as WKB does.</param>
-/// <param name="Closed">A ring of an area, not a line.</param>
-/// <param name="IsHole">An inner ring.</param>
-/// <param name="Polygon">Which polygon of the geometry it belongs to, counting from one; zero for a line.</param>
 public sealed record GeoPackagePart(IReadOnlyList<GeoPackagePosition> Positions, bool Closed, bool IsHole, int Polygon);
 
-/// <summary>
-/// Decodes a GeoPackage geometry blob (OGC 12-128r19 §2.1.3: the <c>GP</c> header, then WKB) into the
-/// lines and rings this host draws. Pure.
-/// </summary>
-/// <remarks>
-/// <para>
-/// It takes ISO WKB (type + 1000 for Z, + 2000 for M, + 3000 for ZM) and the EWKB high-bit flags
-/// alike, since GDAL writes the first and some writers the second. Points and collections yield no
-/// part: they are not linework.
-/// </para>
-/// <para>
-/// A blob this decoder cannot follow yields no part, and the row is passed over — the same asymmetry
-/// <see cref="SiteVectorReader"/> keeps for GeoJSON: one malformed feature must not cost a curator the
-/// rest of the layer. Whether the FILE is a GeoPackage at all is not this decoder's question; the
-/// reader that opens it decides that.
-/// </para>
-/// </remarks>
 public static class GeoPackageGeometry
 {
     private const int HeaderBytes = 8;
 
-    /// <summary>The lines and rings of one geometry blob; empty for an empty, truncated or unreadable one.</summary>
     public static IReadOnlyList<GeoPackagePart> Decode(byte[] blob)
     {
         List<GeoPackagePart> parts = [];
@@ -45,7 +21,7 @@ public static class GeoPackageGeometry
         byte flags = blob[3];
         if ((flags & 0b0001_0000) != 0)
         {
-            return parts; // the empty-geometry flag
+            return parts;
         }
 
         int envelopeDoubles = ((flags >> 1) & 0b111) switch
@@ -69,16 +45,12 @@ public static class GeoPackageGeometry
         }
         catch (Exception ex) when (ex is ArgumentOutOfRangeException or IndexOutOfRangeException)
         {
-            parts.Clear(); // truncated or unfollowable WKB
+            parts.Clear();
         }
 
         return parts;
     }
 
-    /// <summary>
-    /// Decodes a blob that is one row of a layer, numbering its polygons after those the layer's
-    /// earlier rows already held, so an ordinal says which polygon of the LAYER a ring belongs to.
-    /// </summary>
     public static IReadOnlyList<GeoPackagePart> Decode(byte[] blob, ref int polygonsSoFar)
     {
         IReadOnlyList<GeoPackagePart> parts = Decode(blob);
@@ -122,11 +94,11 @@ public static class GeoPackageGeometry
         int dimensions = 2 + (hasZ ? 1 : 0) + (hasM ? 1 : 0);
         switch (type)
         {
-            case 2: // LineString
+            case 2:
                 parts.Add(new GeoPackagePart(ReadPositions(wkb, ref offset, little, dimensions, hasZ), Closed: false, IsHole: false, Polygon: 0));
                 break;
 
-            case 3: // Polygon
+            case 3:
                 polygons++;
                 uint rings = ReadUInt32(wkb, ref offset, little);
                 for (uint ring = 0; ring < rings; ring++)
@@ -136,9 +108,9 @@ public static class GeoPackageGeometry
 
                 break;
 
-            case 5: // MultiLineString
-            case 6: // MultiPolygon
-            case 7: // GeometryCollection
+            case 5:
+            case 6:
+            case 7:
                 uint members = ReadUInt32(wkb, ref offset, little);
                 for (uint member = 0; member < members; member++)
                 {
@@ -147,11 +119,11 @@ public static class GeoPackageGeometry
 
                 break;
 
-            case 1: // Point: not linework, but its bytes are skipped so a collection can go on.
+            case 1:
                 offset += dimensions * 8;
                 break;
 
-            case 4: // MultiPoint: each member is a byte-order byte, a type and a position.
+            case 4:
                 uint points = ReadUInt32(wkb, ref offset, little);
                 for (uint point = 0; point < points; point++)
                 {
@@ -170,15 +142,13 @@ public static class GeoPackageGeometry
     {
         uint count = ReadUInt32(wkb, ref offset, little);
 
-        // A count the rest of the blob cannot hold is a corrupt blob, and is refused before it
-        // allocates anything for it.
         if ((ulong)count * (ulong)(dimensions * 8) > (ulong)(wkb.Length - offset))
         {
             throw new ArgumentOutOfRangeException(nameof(wkb), count, "more positions than the blob holds");
         }
 
         List<GeoPackagePosition> positions = new((int)count);
-        int skipped = (dimensions - 2 - (hasZ ? 1 : 0)) * 8; // the M ordinate, which nothing here reads
+        int skipped = (dimensions - 2 - (hasZ ? 1 : 0)) * 8;
         for (uint index = 0; index < count; index++)
         {
             double x = ReadDouble(wkb, ref offset, little);

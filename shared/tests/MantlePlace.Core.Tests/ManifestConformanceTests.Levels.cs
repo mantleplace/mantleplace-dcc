@@ -2,19 +2,8 @@ namespace MantlePlace.Core.Tests;
 
 using CorpusCase = ConformanceCorpus.CorpusCase;
 
-/// <summary>The fidelity-level expectations: <c>revitLevels</c> rows and <c>revitLevelsAbsent</c> entries.</summary>
 internal static partial class ManifestConformanceTests
 {
-    /// <summary>
-    /// Asserts each <c>revitLevels</c> row against the level the reader produced, and each
-    /// <c>revitLevelsAbsent</c> entry as publishing no levels.
-    /// </summary>
-    /// <remarks>
-    /// A row states only what it pins: the kind always, and a path, hash, row count, field, target,
-    /// reason or cost where the case is about one. A key the row carries is compared even when its
-    /// value is <c>null</c> — <c>reason: null</c> is the unknown reason, read as none, and
-    /// <c>costUnit: null</c> the unknown unit, read as unknown — so neither can be skipped for free.
-    /// </remarks>
     private static void AssertRevitLevels(TestRun run, CorpusCase corpusCase, BundleManifest manifest)
     {
         if (ConformanceCorpus.WantsRows(corpusCase, "revitLevels", out IReadOnlyList<ExpectationNode> rows))
@@ -106,7 +95,6 @@ internal static partial class ManifestConformanceTests
 
     private static bool Has(ExpectationNode row, string key) => row.Element.TryGetProperty(key, out _);
 
-    /// <summary>The entry a row names, by its key in the manifest — this host's own block first, as the reader resolves it.</summary>
     private static BundleArtifact? LevelEntry(BundleManifest manifest, string? entry) => entry switch
     {
         "road_splines" => manifest.RoadSplines,

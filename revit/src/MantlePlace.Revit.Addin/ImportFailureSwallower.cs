@@ -3,28 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-/// <summary>
-/// Stands between Revit's failure machinery and the curator for the length of one import step.
-/// </summary>
-/// <remarks>
-/// <para>
-/// ⛔ Before this existed the plugin set no <c>FailureHandlingOptions</c> at all, on any of its
-/// transactions. The first real import therefore ended in Revit's own modal dialog listing one error
-/// and eight warnings, and because the error was one Revit will not let you ignore, the only button
-/// was Cancel. That is not a dialog a curator can act on, and under
-/// <c>MANTLEPLACE_BUNDLE_ZIP</c> — where nobody is watching — it is a dialog nobody dismisses.
-/// </para>
-/// <para>
-/// The classification is <see cref="ImportFailurePolicy"/>'s, in the pure core, where it can be
-/// asserted headlessly (<c>HPS-02</c>). What lives here is only the <c>FailuresAccessor</c> plumbing.
-/// </para>
-/// <para>
-/// One instance per transaction, plus one for the session (see <see cref="RevitBundleImporter"/>).
-/// <see cref="Lines"/> is what the importer appends to its log, and it is never empty when something
-/// was absorbed — an import that suppresses a dialog and says nothing has moved the problem, not
-/// solved it.
-/// </para>
-/// </remarks>
 internal sealed class ImportFailureSwallower : IFailuresPreprocessor
 {
     private readonly Dictionary<ImportFailureKind, int> _swallowed = [];
@@ -36,41 +14,18 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
 
     internal ImportFailureSwallower(string stepLabel) => _stepLabel = stepLabel;
 
-    /// <summary>True when an error rolled the transaction back rather than being absorbed or resolved.</summary>
     internal bool SawError => _errors.Count > 0;
 
-    /// <summary>Revit's own text for the first error, verbatim — the only string a curator can search for.</summary>
     internal string FirstErrorText => _errors.Count > 0 ? _errors[0].Text : string.Empty;
 
-    /// <summary>
-    /// Every error this transaction saw, with Revit's id for it and the elements Revit said it was
-    /// about — the only way a rolled-back step can say which of its elements was refused.
-    /// </summary>
     internal IReadOnlyList<PostedError> Errors => _errors;
 
-    /// <summary>
-    /// The elements the step that owns this transaction created in it, which an allowlisted error may
-    /// have deleted rather than roll the step back (<see cref="ImportFailureAction.DeleteNamedElements"/>).
-    /// </summary>
-    /// <remarks>
-    /// Empty unless a step declares them, so no other step, and never the session-wide handler, can
-    /// have anything deleted on its behalf.
-    /// </remarks>
     internal HashSet<ElementId> OwnNewElements { get; } = [];
 
-    /// <summary>
-    /// The errors that were answered by deleting the elements they named, for the step to account
-    /// for element by element. Only elements from <see cref="OwnNewElements"/> are ever in here.
-    /// </summary>
     internal IReadOnlyList<PostedError> Deleted => _deleted;
 
-    /// <summary>
-    /// Whether the error that rolled this back was the too-thin one, which the caller can retry
-    /// against a different base plane.
-    /// </summary>
     internal bool SawTooThin { get; private set; }
 
-    /// <summary>Everything worth telling the curator, ready to append to the import log.</summary>
     internal IReadOnlyList<string> Lines
     {
         get
@@ -100,7 +55,6 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
         }
     }
 
-    /// <summary>Forgets everything absorbed so far, so one instance can serve a retry.</summary>
     internal void Reset()
     {
         _swallowed.Clear();
@@ -114,20 +68,6 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
     public FailureProcessingResult PreprocessFailures(FailuresAccessor failuresAccessor)
         => Process(failuresAccessor);
 
-    /// <summary>
-    /// The whole policy, in one place, so the per-transaction preprocessor and the session-wide
-    /// handler cannot drift apart.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ <b>Every accessor is read fully BEFORE anything is deleted or resolved.</b> That is not
-    /// tidiness — it is the fix for a real crash. Deleting a warning invalidates its
-    /// <c>FailureMessageAccessor</c>, so calling <c>GetDescriptionText()</c> afterwards throws
-    /// <c>InvalidOperationException: This FailureMessageAccessor has not been properly
-    /// initialized</c>. An exception thrown inside a failures preprocessor makes Revit abort the
-    /// transaction outright — which is exactly what happened to the site-boundary step on the first
-    /// run of this code: it rolled back with no failure posted and no reason anybody could see,
-    /// because the reason was our own exception.
-    /// </remarks>
     private FailureProcessingResult Process(FailuresAccessor failuresAccessor)
     {
         ArgumentNullException.ThrowIfNull(failuresAccessor);
@@ -159,8 +99,6 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
             switch (action)
             {
                 case ImportFailureAction.Swallow:
-                    // ⛔ DeleteWarning is warnings-only — Revit throws if it is handed an error — so
-                    // the severity test inside Decide is load-bearing, not defensive.
                     failuresAccessor.DeleteWarning(message);
                     Count(kind, id, text);
                     break;
@@ -174,8 +112,6 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
                     break;
 
                 case ImportFailureAction.DeleteNamedElements:
-                    // Deleting the named elements is itself the resolution: Revit drops the failure
-                    // with them and regenerates, and calls this again with whatever is still posted.
                     failuresAccessor.DeleteElements([.. failing]);
                     OwnNewElements.ExceptWith(failing);
                     _deleted.Add(new PostedError(id, text, failing));
@@ -189,41 +125,17 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
             }
         }
 
-        // ⛔ Continue with an unresolved error hands it back to Revit's default handler, which IS the
-        // dead-end modal. ProceedWithCommit after resolving is what tells Revit to take the
-        // resolutions we just applied rather than asking again.
         if (SawError)
         {
             ClearAfterRollback(failuresAccessor);
             return FailureProcessingResult.ProceedWithRollBack;
         }
 
-        // A deletion is answered on the call that made it only: the call Revit makes after
-        // regenerating sees what is left, and has nothing of its own to hand back for it.
         return _resolved.Count > 0 || deletedNow
             ? FailureProcessingResult.ProceedWithCommit
             : FailureProcessingResult.Continue;
     }
 
-    /// <summary>
-    /// Tells Revit to drop the failures when it rolls the transaction back, so the rollback is
-    /// silent.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// ⛔ <c>ProceedWithRollBack</c> alone is not silent. Revit's own text for it: without the
-    /// clear-after-rollback flag, "default failure processing will continue, and failures may be
-    /// delivered to the user even though the transaction will be rolled back". A transaction this
-    /// plugin opens carries the flag in its <c>FailureHandlingOptions</c>; one it did not open —
-    /// Revit's IFC importer's own, reached only through <see cref="OnFailuresProcessing"/> — carried
-    /// none, so an error with no resolution ("Can't keep elements joined") was rolled back and then
-    /// shown anyway, as a modal whose only button is Cancel.
-    /// </para>
-    /// <para>
-    /// Failing to set it must not fail the handler: an exception thrown here aborts the transaction
-    /// outright, and the rollback this was about to ask for is already the outcome.
-    /// </para>
-    /// </remarks>
     private static void ClearAfterRollback(FailuresAccessor failuresAccessor)
     {
         try
@@ -234,19 +146,9 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
         }
         catch (Autodesk.Revit.Exceptions.ApplicationException)
         {
-            // Revit refused to hand over or accept the options; the rollback is still returned.
         }
     }
 
-    /// <summary>Handles failures posted by transactions this plugin did not open.</summary>
-    /// <remarks>
-    /// ⛔ Revit's IFC importer opens its own transaction, literally named <c>Import</c>, inside
-    /// <c>RevitLinkType.CreateFromIFC</c>. A per-transaction preprocessor cannot reach it, so
-    /// "Can't keep elements joined" and the IFC4 warning both surfaced as a modal in the middle of an
-    /// otherwise silent import. This is subscribed to <c>Application.FailuresProcessing</c> for the
-    /// duration of the import and unsubscribed in a <c>finally</c>: it is a session-wide hook, and
-    /// leaving it attached would put this policy between the curator and their own edits.
-    /// </remarks>
     internal void OnFailuresProcessing(object? sender, Autodesk.Revit.DB.Events.FailuresProcessingEventArgs e)
     {
         ArgumentNullException.ThrowIfNull(e);
@@ -254,8 +156,6 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
         FailuresAccessor accessor = e.GetFailuresAccessor();
         FailureProcessingResult result = Process(accessor);
 
-        // Continue means "nothing here needed me", and saying so lets Revit carry on as it would
-        // have. Anything else is a decision this made and has to be handed back.
         if (result != FailureProcessingResult.Continue)
         {
             e.SetProcessingResult(result);
@@ -276,26 +176,8 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
         _swallowed[kind] = _swallowed.TryGetValue(kind, out int count) ? count + 1 : 1;
     }
 
-    /// <summary>
-    /// "An error occurred during the sub-divide action. The sub-divide can not be completed."
-    /// </summary>
-    /// <remarks>
-    /// By its id rather than a <c>BuiltInFailures</c> member, because Revit 2025's API names none for
-    /// it. The id was read from the rollback line of a real import in Revit 2027, which is what
-    /// <see cref="ImportFailurePolicy.ExplainRollBack"/> carries it for. The same bundle raised no
-    /// such error in 2025 or 2026, so whether they post it under the same id is unobserved.
-    /// </remarks>
     private static readonly FailureDefinitionId SubDivisionRefused = new(new Guid("07338aaa-c5fe-4aa0-91e1-fa0569a8fe76"));
 
-    /// <summary>
-    /// Maps a Revit failure id to the pure core's vocabulary.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="ImportFailureKind.Unknown"/> is a real answer, not a gap: an unmapped id is still
-    /// handled correctly because severity decides the action — it just gets reported verbatim instead
-    /// of in our own words, which is what lets the next session add the case without a second Revit
-    /// run. <c>InaccurateSketchLine</c> was added exactly that way.
-    /// </remarks>
     private static ImportFailureKind Classify(FailureDefinitionId id)
     {
         if (id == BuiltInFailures.OverlapFailures.ToposolidFloorOverlap)
@@ -359,5 +241,4 @@ internal sealed class ImportFailureSwallower : IFailuresPreprocessor
     }
 }
 
-/// <summary>One error Revit posted: its failure id, its own text, and the elements it names.</summary>
 internal sealed record PostedError(string Id, string Text, IReadOnlyCollection<ElementId> FailingElementIds);

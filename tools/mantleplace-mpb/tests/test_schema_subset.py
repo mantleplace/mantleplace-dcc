@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The JSON Schema 2020-12 evaluator, held to the specification's own semantics on the keywords
-the published manifest series uses, and to failing closed on every keyword it does not evaluate."""
 
 from __future__ import annotations
 
@@ -42,8 +40,6 @@ class Applicators(unittest.TestCase):
         self.assertFalse(ok(schema, {"a": 1}))
 
     def test_a_ref_reaches_a_schema_grouped_under_a_def(self) -> None:
-        """The 3.0 schema keeps its file table as `$defs.files.<path>`: a group of schemas, not a
-        schema, reached by pointer. The group's keys are paths, never keywords."""
         schema = {"$defs": {"files": {"Readme.md": {"required": ["sha256"]},
                                       "Elevation/Terrain.glb": {"required": ["count"]}}},
                   "properties": {"catalog": {"properties": {
@@ -118,7 +114,6 @@ class FailingClosed(unittest.TestCase):
                     errors({"$schema": S, keyword: False}, {})
 
     def test_a_keyword_it_does_not_evaluate_is_refused_behind_a_ref(self) -> None:
-        """A schema reached only through `$ref` is audited like any other before anything runs."""
         for target in ({"x-unknown": 1}, {"properties": {"a": {"unevaluatedProperties": False}}}):
             with self.subTest(target=target):
                 with self.assertRaises(UnsupportedSchema):

@@ -5,32 +5,14 @@ namespace MantlePlace.Core.Tests;
 
 using CorpusCase = ConformanceCorpus.CorpusCase;
 
-/// <summary>
-/// Revit's import plan for an MPB 3.0 bundle: every step Revit plans for a 2.x bundle is planned from
-/// the file 3.0 promises for it, in that file's stated frame and unit, or skipped with a stated reason.
-/// </summary>
-/// <remarks>
-/// The bundles are the shared corpus's own (<c>corpus/bundle/v3-*.json</c>), read by
-/// <see cref="BundleReader"/> exactly as a host reads them, so nothing here transcribes a manifest
-/// (HPS-40). A case that needs a value the corpus bundle does not state edits a copy of its manifest
-/// and says which value.
-/// </remarks>
 internal static class ThreePlanTests
 {
-    /// <summary>The full Max download every placement case starts from.</summary>
     private const string FullBundle = "bundle/v3-full.json";
 
-    /// <summary>The bundle whose frames are an order in feet, north-east, with a negative grid rotation.</summary>
     private const string FeetBundle = "bundle/v3-frames-feet.json";
 
-    /// <summary>The release notes the left-out items are listed in.</summary>
     private const string ReleaseNotes = "revit/docs/release-notes-1.2.0.md";
 
-    /// <summary>
-    /// Every step kind a 2.x plan of a full bundle lists, planned or skipped. The surface DXF linked as
-    /// CAD is the terrain's last tier, listed only when the two above it fail, so it is held to the
-    /// terrain's row instead.
-    /// </summary>
     private static readonly ImportStepKind[] EveryStep =
     [.. Enum.GetValues<ImportStepKind>().Where(kind => kind != ImportStepKind.ToposurfaceFromSurfaceDxf)];
 
@@ -109,7 +91,6 @@ internal static class ThreePlanTests
                     return;
                 }
 
-                // A 3.0 manifest has no job id, so the order is the one identity it states (§9.3).
                 string orderId = Manifest(files)["order"]!["id"]!.GetValue<string>();
                 string token = LandPlan.BuildToken(orderId);
                 run.True(orderId.Length > 0, "the corpus bundle states an order id");
@@ -144,7 +125,6 @@ internal static class ThreePlanTests
     {
         run.Case("each step reads the file 3.0 promises for it, in that file's frame and unit (an order in feet)", () =>
         {
-            // The full tree, in the feet bundle's frames: US survey feet across, international feet up.
             JsonObject feetFrames = Manifest(Load(FeetBundle))["frames"]!.DeepClone().AsObject();
             BundleImportPlan plan = Plan(Read(Load(FullBundle, manifest => manifest["frames"] = feetFrames)));
 
@@ -210,10 +190,6 @@ internal static class ThreePlanTests
 
         run.Case("a 3.0 tree point lands where the toposolid is: offsets from the site origin, heights above its height", () =>
         {
-            // Trees.csv is host-ready (spec/format.md §4): x and y are metres east and north of the site
-            // origin and ground_z is metres above the origin's height, so the file is already local. Read
-            // as absolute coordinates in the delivery CRS, the origin is subtracted a second time and
-            // every tree stands millions of metres from the site, with its height off by the origin's.
             BundleImportPlan plan = Plan(Read(Load(FullBundle)));
             ImportStep trees = Step(plan, ImportStepKind.Vegetation)!;
             GeoOrigin origin = trees.Frame!.Origin;
@@ -243,10 +219,6 @@ internal static class ThreePlanTests
 
         run.Case("the foliage vocabulary the Trees.csv entry states rides on the vegetation step, so a shrub row is a shrub", () =>
         {
-            // The corpus entry states the table's columns and no vocabulary, so this case edits a copy
-            // of the manifest to state the one the served 3.0.0 schema carries at table.foliage_types.
-            // Pinned to the literal token the platform publishes for vocabulary "1" (spec/format-2.md), so a change to
-            // FoliageTypes.KnownVocabulary cannot silently follow the test.
             const string vocabulary = "1";
             BundleManifest manifest = Read(Load(FullBundle, document =>
                 document["catalog"]!["Landcover/Trees.csv"]!["table"]!.AsObject()["foliage_types"] =
@@ -296,9 +268,6 @@ internal static class ThreePlanTests
 
         run.Case("a 3.0 bundle imported again over its own earlier import follows the re-import rule", () =>
         {
-            // The project's anchor is what the first import of the same 3.0 order wrote: its survey
-            // point and its stated angle. A second import of that bundle meets the rule any re-import
-            // meets: one point and one angle, at a zero offset whatever the angle is.
             static ProjectAnchor AnchorOf(SurveyPointPlacement placement) =>
                 new(placement.Origin.Epsg, placement.Origin.Easting!.Value, placement.Origin.Northing!.Value, placement.AngleRadians);
 
@@ -327,8 +296,6 @@ internal static class ThreePlanTests
 
         run.Case("a layer file whose catalog entry names its tables is read at the table of the step's geometry", () =>
         {
-            // The corpus entries name no tables; a platform export names them (R20), and its water file
-            // holds the waterways and the water bodies as two tables.
             BundleImportPlan plan = Plan(Read(Load(FullBundle, manifest =>
             {
                 manifest["catalog"]!["Basemap/Water.gpkg"]!["tables"] = new JsonArray("Water_line", "Water_polygon");
@@ -498,8 +465,6 @@ internal static class ThreePlanTests
 
         run.Case("a level download without the layers the site lacks plans each of their steps as skipped, naming the file", () =>
         {
-            // What a 3.0 order downloads as when the platform refused the files the bundle does not
-            // hold and the request went again for the rest: the catalog and the archive carry neither.
             (ImportStepKind Kind, string File)[] absent =
             [
                 (ImportStepKind.RoadCentrelines, "Basemap/Roads.gpkg"),
@@ -581,17 +546,12 @@ internal static class ThreePlanTests
         BundleReader.Read(files.Keys, entry => files.TryGetValue(entry, out string? text) ? text : null)
         ?? throw new InvalidOperationException("the reader found no manifest");
 
-    /// <summary>Takes the rectangle off Imagery.png's raster, which the corpus bundle states.</summary>
     private static void WithoutRectangle(JsonObject manifest) =>
         manifest["catalog"]!["Imagery/Imagery.png"]!["raster"]!.AsObject().Remove("rectangle");
 
     internal static JsonObject Manifest(Dictionary<string, string> files) =>
         JsonNode.Parse(files["Manifest.json"])!.AsObject();
 
-    /// <summary>
-    /// A corpus bundle's files as text, its manifest edited by <paramref name="edit"/> first. A file
-    /// given as a string is its text; the manifest is written out as JSON.
-    /// </summary>
     internal static Dictionary<string, string> Load(string bundleFile, Action<JsonObject>? edit = null)
     {
         string root = ConformanceCorpus.FindCorpusDirectory() ?? throw new InvalidOperationException("the corpus is not found");

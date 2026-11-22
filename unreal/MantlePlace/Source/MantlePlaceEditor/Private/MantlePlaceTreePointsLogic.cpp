@@ -2,7 +2,7 @@
 
 #include "MantlePlaceTreePointsLogic.h"
 
-#include "MantlePlaceImportManifest.h" // FMantlePlaceVaultManifest::ProjectedToUeCm
+#include "MantlePlaceImportManifest.h"
 
 EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
     const FString& CsvText,
@@ -23,7 +23,7 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 	}
 
 	TArray<FString> Lines;
-	CsvText.ParseIntoArrayLines(Lines, /*bCullEmpty*/ true);
+	CsvText.ParseIntoArrayLines(Lines, true);
 	if (Lines.Num() == 0)
 	{
 		OutError = TEXT("The tree-point file is empty: it has no header row naming the columns x, y, ground_z, "
@@ -31,15 +31,12 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		return EMantlePlaceTreePointsOutcome::HeaderUnrecognised;
 	}
 
-	// Columns are found by header NAME, never by position. The manifest publishes the column names
-	// (`landcover.tree_points.columns`), so the names are the contract and the order is not: a
-	// column this reader does not know is ignored, and only a missing required one is a drift.
 	static const TCHAR* const RequiredColumns[] = {
 	    TEXT("x"), TEXT("y"), TEXT("ground_z"), TEXT("height_m"), TEXT("crown_radius_m")};
 	enum : int32 { ColumnX, ColumnY, ColumnGroundZ, ColumnHeight, ColumnCrown, RequiredColumnCount };
 
 	TArray<FString> HeaderFields;
-	Lines[0].ParseIntoArray(HeaderFields, TEXT(","), /*bCullEmpty*/ false);
+	Lines[0].ParseIntoArray(HeaderFields, TEXT(","), false);
 	int32 ColumnIndex[RequiredColumnCount];
 	TArray<FString> Missing;
 	int32 WidestIndex = 0;
@@ -54,9 +51,6 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		}
 		WidestIndex = FMath::Max(WidestIndex, ColumnIndex[Required]);
 	}
-	// The optional sixth column. Read only where the manifest names the vocabulary its values come
-	// from: a manifest that names none has no such column, so a header that carries one anyway is
-	// not trusted to mean it. The vocabulary id itself is not judged (see the header).
 	const int32 FoliageColumn = HeaderFields.IndexOfByPredicate([](const FString& Field) {
 		return Field.TrimStartAndEnd().Equals(TEXT("foliage_type"), ESearchCase::IgnoreCase);
 	});
@@ -71,11 +65,6 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		return EMantlePlaceTreePointsOutcome::HeaderUnrecognised;
 	}
 
-	// HPS-53: the frame the pointer states is read first, and read in full. All three strings are
-	// compared verbatim against what this host places in — its own georeference's CRS, in metres —
-	// and nothing about them is interpreted: a CRS written another way is a different CRS here,
-	// because deciding two spellings are one frame is a derivation this host does not make.
-	// Refused before any row is read, because no row could change the answer.
 	const bool bFrameOwed = Frame.IsOwed();
 	if (bFrameOwed)
 	{
@@ -111,9 +100,6 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		}
 	}
 
-	// HPS-53's backstop: the landscape extent this block publishes. With none published there is
-	// nothing to hold the file against, which is no evidence either way — so a stated frame that
-	// matched stands, and an unstated one is refused, because it is never assumed to match.
 	const bool bHasExtent = LandscapeSpanUeCm.X > 0.0 && LandscapeSpanUeCm.Y > 0.0;
 	if (!bHasExtent && !bFrameOwed)
 	{
@@ -124,9 +110,6 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 	}
 	const double HalfSpanNorthCm = LandscapeSpanUeCm.X / 2.0;
 	const double HalfSpanEastCm = LandscapeSpanUeCm.Y / 2.0;
-	// A point on the extent's edge is inside it, and the edge is the published span to the
-	// centimetre: the span is a product of a scale and a quad count, so the same point reads a
-	// hair either side of the edge by rounding alone.
 	const double EdgeToleranceCm = EdgeToleranceCmValue;
 	int32 OutsideCount = 0;
 	int32 TotalRows = 0;
@@ -136,27 +119,23 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 	for (int32 LineIndex = 1; LineIndex < Lines.Num(); ++LineIndex)
 	{
 		TArray<FString> Fields;
-		Lines[LineIndex].ParseIntoArray(Fields, TEXT(","), /*bCullEmpty*/ false);
+		Lines[LineIndex].ParseIntoArray(Fields, TEXT(","), false);
 		if (Fields.Num() <= WidestIndex || !Fields[ColumnIndex[ColumnX]].IsNumeric()
 		    || !Fields[ColumnIndex[ColumnY]].IsNumeric())
 		{
-			continue; // one malformed row must not drop the whole layer
+			continue;
 		}
 
 		const double UtmX = FCString::Atod(*Fields[ColumnIndex[ColumnX]]);
 		const double UtmY = FCString::Atod(*Fields[ColumnIndex[ColumnY]]);
-		// ground_z is deliberately empty when the DEM had no data under the point.
 		const FString& GroundField = Fields[ColumnIndex[ColumnGroundZ]];
 		const double GroundZM = GroundField.IsEmpty() ? 0.0 : FCString::Atod(*GroundField);
 
 		FMantlePlaceTreePointRow Row;
-		// Same frame math as the drape/mesh placement, through the one helper that owns it.
 		Row.Position = FMantlePlaceVaultManifest::ProjectedToUeCm(
 		    UtmX - OriginEastingM, UtmY - OriginNorthingM, GroundZM);
 		Row.HeightM = FCString::Atof(*Fields[ColumnIndex[ColumnHeight]]);
 		Row.CrownRadiusM = FCString::Atof(*Fields[ColumnIndex[ColumnCrown]]);
-		// Metres -> the engine's centimetres: the unit change Position already makes, so a scatter
-		// reads a size in the unit it places in. A unit, not a derived value.
 		Row.HeightCm = Row.HeightM * 100.0f;
 		Row.CrownRadiusCm = Row.CrownRadiusM * 100.0f;
 		Row.GroundZM = static_cast<float>(GroundZM);
@@ -167,14 +146,10 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		}
 		++TotalRows;
 
-		// The landscape is centred on the origin, so its extent in this frame is +/- half its span.
-		// A comparison of two published values, in the units they were published in.
 		if (bHasExtent
 		    && (FMath::Abs(Row.Position.X) > HalfSpanNorthCm + EdgeToleranceCm
 		        || FMath::Abs(Row.Position.Y) > HalfSpanEastCm + EdgeToleranceCm))
 		{
-			// Counted, never kept: whether the file is refused or only trimmed is decided below,
-			// once the share of the file this is is known.
 			if (OutsideCount++ == 0)
 			{
 				FirstOutsideX = Fields[ColumnIndex[ColumnX]];
@@ -185,17 +160,6 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		OutRows.Add(Row);
 	}
 
-	// HPS-53: a file with a real share of its points outside the extent this host's own block
-	// publishes is not in this frame, and the frame belongs to the FILE — so the rows that happened
-	// to land inside go too. The failure this guards is arithmetic that succeeds: foot State Plane
-	// coordinates minus a metre UTM origin is a finite number a thousand kilometres away that looks
-	// exactly like a position, and every point of such a file is off the landscape. Never a
-	// conversion (HPS-33): nothing here scales a unit or reprojects to reconcile the mismatch.
-	//
-	// A handful of points just past the edge of a file that is otherwise on the landscape is the
-	// other case — a tree whose point sits on or over the border of the tile — and refusing the
-	// whole layer for it throws away a real forest. The share a file may have outside and still be
-	// placed is MaxOutsideSharePercentValue: those points are left out and counted, the rest are placed.
 	if (OutsideCount > 0)
 	{
 		if (static_cast<int64>(OutsideCount) * 100 > static_cast<int64>(TotalRows) * MaxOutsideSharePercentValue)
@@ -221,10 +185,6 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 		}
 	}
 
-	// The manifest's own row count, checked against what this reader produced. A mismatch is a
-	// failure rather than a warning: the rows it did produce are a silent subset of the layer, and
-	// a foliage scatter built from a subset looks like a sparse forest, not like an error. The
-	// points left out above were read, so they count: the payload and the manifest agree on them.
 	if (DeclaredPointCount > 0 && TotalRows != DeclaredPointCount)
 	{
 		OutError = FString::Printf(
@@ -243,8 +203,6 @@ EMantlePlaceTreePointsOutcome FMantlePlaceTreePointsLogic::ParseCsv(
 
 EMantlePlaceFoliageType FMantlePlaceTreePointsLogic::ReadFoliageType(const FString& Cell)
 {
-	// Exact and case-sensitive, trimmed only of the CSV's own padding: the vocabulary's values are the
-	// platform's words, and a case-fold or a prefix match invents members it never published.
 	if (Cell.TrimStartAndEnd().Equals(TEXT("shrub"), ESearchCase::CaseSensitive))
 	{
 		return EMantlePlaceFoliageType::Shrub;
@@ -279,7 +237,7 @@ bool LevelFromName(const FString& Name, EMantlePlaceTreeLevel& Out)
 	if (Name == TEXT("MAX")) { Out = EMantlePlaceTreeLevel::Max; return true; }
 	if (Name == TEXT("MED")) { Out = EMantlePlaceTreeLevel::Med; return true; }
 	if (Name == TEXT("MIN")) { Out = EMantlePlaceTreeLevel::Min; return true; }
-	return false; // RAW is never imported, and anything else is not a level this build knows
+	return false;
 }
 
 FMantlePlaceResolvedTreeLevel MaxLevel(const FMantlePlaceFoliagePointsBlock& Block)
@@ -338,8 +296,6 @@ FMantlePlaceResolvedTreeLevel FMantlePlaceTreePointsLogic::ResolveLevel(
 	{
 		Out.Applied = Applied;
 		Out.RowLimit = Entry->Rows;
-		// The cut keeps the MAX file's first rows, so the file cannot hold fewer than the lesser of
-		// the cut and what MAX holds. Unknown MAX count = unknown cut count.
 		Out.DeclaredCount = Block.Count > 0 ? FMath::Min(Entry->Rows, Block.Count) : 0;
 		return Out;
 	}
@@ -354,9 +310,6 @@ FString FMantlePlaceTreePointsLogic::CutRows(const FString& CsvText, int32 Rows)
 	{
 		return CsvText;
 	}
-	// Walk the lines, counting the header as line one and skipping blank lines, and cut after the
-	// Rows-th data line. Ending the text at the line's end keeps its own newline out, which the
-	// parser does not need.
 	int32 Pos = 0;
 	int32 Lines = 0;
 	const int32 Len = CsvText.Len();

@@ -1,23 +1,11 @@
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// <c>HPS-52</c> for the three deliverables this host's block and the host-neutral pointers both
-/// name: the terrain points, the surface DXF and the site IFC. The block's <c>path</c> is the file
-/// placed; <c>layout</c>, then the detail block's own <c>path</c>, is the fallback for a block that
-/// carries none.
-/// </summary>
-/// <remarks>
-/// No bundle seen so far names two different files here, which is why every case is synthetic. The
-/// hazard each one guards is a file in one frame placed with another file's statements, and nothing
-/// on screen saying so.
-/// </remarks>
 internal static class HostBlockPrecedenceTests
 {
     private const string BlockHash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
     private const string DetailHash = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 
-    /// <summary>One deliverable: where each of its three pointers lives, and how the plan names it.</summary>
     private sealed record Deliverable(
         string Name,
         string LayoutKey,
@@ -60,8 +48,6 @@ internal static class HostBlockPrecedenceTests
 
             run.Case($"{d.Name}: a layout pointer with no detail path is not described onto the block's file", () =>
             {
-                // The detail block with no `path` of its own describes layout's file, so its units
-                // must not cross to the block's file either.
                 BundleManifest manifest = BundleManifestReader.Parse(
                     Manifest(d, layoutPath: "Shared/Layout.file", detailPath: null, blockPath: "Revit/Own.file", blockUnits: null));
                 BundleArtifact? artifact = d.Read(manifest);

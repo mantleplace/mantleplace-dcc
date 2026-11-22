@@ -7,15 +7,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The SQLite half of the carrier read, on a real GeoPackage file written by the test, read through the
-/// <c>winsqlite3.dll</c> Windows ships and checked against the GeoJSON reader for the same layer.
-/// </summary>
-/// <remarks>
-/// Windows only, because the library is: the cases are skipped elsewhere (the pure half, in
-/// <see cref="GeoPackageReaderTests"/>, runs everywhere). No file is checked in; each case writes its
-/// carrier to a temp path and removes it.
-/// </remarks>
 internal static class GeoPackageFileTests
 {
     private const int Srs = 6605;
@@ -35,7 +26,6 @@ internal static class GeoPackageFileTests
 
         if (!OperatingSystem.IsWindows())
         {
-            // The SQLite this host reads a GeoPackage with is Windows'; nothing to run elsewhere.
             return run.Report("GeoPackage file (skipped: not Windows)");
         }
 
@@ -211,11 +201,6 @@ internal static class GeoPackageFileTests
         ]}
         """;
 
-    /// <summary>
-    /// One row's <c>VALUES</c> tuple, in the fixture table's column order after the geometry: name, class,
-    /// width, subtype, threshold, lowest level, flood zone, zone subtype. Each value is SQL (<c>NULL</c>, a
-    /// number or a quoted string), and a column left off is <c>NULL</c>.
-    /// </summary>
     private static string Insert(byte[] wkb, params string[] values)
     {
         string[] columns = [.. values, .. Enumerable.Repeat("NULL", Math.Max(0, 8 - values.Length))];
@@ -245,7 +230,6 @@ internal static class GeoPackageFileTests
         }
     }
 
-    /// <summary>The three calls a test needs to write a database; the product only reads one.</summary>
     [SupportedOSPlatform("windows")]
     private static class FixtureSqlite
     {
@@ -254,7 +238,7 @@ internal static class GeoPackageFileTests
         internal static void Execute(string path, string sql)
         {
             byte[] file = Utf8(path);
-            int code = sqlite3_open_v2(file, out IntPtr db, 0x6, IntPtr.Zero); // read-write | create
+            int code = sqlite3_open_v2(file, out IntPtr db, 0x6, IntPtr.Zero);
             try
             {
                 if (code != 0)

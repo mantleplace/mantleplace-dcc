@@ -6,13 +6,6 @@
 
 #include "MantlePlaceStreamStaging.h"
 
-// Whether a bundle already laid out on disk can be served as it stands, or has to be laid out again.
-//
-// Getting this wrong in the permissive direction serves the wrong terrain: the availability rewrite
-// declares every .terrain file beneath the staging directory, so a stale tile is not merely unused,
-// it is advertised. Getting it wrong in the strict direction costs an extraction. Every assertion
-// below is written from that asymmetry — anything that does not match exactly re-stages.
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMantlePlaceStreamStagingTest,
     "MantlePlace.Import.StreamStaging",
@@ -20,7 +13,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 namespace
 {
-	/** A record for a staged bundle, as the streaming path writes one. */
 	MantlePlaceStreamStaging::FRecord MakeRecord()
 	{
 		MantlePlaceStreamStaging::FRecord Record;
@@ -42,21 +34,18 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 
 	const FRecord Incoming = MakeRecord();
 
-	// --- The one case that reuses ---------------------------------------------------------------
 	{
 		TestTrue(TEXT("an exact match with its content on disk is reused"),
-			Classify(/*bRecordFound*/ true, Incoming, Incoming, /*bTerrainRootPresent*/ true)
+			Classify(true, Incoming, Incoming, true)
 				== EVerdict::Reuse);
 	}
 
-	// --- No record, or no content --------------------------------------------------------------
 	{
 		TestTrue(TEXT("no record stages"),
 			Classify(false, FRecord(), Incoming, true) == EVerdict::Stage);
 
-		// A user who cleaned their Saved directory leaves the record behind. A record is not content.
 		TestTrue(TEXT("a record whose layer.json is gone stages"),
-			Classify(true, Incoming, Incoming, /*bTerrainRootPresent*/ false) == EVerdict::Stage);
+			Classify(true, Incoming, Incoming, false) == EVerdict::Stage);
 
 		FRecord Empty = Incoming;
 		Empty.EntryCount = 0;
@@ -64,11 +53,6 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 			Classify(true, Empty, Incoming, true) == EVerdict::Stage);
 	}
 
-	// --- A rebuilt order: the case identity alone would get wrong --------------------------------
-	// The identity is the ORDER and is stable across rebuilds by design (ADR 0002), so a
-	// re-materialized order arrives with the same identity and different tiles. Without the digest
-	// this would serve the previous build's terrain, and the user would see a stale AOI with no
-	// error anywhere.
 	{
 		FRecord Rebuilt = Incoming;
 		Rebuilt.ManifestSha256 = TEXT("0000000011111111222222223333333344444444555555556666666677777777");
@@ -83,24 +67,18 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 			Classify(true, NoDigest, IncomingNoDigest, true) == EVerdict::Stage);
 	}
 
-	// --- A different bundle in the same slot ------------------------------------------------------
 	{
 		FRecord Other = Incoming;
 		Other.Identity = TEXT("ord-99998888-7777");
 		TestTrue(TEXT("a record for another order stages"),
 			Classify(true, Other, Incoming, true) == EVerdict::Stage);
 
-		// Case-sensitive: an order id and a hex digest are both case-significant as delivered.
 		FRecord Cased = Incoming;
 		Cased.Identity = Incoming.Identity.ToUpper();
 		TestTrue(TEXT("an identity differing only in case is not the same identity"),
 			Classify(true, Cased, Incoming, true) == EVerdict::Stage);
 	}
 
-	// --- The bundle layout moved ------------------------------------------------------------------
-	// The terrain folder is renamed across bundle versions, and every served URL is built from the
-	// manifest pointer. Either changing means the directory on disk is not the one this stream
-	// would produce.
 	{
 		FRecord Legacy = Incoming;
 		Legacy.TerrainPrefix = TEXT("Terrain/");
@@ -113,8 +91,6 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 			Classify(true, MovedPointer, Incoming, true) == EVerdict::Stage);
 	}
 
-	// --- The served drape moved, appeared or went away ------------------------------------------
-	// The drape is extracted by its manifest pointer, so the files on disk depend on it.
 	{
 		FRecord Moved = Incoming;
 		Moved.DrapePath = TEXT("Imagery/Other.png");
@@ -128,17 +104,12 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("a drape that went away stages"),
 			Classify(true, Incoming, NoDrape, true) == EVerdict::Stage);
 
-		// A directory staged by scheme 1 holds every Imagery/ entry; it is not served as it stands.
 		FRecord SchemeOne = Incoming;
 		SchemeOne.SchemeVersion = 1;
 		TestTrue(TEXT("a directory staged by the folder-name layout stages again"),
 			Classify(true, SchemeOne, Incoming, true) == EVerdict::Stage);
 	}
 
-	// --- What is extracted: only what a manifest pointer names --------------------------------------
-	// HPS-32: every artifact path comes from a manifest pointer, never from folder convention. The
-	// record's terrain prefix is derived from layout.cesium_terrain and its drape path is
-	// hosts.unreal.imagery_drape.source, so these assertions are about pointers, not folders.
 	{
 		TestTrue(TEXT("a terrain tile under the pointer's directory is extracted"),
 			SelectsEntry(Incoming, TEXT("CesiumTerrain/14/5615/11520.terrain")));
@@ -147,7 +118,6 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("the served drape is extracted"),
 			SelectsEntry(Incoming, TEXT("Imagery/Drape.png")));
 
-		// The rest of the imagery folder is not served, so it is not extracted.
 		TestFalse(TEXT("a COG beside the drape is not extracted"),
 			SelectsEntry(Incoming, TEXT("Imagery/Imagery.tif")));
 		TestFalse(TEXT("a PMTiles archive beside the drape is not extracted"),
@@ -159,8 +129,6 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("a name that only begins with the drape's is not the drape"),
 			SelectsEntry(Incoming, TEXT("Imagery/Drape.png.aux.xml")));
 
-		// A manifest path finds its archive entry regardless of case (MPB 2.0, format.md 10.3 rule 6): the
-		// pointer says one case and the archive holds another, and the entry is still the one pointed at.
 		TestTrue(TEXT("a terrain tile is extracted whatever the case of the folder"),
 			SelectsEntry(Incoming, TEXT("cesiumterrain/14/5615/11520.terrain")));
 		TestTrue(TEXT("the drape is extracted whatever its case"),
@@ -168,7 +136,6 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("ignoring case does not widen the drape match to a longer name"),
 			SelectsEntry(Incoming, TEXT("imagery/drape.png.aux.xml")));
 
-		// A stream that serves no imagery extracts none.
 		FRecord NoDrape = Incoming;
 		NoDrape.DrapePath = FString();
 		TestFalse(TEXT("with no served drape, no imagery is extracted"),
@@ -176,14 +143,12 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("and the terrain still is"),
 			SelectsEntry(NoDrape, TEXT("CesiumTerrain/0/0/0.terrain")));
 
-		// An empty prefix would match every entry.
 		FRecord NoPrefix = NoDrape;
 		NoPrefix.TerrainPrefix = FString();
 		TestFalse(TEXT("an empty terrain prefix selects nothing"),
 			SelectsEntry(NoPrefix, TEXT("CesiumTerrain/0/0/0.terrain")));
 	}
 
-	// --- A layout this build does not know ---------------------------------------------------------
 	{
 		FRecord Newer = Incoming;
 		Newer.SchemeVersion = CurrentSchemeVersion + 1;
@@ -196,7 +161,6 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 			Classify(true, Older, Incoming, true) == EVerdict::Stage);
 	}
 
-	// --- Round trip --------------------------------------------------------------------------------
 	{
 		FRecord Parsed;
 		TestTrue(TEXT("a written record reads back"), FromJson(ToJson(Incoming), Parsed));
@@ -208,12 +172,10 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("entry count survives"), Parsed.EntryCount, Incoming.EntryCount);
 		TestEqual(TEXT("scheme survives"), Parsed.SchemeVersion, Incoming.SchemeVersion);
 
-		// And the round trip is what the reuse decision is actually made on.
 		TestTrue(TEXT("a round-tripped record still reuses"),
 			Classify(true, Parsed, Incoming, true) == EVerdict::Reuse);
 	}
 
-	// --- Unreadable records are absent, not trusted --------------------------------------------------
 	{
 		FRecord Parsed;
 		TestFalse(TEXT("nonsense is not a record"), FromJson(TEXT("not json at all"), Parsed));
@@ -224,9 +186,6 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 			FromJson(TEXT("{\"identity\":\"\"}"), Parsed));
 	}
 
-	// --- Where the two paths sit relative to each other -----------------------------------------------
-	// The record is a SIBLING of the staging directory, never a file inside it: that directory is
-	// served over HTTP, so a bookkeeping file inside it would be servable content.
 	{
 		const FString Identity = TEXT("ord-11112222-3333");
 		const FString Dir = StagingDir(Identity);
@@ -238,9 +197,6 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 			Record.StartsWith(Dir + TEXT("/")));
 		TestTrue(TEXT("the record sits beside it"), Record.EndsWith(Identity + TEXT(".json")));
 
-		// Two identities that share their first eight characters must not share a directory. In the
-		// content tree they deliberately do, guarded by the provenance record; here there is nothing
-		// to trade readability for, and the availability rewrite makes a collision serve wrong tiles.
 		TestNotEqual(TEXT("a short-form collision does not collide here"),
 			StagingDir(TEXT("ord-1111aaaa")), StagingDir(TEXT("ord-1111bbbb")));
 	}
@@ -248,4 +204,4 @@ bool FMantlePlaceStreamStagingTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

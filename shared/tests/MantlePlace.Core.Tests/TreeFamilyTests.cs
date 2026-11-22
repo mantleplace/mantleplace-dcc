@@ -2,10 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The Planting family's contract with the importer: which published trees Revit can build at all,
-/// and when the tree step places family instances rather than falling back to DirectShapes.
-/// </summary>
 internal static class TreeFamilyTests
 {
     private static readonly TreeFamilyParameter[] Complete =
@@ -45,8 +41,6 @@ internal static class TreeFamilyTests
 
         run.Case("a crown too small for its apex to be a curve does not fit", () =>
         {
-            // The apex is a fixed fraction of the crown, so a crown of one centimetre asks Revit for
-            // a half-millimetre circle, which is under its shortest curve.
             run.False(TreeFamily.Fits(new SiteTreePoint(0.0, 0.0, 0.0, 12.0, 0.01, FoliageType.Tree)), "one-centimetre crown");
             run.True(TreeFamily.Fits(new SiteTreePoint(0.0, 0.0, 0.0, 12.0, 0.2, FoliageType.Tree)), "twenty-centimetre crown");
         });

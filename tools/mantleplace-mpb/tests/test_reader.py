@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The reader: every file with its frame and role, and how a file sits inside its own frame.
-
-The reader never reprojects. Every case that crosses projections asserts a refusal, not a number.
-"""
 
 from __future__ import annotations
 
@@ -68,7 +64,6 @@ def site_manifest(file_entries: dict, origin: dict | None = SITE_ORIGIN) -> dict
 
 def site_files(file_entries: dict, origin: dict | None = SITE_ORIGIN) -> dict[str, bytes]:
     files = bundle_files(site_manifest(file_entries, origin))
-    # Every entry names a file, except under Parts/: those stand for a file another part holds.
     names = {"Elevation/DEM.tif", "Site/Terrain.glb", "Features/Roads.gpkg", "Site/Other.glb"}
     for name in names | {n for n in file_entries if not n.startswith("Parts/")}:
         files[name] = name.encode("utf-8")

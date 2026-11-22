@@ -68,7 +68,6 @@ public:
 		meta = (DisplayName = "Generated content root"))
 	FString GeneratedContentRoot;
 
-	/** The configured root if it is usable, the default otherwise. What the importer calls. */
 	static FString ResolveGeneratedContentRoot();
 
 	// --- Streaming into Cesium ------------------------------------------------------------------
@@ -155,50 +154,27 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = "Foliage", meta = (DisplayName = "Shrub meshes", AllowedClasses = "/Script/Engine.StaticMesh"))
 	TArray<FSoftObjectPath> FoliageShrubMeshes;
 
-	/** The engine meshes the two lists above default to: engine content, so licence-clean in every project. */
 	static const TCHAR* DefaultFoliageTreeMesh() { return TEXT("/Engine/BasicShapes/Cone.Cone"); }
 	static const TCHAR* DefaultFoliageShrubMesh() { return TEXT("/Engine/BasicShapes/Sphere.Sphere"); }
-
-	// --- The defaults, named once----------------------------------------------------------------
-	//
-	// Each is exactly the literal the code used to hardcode. Named here rather than repeated at the
-	// constructor, the fallback and the call site, because three spellings of one number is how two
-	// of them end up disagreeing.
 
 	static constexpr int32 DefaultLocalTileServerFirstPort = 8088;
 	static constexpr int32 DefaultLocalTileServerPortScanCount = 8;
 	static constexpr float DefaultMaterializePollIntervalSeconds = 3.0f;
 	static constexpr int32 DefaultMaterializeMaxPolls = 200;
 	static constexpr int32 DefaultMaxConsecutivePollFailures = 5;
-	/** The engine's New Landscape default (ULandscapeEditorObject::WorldPartitionGridSize). */
 	static constexpr int32 DefaultWorldPartitionGridSize = 2;
 
-	// --- Usability, as pure functions --------------------------------------------------------------
-	//
-	// Separated from the reads below so they can be asserted headlessly. The clamps in the meta
-	// specifiers above only constrain the Project Settings UI; a value edited into DefaultGame.ini by
-	// hand, or carried over from an older plugin version, arrives unchecked. Each of these answers
-	// "is this usable, and what happens if not" once, where a test can ask it.
-
-	/** A port in the unprivileged range, or the default. */
 	static int32 UsableLocalTileServerFirstPort(int32 Configured);
 
-	/** A scan count of at least one that cannot run past port 65535, or the default. */
 	static int32 UsableLocalTileServerPortScanCount(int32 FirstPort, int32 Configured);
 
-	/** A poll interval of at least half a second, or the default. */
 	static float UsableMaterializePollIntervalSeconds(float Configured);
 
-	/** A positive poll budget, or the default. */
 	static int32 UsableMaterializeMaxPolls(int32 Configured);
 
-	/** A non-negative failure tolerance, or the default. */
 	static int32 UsableMaxConsecutivePollFailures(int32 Configured);
 
-	/** A grid size in the engine's 1-16 range, or the default. */
 	static int32 UsableWorldPartitionGridSize(int32 Configured);
-
-	// --- The configured values if usable, the defaults otherwise. What callers call. ---------------
 
 	static void ResolveLocalTileServerPortScan(int32& OutFirstPort, int32& OutPortCount);
 	static float ResolveMaterializePollIntervalSeconds();
@@ -206,7 +182,5 @@ public:
 	static int32 ResolveMaxConsecutivePollFailures();
 	static int32 ResolveWorldPartitionGridSize();
 
-	//~ Begin UDeveloperSettings interface
 	virtual FName GetCategoryName() const override;
-	//~ End UDeveloperSettings interface
 };

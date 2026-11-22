@@ -1,31 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""Read a bundle: every file with its frame and role, and how a file sits inside its own frame.
-
-    from mantleplace_mpb import read_bundle
-    with read_bundle("site.zip") as bundle:
-        for f in bundle.files:
-            print(f.path, f.role, f.frame and f.frame.coordinate_mode)
-        move = bundle.transform("Site/Terrain.glb", "Elevation/DEM.tif")
-        move.apply((10.0, 5.0, 20.0))
-
-The reader states what the manifest states and does the arithmetic the spec allows (format.md
-6.8): an axis transform from a file's `axis_mapping`, a unit factor, and an offset from the site
-origin, added. **It never reprojects.** Two files whose horizontal CRS, vertical CRS, geoid or
-epoch differ are in different frames, and asking for one in terms of the other raises
-`FrameMismatch`. A CRS is compared as written (a `code` case-insensitively, a PROJJSON object or
-a WKT2 string exactly), so two unlike spellings of one CRS are different frames here, never
-resolved. There is no schema fetch and no network: `validate` holds a bundle to the schema; this
-reads one.
-
-A frame the reader cannot read (a value outside the known sets, a field missing, two axes on one
-line) leaves the file in the listing with `frame` None and `frame_problem` saying why: it is a
-file the reader cannot place, refused by name, never guessed at. A missing or unknown ODbL role
-reads as `database`, the stricter duty (format.md 6.8).
-
-Linear units are taken as the manifest states them (`unit_to_metres`); the reader does not know
-which CRS is geographic.
-"""
 
 from __future__ import annotations
 
@@ -40,9 +14,7 @@ from .report import Report
 Vector = tuple[float, float, float]
 Matrix = tuple[Vector, Vector, Vector]
 
-#: The unit of a site origin's projected point, as the schema names them, as a factor to metres.
 _ORIGIN_UNITS = {"m": 1.0, "ft": 0.3048, "usft": 1200 / 3937}
-#: Where each named direction points, as (east, north, up).
 _DIRECTIONS: dict[str, Vector] = {
     "east": (1, 0, 0), "west": (-1, 0, 0), "north": (0, 1, 0), "south": (0, -1, 0),
     "up": (0, 0, 1), "down": (0, 0, -1)}
@@ -56,15 +28,15 @@ _IDENTITY: Matrix = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
 
 
 class BundleError(Exception):
-    """The input is not a bundle this reader can open: unreadable, or no usable manifest."""
+    pass
 
 
 class FrameError(Exception):
-    """A file cannot be placed from what the manifest states, short of reprojecting."""
+    pass
 
 
 class FrameMismatch(FrameError):
-    """Two files are in different frames; relating them would take a reprojection."""
+    pass
 
 
 def _multiply(a: Matrix, b: Matrix) -> Matrix:
@@ -81,7 +53,6 @@ def _apply(a: Matrix, v: Vector) -> Vector:
 
 
 def _crs_key(reference: object) -> tuple[str, str] | None:
-    """A CRS reference reduced to a comparable key, or None when it is not one."""
     if not isinstance(reference, dict):
         return None
     if isinstance(reference.get("code"), str):
@@ -99,15 +70,12 @@ def _number(value: object) -> bool:
 
 @dataclass(frozen=True)
 class Frame:
-    """A file's frame, written whole (format.md 6.8). Built only from a frame that can be read."""
-
     horizontal_crs: dict
     unit_to_metres: float
     axis_order: str
     axis_mapping: dict
     coordinate_mode: str
     vertical_crs: dict | None = None
-    #: The vertical unit: `vertical_unit_to_metres` where stated, else the horizontal unit.
     vertical_unit_to_metres: float = 1.0
     geoid_model: str | None = None
     pixel_convention: str | None = None
@@ -116,7 +84,6 @@ class Frame:
 
     @classmethod
     def from_entry(cls, raw: object) -> "Frame":
-        """The frame a file entry states, or `FrameError` naming what makes it unreadable."""
         if not isinstance(raw, dict):
             raise FrameError("the frame is not an object")
         missing = [k for k in _REQUIRED if k not in raw]
@@ -158,16 +125,10 @@ class Frame:
 
     @property
     def axis_transform(self) -> Matrix:
-        """Rows east, north, up; columns the file's x, y, z. `enu = axis_transform @ xyz`."""
         columns = [_DIRECTIONS[self.axis_mapping[a]] for a in ("x", "y", "z")]
         return tuple(tuple(columns[j][i] for j in range(3)) for i in range(3))  # type: ignore[return-value]
 
     def same_frame_as(self, other: "Frame") -> bool:
-        """The same horizontal CRS, vertical CRS, geoid and epoch, compared as written.
-
-        Axes and units are not part of a frame's identity: they are what `transform` resolves
-        between two files of one frame.
-        """
         return ((_crs_key(self.horizontal_crs), _crs_key(self.vertical_crs), self.geoid_model,
                  self.coordinate_epoch)
                 == (_crs_key(other.horizontal_crs), _crs_key(other.vertical_crs), other.geoid_model,
@@ -176,8 +137,6 @@ class Frame:
 
 @dataclass(frozen=True)
 class ProjectedOrigin:
-    """The site origin as a point in a projected CRS (`location.site_origin.projected`)."""
-
     crs: dict
     x: float
     y: float
@@ -192,8 +151,6 @@ class ProjectedOrigin:
 
 @dataclass(frozen=True)
 class SiteOrigin:
-    """`location.site_origin`: the one point every offset file is measured from."""
-
     latitude: float
     longitude: float
     ellipsoidal_height_m: float
@@ -237,15 +194,10 @@ def _site_origin(location: object) -> tuple[SiteOrigin | None, str | None]:
 
 @dataclass(frozen=True)
 class BundleFile:
-    """One file of the bundle with what the manifest states about it."""
-
     path: str
     size: int | None
-    #: The file's frame, or None when it states none or states one the reader cannot read.
     frame: Frame | None
-    #: Why `frame` is None although the entry states one; None when it simply states none.
     frame_problem: str | None
-    #: The `odbl_role` as written, None when the entry states none.
     declared_role: str | None
     license: str | None
     sources: tuple[dict, ...]
@@ -253,7 +205,6 @@ class BundleFile:
 
     @property
     def role(self) -> str:
-        """`database`, `produced-work` or `none`. A missing or unknown role reads as `database`."""
         return self.declared_role if self.declared_role in _ROLES else "database"
 
     @property
@@ -263,8 +214,6 @@ class BundleFile:
 
 @dataclass(frozen=True)
 class Offset:
-    """The site origin as the offset of an offset-mode file, in the origin's own unit."""
-
     x: float
     y: float
     z: float
@@ -276,11 +225,6 @@ class Offset:
 
 @dataclass(frozen=True)
 class Transform:
-    """A linear map between two files' coordinates: `dst = matrix @ src + translation`.
-
-    The translation is in the destination file's units.
-    """
-
     matrix: Matrix
     translation: Vector
 
@@ -291,15 +235,6 @@ class Transform:
 
 @dataclass(frozen=True)
 class Placement:
-    """How one file's coordinates sit in its frame, without leaving the frame.
-
-    `axis_transform` takes a file point to east-north-up; the frame's units scale it to metres
-    (`frame.unit_to_metres`, `frame.vertical_unit_to_metres`). An `offset`-mode file also has
-    an `offset`: the site origin, in its projected CRS, which `to_enu_metres` adds. Where that
-    cannot be had without reprojecting (no `projected` block, or one in another CRS than the
-    file's), `offset` is None and `offset_problem` says why.
-    """
-
     path: str
     frame: Frame
     offset: Offset | None
@@ -314,15 +249,9 @@ class Placement:
         return self.frame.axis_transform
 
     def axes_to_enu(self, point: Vector) -> Vector:
-        """A file point turned onto east-north-up in the file's own units; no scale, no offset."""
         return _apply(self.axis_transform, tuple(point))  # type: ignore[arg-type]
 
     def to_enu_metres(self, point: Vector) -> Vector:
-        """A file point as east, north, up in metres in the frame's horizontal CRS.
-
-        An absolute file is its own coordinates; an offset file is the origin plus its point.
-        Raises `FrameError` for an offset file whose origin is not available in this frame.
-        """
         east, north, up = self.axes_to_enu(point)
         east *= self.frame.unit_to_metres
         north *= self.frame.unit_to_metres
@@ -367,15 +296,11 @@ def _offset_for(frame: Frame, origin: SiteOrigin | None,
 
 @dataclass(frozen=True)
 class FrameGroup:
-    """The files that share one frame (`Frame.same_frame_as`)."""
-
     frame: Frame
     files: tuple[BundleFile, ...]
 
 
 class BundleReader:
-    """An open bundle: its manifest, every file with frame and role, and the placement helpers."""
-
     def __init__(self, bundle: object, manifest: dict) -> None:
         self._bundle = bundle
         self.manifest = manifest
@@ -417,7 +342,6 @@ class BundleReader:
 
     @property
     def files(self) -> list[BundleFile]:
-        """Every file in the bundle, by path: the manifest and README included."""
         return [self._files[name] for name in sorted(self._files)]
 
     def __iter__(self) -> Iterator[BundleFile]:
@@ -433,7 +357,6 @@ class BundleReader:
             raise KeyError(f"{path} is not a file of this bundle") from None
 
     def by_frame(self) -> list[FrameGroup]:
-        """The files that state a readable frame, grouped by the frame they share."""
         groups: list[tuple[Frame, list[BundleFile]]] = []
         for f in self.files:
             if f.frame is None:
@@ -447,11 +370,9 @@ class BundleReader:
         return [FrameGroup(frame, tuple(members)) for frame, members in groups]
 
     def unframed(self) -> list[BundleFile]:
-        """The files with no readable frame: none stated, or one the reader refuses."""
         return [f for f in self.files if f.frame is None]
 
     def placement(self, path: str) -> Placement:
-        """How `path` sits in its own frame. Raises `FrameError` for a file with no readable frame."""
         found = self.file(path)
         if found.frame is None:
             raise FrameError(found.frame_problem or f"{path} states no frame, so it cannot be placed")
@@ -459,11 +380,6 @@ class BundleReader:
         return Placement(path, found.frame, offset, problem)
 
     def transform(self, source: str, destination: str) -> Transform:
-        """The map from `source` file coordinates to `destination` file coordinates.
-
-        Both files must be in one frame (`FrameMismatch` otherwise: no reprojection). The result
-        is axes, units and, between an absolute and an offset file, the site origin added.
-        """
         src, dst = self.placement(source), self.placement(destination)
         if not src.frame.same_frame_as(dst.frame):
             raise FrameMismatch(
@@ -481,7 +397,6 @@ class BundleReader:
                     f"{'absolute' if offset_side is dst else 'offset'}-mode heights are in the "
                     "file's vertical CRS; joining them would take a geoid model this reader does "
                     "not apply")
-        # metres_src = O_src + A_src p;  metres_dst = O_dst + A_dst q;  both are the same point.
         a_dst_inverse = _multiply(_transpose(dst.axis_transform),
                                   ((1 / dst.frame.unit_to_metres, 0, 0),
                                    (0, 1 / dst.frame.unit_to_metres, 0),
@@ -510,7 +425,6 @@ class BundleReader:
 
 
 def _signed_origin(src: Placement, dst: Placement, origin: Vector) -> Vector:
-    """O_src - O_dst: the origin when only the source is offset, its negation when only the destination is."""
     if src.mode == dst.mode:
         return (0.0, 0.0, 0.0)
     sign = 1.0 if src.mode == "offset" else -1.0
@@ -518,11 +432,6 @@ def _signed_origin(src: Placement, dst: Placement, origin: Vector) -> Vector:
 
 
 def read_bundle(path: str | Path) -> BundleReader:
-    """Open the bundle at `path` (a zip, a folder, or either inside one wrapper folder).
-
-    Raises `BundleError` when it is not a bundle: unreadable, no manifest, or a manifest that is
-    not a JSON object. It does not check the bundle against the schema (that is `validate`).
-    """
     report = Report(input=str(path))
     bundle = open_bundle(Path(path), report)
     if bundle is None:

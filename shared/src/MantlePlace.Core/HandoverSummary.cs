@@ -1,20 +1,13 @@
 namespace MantlePlace.Core;
 
-/// <summary>What Prepare for handover did, or is about to do, in numbers.</summary>
-/// <param name="Containers">How many ODbL containers the project holds.</param>
-/// <param name="Swapped">How many of them are swapped for a Produced Work terrain already in the project.</param>
-/// <param name="Elements">How many elements the containers hold.</param>
 public readonly record struct HandoverCounts(int Containers, int Swapped, int Elements);
 
-/// <summary>The words Prepare for handover says. Pure, so the wording is asserted headlessly.</summary>
 public static class HandoverSummary
 {
-    /// <summary>What the credit step says when the project has no provenance record to credit from.</summary>
     public const string NoRecord =
         "This project has no Mantle Place provenance record, so there is no credit to add. A project "
         + "imported by this plugin carries one.";
 
-    /// <summary>The confirmation's question.</summary>
     public static string Ask(HandoverCounts counts)
     {
         if (counts.Containers == 0)
@@ -31,7 +24,6 @@ public static class HandoverSummary
             + " One undo step reverses it, and nothing is saved.";
     }
 
-    /// <summary>The result, once it is done. <paramref name="creditLine"/> is what the credit step said.</summary>
     public static string Done(HandoverCounts counts, int deleted, string creditLine)
     {
         ArgumentNullException.ThrowIfNull(creditLine);

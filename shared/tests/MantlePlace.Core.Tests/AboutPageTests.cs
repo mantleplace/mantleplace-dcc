@@ -1,6 +1,5 @@
 namespace MantlePlace.Core.Tests;
 
-/// <summary>The About window's text and its privacy link, for every host that opens it.</summary>
 internal static class AboutPageTests
 {
     internal static int Run()

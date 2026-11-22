@@ -2,14 +2,6 @@ using System.Text.Json.Nodes;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The import window's estimate for an MPB 3.0 bundle: each layer's catalog count, times Revit's
-/// measured cost per unit, and a layer whose estimate breaks the five-minute budget starting unticked.
-/// </summary>
-/// <remarks>
-/// The bundle is the shared corpus's full Max download with two catalog counts edited on a copy
-/// (the corpus is not ours to change): the road surfaces' features and the trees' rows.
-/// </remarks>
 internal static class ThreeEstimateTests
 {
     private const string FullBundle = "bundle/v3-full.json";

@@ -2,10 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// A frame names its vertical datum (<c>HPS-53</c>): the ground records the datum it was built in,
-/// and every step that places a height is skipped by name where its content's datum is another.
-/// </summary>
 internal static class HeightDatumTests
 {
     private const string Stem = "eb00f56f-74f5-4134-9c8a-baf82215191a";
@@ -134,10 +130,6 @@ internal static class HeightDatumTests
         return run.Report("height datums");
     }
 
-    /// <summary>
-    /// The planner hands each step the datum its content states, so the shim compares and never goes
-    /// looking in the manifest.
-    /// </summary>
     private static void PlannerCarriesDatums(TestRun run)
     {
         string[] entries =
@@ -201,7 +193,6 @@ internal static class HeightDatumTests
         });
     }
 
-    /// <summary>Value equality for the records here, reported by their own <c>ToString</c>.</summary>
     private static void Same<T>(TestRun run, T actual, T expected, string detail)
     {
         if (!EqualityComparer<T>.Default.Equals(actual, expected))
@@ -233,7 +224,6 @@ internal static class HeightDatumTests
     private static ImportStep? Step(BundleImportPlan plan, ImportStepKind kind)
         => plan.Steps.FirstOrDefault(step => step.Kind == kind);
 
-    /// <param name="contents">Whether the host-neutral pointers state a datum of their own.</param>
     private static string Manifest(string version, string blockDatum, bool ownRoads, bool contents = true)
     {
         string datum(string value) => contents ? $", \"vertical_datum\": \"{value}\"" : string.Empty;

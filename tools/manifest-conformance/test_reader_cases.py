@@ -1,13 +1,3 @@
-"""Tests for the reader leg of the conformance gate (`reader_cases.py`).
-
-The `reader` corpus group holds, for each synthetic bundle, what a correct reader finds in it, as
-language-neutral data. The gate holds every case file to the documented shape and to the bundle it
-answers for. These tests prove the shipped cases pass, that the cases the ticket names are all there,
-and that a case fails for each way it can be wrong.
-
-Run: `python -m unittest discover -s tools/manifest-conformance`
-"""
-
 from __future__ import annotations
 
 import copy
@@ -33,7 +23,6 @@ def _load(relative: str) -> dict:
 
 
 def _case(case_id: str) -> tuple[dict, dict, dict]:
-    """(index entry, case file, bundle description), all copies a test may break."""
     entry = next(c for c in _index() if c["id"] == case_id)
     body = _load(entry["file"])
     return copy.deepcopy(entry), copy.deepcopy(body), copy.deepcopy(_load(body["bundle"]))
@@ -58,13 +47,13 @@ class ShippedCasesTest(unittest.TestCase):
 
     def test_the_situations_the_ticket_names_each_have_a_case(self) -> None:
         ids = {c["id"] for c in _index() if c["group"] == "reader"}
-        for wanted in ("reader.v3FullMax", "reader.v3FullMed", "reader.v3FullMin",  # a level each
-                       "reader.v3RecordsNotHeld", "reader.v3MedWithoutRecords",  # optional subjects
-                       "reader.v2Full",  # the manifest at the 2.x location
-                       "reader.majorAhead",  # a major above 3, refused
-                       "reader.v3CatalogFileMissing",  # a catalog name with no file
-                       "reader.v3FramesFeet",  # frames in feet, north-east, a CRS in each form
-                       "reader.v3FramesUnitUnknown", "reader.v3FramesAxisOrderUnknown",  # refused, named
+        for wanted in ("reader.v3FullMax", "reader.v3FullMed", "reader.v3FullMin",
+                       "reader.v3RecordsNotHeld", "reader.v3MedWithoutRecords",
+                       "reader.v2Full",
+                       "reader.majorAhead",
+                       "reader.v3CatalogFileMissing",
+                       "reader.v3FramesFeet",
+                       "reader.v3FramesUnitUnknown", "reader.v3FramesAxisOrderUnknown",
                        "reader.v3FramesLocalUnitNotMetre", "reader.v3FramesVerticalDatumUnreadable"):
             self.assertIn(wanted, ids)
 
@@ -73,7 +62,6 @@ class ShippedCasesTest(unittest.TestCase):
         self.assertEqual(levels, {"Max", "Med", "Min"})
 
     def test_every_accepted_3_x_bundle_of_the_corpus_has_a_reader_case(self) -> None:
-        """Each `bundle` case that conforms and declares 3.x is the answer of some reader case."""
         answered = {_load(c["file"])["bundle"] for c in _index() if c["group"] == "reader"}
         for c in _index():
             if c["group"] == "bundle" and c["expect"] == "accept":
@@ -105,14 +93,12 @@ class ShippedCasesTest(unittest.TestCase):
         high, mid, low = counts("reader.v3FullMax"), counts("reader.v3FullMed"), counts("reader.v3FullMin")
         self.assertEqual(high["Elevation/Terrain.glb"], 4 * low["Elevation/Terrain.glb"])
         self.assertEqual(high["Elevation/Terrain.glb"], 2 * mid["Elevation/Terrain.glb"])
-        self.assertEqual(high["Elevation/Terrain.dxf"], low["Elevation/Terrain.dxf"])  # georeferenced
+        self.assertEqual(high["Elevation/Terrain.dxf"], low["Elevation/Terrain.dxf"])
         self.assertIsNone(high["Elevation/Terrain.mtl"])
         self.assertIsNone(high["Readme.md"])
 
 
 class FramesTest(unittest.TestCase):
-    """The two frames a 3.x manifest states once (format.md section 9.4) are on the result."""
-
     def assertFails(self, problems: list[str], text: str) -> None:
         self.assertTrue(any(text in p for p in problems), f"no failure mentions {text!r}: {problems}")
 
@@ -289,7 +275,6 @@ class AnswerTest(unittest.TestCase):
         self.assertFails(_problems("reader.v3FullMax", change), "count")
 
     def test_a_count_the_catalog_does_not_state_is_refused(self) -> None:
-        """A reader reports what the catalog states and never counts a file for itself."""
         def invent(_e, r):
             next(row for row in r["files"] if row["count"] is None)["count"] = 3
         self.assertFails(_problems("reader.v3MedWithoutRecords", invent), "count")

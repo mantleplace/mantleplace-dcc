@@ -4,14 +4,6 @@ using MantlePlace.AutoCad.Tests;
 using MantlePlace.Core;
 using MantlePlace.Core.Tests;
 
-// Headless entry point: no AutoCAD, no Civil 3D, no test framework, no network (HPS-42). Non-zero
-// exit on any failing assertion, so CI needs nothing but `dotnet run`.
-//
-// The conformance runners are the shared suite's, compiled in (the csproj says why). This host claims
-// every corpus group. The `manifest` group runs under this host's own key: the cases scoped to
-// `autocad` drive the import plan, and the host-invariant ones the shared reader it references.
-//
-// The suite names itself the way the AutoCAD shell does (MantlePlace.AutoCad.Addin/HostRegistration.cs).
 HostIdentity.Set(
     AutoCadBlockReader.HostKey,
     typeof(AutoCadBlockReader).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion,
@@ -40,7 +32,6 @@ exitCode |= ExportReceiptTests.Run();
 exitCode |= LocalBundleImportTests.Run();
 exitCode |= AboutPageTests.Run();
 exitCode |= HostReleaseYearTests.Run();
-// The shell declares no window of its own: every window it opens is the shared set (SharedWindowsTests).
 exitCode |= ShimWindowTests.Run("autocad/src/MantlePlace.AutoCad.Addin", "shim windows", declaresWindows: false);
 exitCode |= SharedWindowsTests.Run();
 

@@ -39,9 +39,6 @@ FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePla
 	const int64 Size = bExists ? Files.FileSize(*Cached.LocalPath) : -1;
 	Cached.SizeBytes = (Size > 0) ? Size : 0;
 
-	// Prefer the sha recorded in the sidecar at download time - validating a list refresh by
-	// re-hashing a multi-GB file on disk would block the editor. The sidecar sha is what we
-	// downloaded; comparing it to the vault's current sha detects a re-cut (-> CachedStale).
 	FString RecordedSha;
 	FString RecordedListingSha;
 	int64 RecordedSize = 0;
@@ -69,7 +66,6 @@ FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePla
 	}
 	Cached.Sha256 = RecordedSha;
 
-	// A cached view is held against its own record: the listing states the whole archive.
 	const FMantlePlaceCacheExpectation Expected = FCacheLogic::ExpectationForHeld(
 		bHoldsView, RecordedSha, RecordedSize,
 		Item.bHasSha256, Item.Sha256, Item.bHasSizeBytes, Item.SizeBytes);
@@ -79,14 +75,11 @@ FMantlePlaceCachedBundle UMantlePlaceBundleCache::ResolveCached(const FMantlePla
 		Expected.bHasSizeBytes, Expected.SizeBytes,
 		Item.bHasManifestVersion, Item.ManifestVersion);
 	Cached.State = FCacheLogic::DeriveCacheState(bExists, Validity);
-	// A view cannot be compared to the listing's digest, so a re-cut shows as the listing's digest
-	// moving from the one recorded when the view was downloaded.
 	if (Cached.State == EMantlePlaceCacheState::CachedValid
 		&& FCacheLogic::IsViewRecut(bHoldsView, RecordedListingSha, Item.bHasSha256, Item.Sha256))
 	{
 		Cached.State = EMantlePlaceCacheState::CachedStale;
 	}
-	// One slot per order, holding one level: a download of another level is not served from it.
 	if (WantedLevel != nullptr)
 	{
 		Cached.State = FCacheLogic::StateAtLevel(Cached.State, Cached.Level, *WantedLevel);
@@ -123,7 +116,7 @@ bool UMantlePlaceBundleCache::EvictCache(const FMantlePlaceVaultItem& Item)
 		return false;
 	}
 	const FString Dir = FCacheLogic::DeriveBundleDir(GetCacheRoot(), Item.OrderId);
-	return IFileManager::Get().DeleteDirectory(*Dir, /*RequireExists*/ false, /*Tree*/ true);
+	return IFileManager::Get().DeleteDirectory(*Dir, false, true);
 }
 
 void UMantlePlaceBundleCache::DownloadBundle(
@@ -135,9 +128,6 @@ void UMantlePlaceBundleCache::DownloadBundle(
 		return;
 	}
 
-	// Offline re-import: a valid cached bundle is served without any network round-trip (the
-	// anti-streaming guarantee made literal). Checked before the URL so it works fully offline. The slot
-	// serves only the level it holds (none, for a 2.x download): another 3.0 level is fetched and replaces it.
 	const FMantlePlaceCachedBundle Cached = ResolveCached(Item, &Presigned.Level);
 	if (Cached.State == EMantlePlaceCacheState::CachedValid)
 	{
@@ -151,7 +141,6 @@ void UMantlePlaceBundleCache::DownloadBundle(
 		return;
 	}
 
-	// A presigned URL is short-lived; refuse a stale one with guidance rather than 403-failing mid-stream.
 	FDateTime ExpiresUtc;
 	if (FCacheLogic::ParseExpiry(Presigned.ExpiresAt, ExpiresUtc) && FCacheLogic::IsExpired(FDateTime::UtcNow(), ExpiresUtc))
 	{
@@ -159,7 +148,6 @@ void UMantlePlaceBundleCache::DownloadBundle(
 		return;
 	}
 
-	// Single in-flight download (mirrors the vault client's single-request discipline).
 	if (ActiveRequest.IsValid())
 	{
 		NotifyDownloadComplete(false, FString(), TEXT("A download is already in progress."));
@@ -178,8 +166,8 @@ void UMantlePlaceBundleCache::DownloadBundle(
 		: (Item.bHasSizeBytes ? static_cast<uint64>(Item.SizeBytes) : 0);
 
 	IFileManager& Files = IFileManager::Get();
-	Files.MakeDirectory(*FCacheLogic::DeriveBundleDir(Root, Item.OrderId), /*Tree*/ true);
-	Files.Delete(*ActivePartPath, /*RequireExists*/ false, /*EvenIfReadOnly*/ true, /*Quiet*/ true);
+	Files.MakeDirectory(*FCacheLogic::DeriveBundleDir(Root, Item.OrderId), true);
+	Files.Delete(*ActivePartPath, false, true, true);
 
 	FArchive* Writer = Files.CreateFileWriter(*ActivePartPath);
 	if (Writer == nullptr)
@@ -192,20 +180,17 @@ void UMantlePlaceBundleCache::DownloadBundle(
 	ActiveRequest = FHttpModule::Get().CreateRequest();
 	ActiveRequest->SetVerb(TEXT("GET"));
 	ActiveRequest->SetURL(Presigned.Url);
-	// Stream the body straight to the .part file (no full in-memory buffer); complete + progress on
-	// the game thread so the Blueprint events are safe to fire directly (the body Serialize runs on
-	// the HTTP thread, which the FArchive owns).
 	ActiveRequest->SetDelegateThreadPolicy(EHttpRequestDelegateThreadPolicy::CompleteOnGameThread);
 	if (!ActiveRequest->SetResponseBodyReceiveStream(ResponseFileWriter.ToSharedRef()))
 	{
-		FinishStream(/*bDeletePartFile*/ true);
+		FinishStream(true);
 		NotifyDownloadComplete(false, FString(), TEXT("This HTTP backend cannot stream the response to disk."));
 		return;
 	}
 
 	TWeakObjectPtr<UMantlePlaceBundleCache> WeakThis(this);
 	ActiveRequest->OnRequestProgress64().BindLambda(
-		[WeakThis](FHttpRequestPtr /*Request*/, uint64 /*BytesSent*/, uint64 BytesReceived)
+		[WeakThis](FHttpRequestPtr, uint64, uint64 BytesReceived)
 		{
 			if (UMantlePlaceBundleCache* Self = WeakThis.Get())
 			{
@@ -223,7 +208,7 @@ void UMantlePlaceBundleCache::DownloadBundle(
 
 	if (!ActiveRequest->ProcessRequest())
 	{
-		FinishStream(/*bDeletePartFile*/ true);
+		FinishStream(true);
 		NotifyDownloadComplete(false, FString(), TEXT("Failed to start the download request."));
 	}
 }
@@ -240,13 +225,10 @@ void UMantlePlaceBundleCache::HandleDownloadProgress(uint64 BytesReceived)
 }
 
 void UMantlePlaceBundleCache::HandleDownloadComplete(
-	TSharedPtr<IHttpRequest, ESPMode::ThreadSafe> /*Request*/,
+	TSharedPtr<IHttpRequest, ESPMode::ThreadSafe>,
 	TSharedPtr<IHttpResponse, ESPMode::ThreadSafe> Response,
 	bool bConnectedSuccessfully)
 {
-	// We are inside the completion delegate, so do NOT unbind/cancel it (that is the start/cancel/
-	// destroy path). Just close the streamed writer so the .part is flushed + the OS handle released
-	// before we read it back to hash, and drop our request reference.
 	if (ResponseFileWriter.IsValid())
 	{
 		ResponseFileWriter->Flush();
@@ -271,12 +253,11 @@ void UMantlePlaceBundleCache::HandleDownloadComplete(
 	int64 OnDiskSize = -1;
 	const FString ComputedSha = ComputeFileSha256(ActivePartPath, OnDiskSize);
 
-	// A view is checked for the length the platform stated; the whole archive, against the listing.
 	const FMantlePlaceCacheExpectation Expected = FCacheLogic::ExpectationForDownload(
 		bActiveIsView, bActiveIsView && ActiveViewSizeBytes > 0, ActiveViewSizeBytes,
 		ActiveItem.bHasSha256, ActiveItem.Sha256, ActiveItem.bHasSizeBytes, ActiveItem.SizeBytes);
 	const FMantlePlaceCacheValidity Validity = FCacheLogic::DecideValidity(
-		/*bFileExists*/ OnDiskSize >= 0, OnDiskSize, ComputedSha,
+		OnDiskSize >= 0, OnDiskSize, ComputedSha,
 		Expected.bHasSha256, Expected.Sha256,
 		Expected.bHasSizeBytes, Expected.SizeBytes,
 		ActiveItem.bHasManifestVersion, ActiveItem.ManifestVersion);
@@ -291,15 +272,13 @@ void UMantlePlaceBundleCache::HandleDownloadComplete(
 		return;
 	}
 
-	// Promote the verified .part to the canonical bundle.zip atomically.
 	IFileManager& Files = IFileManager::Get();
-	if (!Files.Move(*ActiveFinalPath, *ActivePartPath, /*bReplace*/ true, /*bEvenIfReadOnly*/ true))
+	if (!Files.Move(*ActiveFinalPath, *ActivePartPath, true, true))
 	{
 		FailDownload(TEXT("Could not finalize the cached bundle."));
 		return;
 	}
 
-	// Record the cache sidecar (integrity facts; the list state is recomputed at inspect time).
 	FMantlePlaceCachedBundle Meta;
 	Meta.OrderId = ActiveItem.OrderId;
 	Meta.LocalPath = ActiveFinalPath;
@@ -330,16 +309,13 @@ FString UMantlePlaceBundleCache::ComputeFileSha256(const FString& Path, int64& O
 	OutSizeBytes = Files.FileSize(*Path);
 	if (OutSizeBytes < 0)
 	{
-		return FString(); // missing
+		return FString();
 	}
 	if (OutSizeBytes > MaxHashSizeBytes)
 	{
-		// Too big to hash synchronously on the game thread - validity falls back to size (+ version).
 		return FString();
 	}
 
-	// Stream the file through the incremental hasher in fixed chunks - no whole-file allocation
-	// (the size cap above still bounds how long this synchronous hash runs on the game thread).
 	TUniquePtr<FArchive> Reader(IFileManager::Get().CreateFileReader(*Path));
 	if (!Reader)
 	{
@@ -347,7 +323,7 @@ FString UMantlePlaceBundleCache::ComputeFileSha256(const FString& Path, int64& O
 	}
 
 	FMantlePlaceSha256 Hasher;
-	static constexpr int64 ChunkSize = 1 << 20; // 1 MiB
+	static constexpr int64 ChunkSize = 1 << 20;
 	TArray<uint8> Chunk;
 	Chunk.SetNumUninitialized(static_cast<int32>(ChunkSize));
 	int64 Remaining = OutSizeBytes;
@@ -382,7 +358,7 @@ void UMantlePlaceBundleCache::FinishStream(bool bDeletePartFile)
 	}
 	if (bDeletePartFile && !ActivePartPath.IsEmpty())
 	{
-		IFileManager::Get().Delete(*ActivePartPath, /*RequireExists*/ false, /*EvenIfReadOnly*/ true, /*Quiet*/ true);
+		IFileManager::Get().Delete(*ActivePartPath, false, true, true);
 	}
 }
 
@@ -390,7 +366,7 @@ void UMantlePlaceBundleCache::FailDownload(const FString& Message)
 {
 	if (!ActivePartPath.IsEmpty())
 	{
-		IFileManager::Get().Delete(*ActivePartPath, /*RequireExists*/ false, /*EvenIfReadOnly*/ true, /*Quiet*/ true);
+		IFileManager::Get().Delete(*ActivePartPath, false, true, true);
 	}
 	ActivePartPath.Reset();
 	ActiveFinalPath.Reset();
@@ -400,8 +376,7 @@ void UMantlePlaceBundleCache::FailDownload(const FString& Message)
 
 void UMantlePlaceBundleCache::CancelDownload()
 {
-	// User-cancelled: tear down the request + partial file, but fire no completion event.
-	FinishStream(/*bDeletePartFile*/ true);
+	FinishStream(true);
 	ActivePartPath.Reset();
 	ActiveFinalPath.Reset();
 }
@@ -420,6 +395,6 @@ void UMantlePlaceBundleCache::NotifyDownloadProgress(const FMantlePlaceDownloadP
 
 void UMantlePlaceBundleCache::BeginDestroy()
 {
-	FinishStream(/*bDeletePartFile*/ false);
+	FinishStream(false);
 	Super::BeginDestroy();
 }

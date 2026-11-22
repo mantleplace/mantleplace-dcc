@@ -11,11 +11,6 @@
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 
-// The test mount the World Partition tests save their levels under. What it pins: every package a
-// saved partitioned level makes (the map, an asset beside it, an external actor, an external object)
-// is under the plugin's own /MantlePlace/ root, which the plugin's asset domain covers, and resolves
-// to a file in Intermediate, never in the plugin's Content.
-
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMantlePlaceTestMountTest,
     "MantlePlace.Import.WorldPartition.TestMount",
@@ -54,4 +49,4 @@ bool FMantlePlaceTestMountTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

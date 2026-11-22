@@ -1,14 +1,5 @@
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The import window's line about the order's unit system, linear unit and delivery CRS, and the
-/// line that appears only when the project displays lengths in the other unit system.
-/// </summary>
-/// <remarks>
-/// Driven through <see cref="BundleManifestReader.Parse"/> rather than a hand-built
-/// <see cref="DeliveryFacts"/>, because a published value the reader drops is a line that says the
-/// wrong thing, and only the reader's path can show that it was kept.
-/// </remarks>
 internal static class DeliveryHeaderTests
 {
     private const string Meters = "autodesk.unit.unit:meters-1.0.0";
@@ -41,9 +32,6 @@ internal static class DeliveryHeaderTests
 
         run.Case("the local-feet tier before the label names no delivery CRS, and the line says so", () =>
         {
-            // The schema publishes horizontal_epsg as null here: the vectors live in a local frame.
-            // local_origin carries a UTM EPSG, but that is the origin's CRS, not the delivery's, and
-            // printing it would say the files are on a grid they are not on.
             DeliveryFacts delivery = Read("""
                 {"unit_system": "imperial", "tier": "local_ft", "linear_unit": "ft", "horizontal_epsg": null,
                  "local_origin": {"lon": -155.5, "lat": 19.6, "utm_epsg": 32605, "easting_m": 1, "northing_m": 2}}
@@ -93,7 +81,6 @@ internal static class DeliveryHeaderTests
 
         run.Case("a block naming neither a label nor an EPSG code says so rather than naming one", () =>
         {
-            // Not the tier, which is not a CRS, and never a name looked up from it.
             DeliveryFacts delivery = Read("""{"unit_system": "imperial", "tier": "county_ft", "linear_unit": "ft"}""");
             run.Equal(DeliveryHeader.Describe(delivery), "Imperial · international feet · no delivery CRS", "no CRS named");
         });

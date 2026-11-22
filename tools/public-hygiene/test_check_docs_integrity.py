@@ -1,14 +1,4 @@
 #!/usr/bin/env python3
-"""Tests for the documentation-integrity gate.
-
-Each test builds a throwaway repository rather than asserting against the real tree, so the suite
-says what the gate MEANS rather than what this repository happens to contain today.
-
-The non-findings matter as much as the findings, and both directions are asserted for every rule.
-A gate that flags an example command, an external URL or a README with no frontmatter is a gate
-somebody switches off within a week — and then it guards nothing, which is the state that let six
-stale claims reach main in the first place.
-"""
 
 from __future__ import annotations
 
@@ -21,8 +11,6 @@ from tempfile import TemporaryDirectory
 
 import check_docs_integrity as gate
 
-# The fixture root guide. Every test writes one, because the ADR index check reads it always: a
-# tree whose guide is missing is itself a finding, which one test below asserts on purpose.
 ROOT_GUIDE = """\
 # Fixture guide
 
@@ -33,8 +21,6 @@ ROOT_GUIDE = """\
 
 
 class GateTestCase(unittest.TestCase):
-    """A temporary git repository, because the gate reads tracked files and nothing else."""
-
     def setUp(self) -> None:
         self._tmp = TemporaryDirectory()
         self.root = Path(self._tmp.name)
@@ -77,7 +63,6 @@ class BaselineTests(GateTestCase):
         self.assertClean()
 
     def test_the_real_repository_is_clean(self) -> None:
-        """The gate is a regression guard, so it starts from zero findings on this tree."""
         buffer = io.StringIO()
         with redirect_stdout(buffer):
             code = gate.run(gate.REPO_ROOT)
@@ -116,7 +101,6 @@ class LinkTests(GateTestCase):
         self.assertClean()
 
     def test_a_target_whose_name_carries_parentheses_is_read_whole(self) -> None:
-        """Cutting at the first ")" would report an existing file as missing."""
         self.write("docs/note (draft).md", self.document("note", "Parentheses in the name."))
         self.write("README.md", "See [it](docs/note%20(draft).md).\n")
         self.assertClean()
@@ -130,19 +114,15 @@ class LinkTests(GateTestCase):
         self.assertRefused("0042-nope.md")
 
     def test_a_site_root_relative_target_is_refused_even_when_the_file_exists(self) -> None:
-        """GitHub resolves a leading slash against the site root, not this repository."""
         self.write("README.md", "See [it](/docs/adr/0001-the-first-decision.md).\n")
         self.assertRefused("site-root-relative", "/docs/adr/0001-the-first-decision.md")
 
     def test_a_target_whose_case_is_wrong_is_refused_on_every_platform(self) -> None:
-        """`Path.exists()` is case-insensitive on Windows; the hosted runner is not."""
         self.write("README.md", "See [it](DOCS/adr/0001-the-first-decision.md).\n")
         self.assertRefused("DOCS/adr/0001-the-first-decision.md")
 
 
 class NonFindingTests(GateTestCase):
-    """The false positives that would get this gate switched off."""
-
     def test_a_link_inside_a_fenced_block_is_not_a_link(self) -> None:
         self.write("README.md", "Example:\n\n```md\n[text](nowhere/at/all.md)\n```\n")
         self.assertClean()
@@ -185,7 +165,6 @@ class NonFindingTests(GateTestCase):
         self.assertRefused("0042-nope.md")
 
     def test_a_target_that_escapes_the_repository_root_is_a_host_route(self) -> None:
-        """`../../security/advisories/new` is GitHub's route, not a path, and resolves nowhere."""
         self.write("README.md", "[Report privately](../../security/advisories/new).\n")
         self.write("SECURITY.md", "[Report privately](../../security/advisories/new).\n")
         self.assertClean()
@@ -217,7 +196,6 @@ class FrontmatterTests(GateTestCase):
         self.assertRefused("docs/guide.md", "does not parse")
 
     def test_an_unclosed_block_is_refused_rather_than_taken_as_complete(self) -> None:
-        """Both keys are present and the block still fails: an unterminated block is not a block."""
         self.write("docs/guide.md", "---\nname: guide\ndescription: x\n")
         self.assertRefused("docs/guide.md", "never closed")
 
@@ -247,7 +225,6 @@ class FrontmatterTests(GateTestCase):
         self.assertClean()
 
     def test_the_human_reading_surface_is_not_asked_for_frontmatter(self) -> None:
-        """GitHub renders a frontmatter block as a visible table; these pages are read by people."""
         for relative in (
             "README.md",
             "CONTRIBUTING.md",
@@ -274,7 +251,6 @@ class AdrIndexTests(GateTestCase):
         self.assertRefused("names 0002", "no docs/adr/0002-*.md exists")
 
     def test_a_passing_mention_is_not_an_index_entry(self) -> None:
-        """The real index says "0002's bug in the other host" in prose; bold is what lists."""
         self.assertClean()
 
     def test_a_tree_with_no_root_guide_is_refused_rather_than_passed_quietly(self) -> None:
@@ -287,10 +263,6 @@ class AdrIndexTests(GateTestCase):
 
 
 class ContributorProcedureTests(unittest.TestCase):
-    """Root CLAUDE.md used to point at a workflow document a reader here cannot open. The public
-    procedure replaces it, so it is pinned: the guide links it, it exists, and it is one of the
-    documents the gate reads for links and frontmatter."""
-
     PROCEDURE = "docs/agents/contributor-procedure.md"
 
     def test_the_guide_points_at_the_public_procedure_and_no_outside_standard(self) -> None:
@@ -326,7 +298,6 @@ class UnitTests(unittest.TestCase):
         self.assertEqual(gate.link_targets("[x](<y.md>)\n"), [(1, "y.md")])
 
     def test_a_site_root_target_resolves_from_the_repository_root_to_name_the_intent(self) -> None:
-        """It is refused either way; resolving it is what lets the finding say what was meant."""
         self.assertEqual(gate.resolved("docs/agents/x.md", "/spec/format.md"), "spec/format.md")
 
     def test_a_sibling_target_resolves_from_the_citing_file(self) -> None:

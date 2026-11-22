@@ -1,21 +1,3 @@
-# Release of the mantleplace-mpb package (the `mpb` validator and bundle reader) to PyPI.
-#
-# A release is a tag: `mpb-<version>`, where <version> is tools/mantleplace-mpb's __version__.
-# That version is the MPB manifest version the conformance corpus is written against (plus `.postN`
-# for a package-only release), and the build job refuses a tag that names anything else.
-#
-# PUBLISHING USES TRUSTED PUBLISHING (OIDC). There is no PyPI token anywhere: not in this
-# repository, not in its settings. The `publish` job alone may mint the short-lived identity token,
-# and PyPI accepts it only from this repository, this workflow file and the `pypi` environment.
-# That environment is where a release is approved: give it required reviewers, and a tag push
-# waits there until a maintainer says go. One-time setup on PyPI is a pending publisher for the
-# project `mantleplace-mpb` naming owner `mantleplace`, repository `mantleplace-dcc`, workflow
-# `release-mpb.yml` and environment `pypi`.
-#
-# A manual run (workflow_dispatch) builds and checks everything and publishes nothing.
-#
-# Hosted runner on purpose, like every gate here. It does not run on a push to a branch or on a
-# change to a branch's diff, so it costs nothing until a maintainer cuts a tag.
 name: release-mpb
 
 on:
@@ -64,7 +46,6 @@ jobs:
       - name: Check the distributions
         run: python -m twine check --strict tools/mantleplace-mpb/dist/*
 
-      # What PyPI will serve, installed the way a user installs it, and run over the corpus.
       - name: Install the built wheel and validate the corpus with it
         run: |
           python -m venv "$RUNNER_TEMP/wheel-check"

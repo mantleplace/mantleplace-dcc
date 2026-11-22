@@ -8,10 +8,6 @@
 #include "MantlePlaceManifestThreeLogic.h"
 #include "MantlePlaceVaultTypes.h"
 
-// The level control's state (HPS-59): Max, Med and Min, each with its size, the platform's recommendation
-// preselected and said, the curator free to choose, and Download once. The import window only lays these
-// out; every word and every state change is asserted here.
-
 namespace
 {
 FMantlePlaceLevelSize Size(const TCHAR* Level, int64 Bytes, int64 Rows, int64 Features, int64 Triangles, int64 Pixels)
@@ -53,7 +49,6 @@ bool FMantlePlaceLevelChoiceStateTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("The heading is the standard's"), FChoice::Heading(), FString(TEXT("Fidelity Level")));
 	TestEqual(TEXT("The button is the standard's"), FChoice::DownloadWord(), FString(TEXT("Download")));
 
-	// A 2.x order has no control: its download and levels are as they were.
 	FMantlePlaceVaultItem TwoX;
 	TwoX.OrderId = TEXT("order-2");
 	TestFalse(TEXT("A 2.x order offers no level control"), FChoice::For(TwoX).IsValid());
@@ -65,7 +60,6 @@ bool FMantlePlaceLevelChoiceStateTest::RunTest(const FString& Parameters)
 	}
 	TestEqual(TEXT("It is for the order"), Choice->OrderId(), FString(TEXT("order-3")));
 
-	// Three levels, most to least, each reading its level and then its size; Recommended beside one.
 	const TArray<FMantlePlaceLevelOption>& Options = Choice->Options();
 	if (TestEqual(TEXT("Three levels"), Options.Num(), 3))
 	{
@@ -77,7 +71,6 @@ bool FMantlePlaceLevelChoiceStateTest::RunTest(const FString& Parameters)
 			FString(TEXT("Med: 400 rows, 120 features, 2,000,000 triangles, 4,000,000 pixels")));
 	}
 
-	// The recommendation is preselected; the curator is free to choose any offered level, and only those.
 	TestEqual(TEXT("The recommendation is preselected"), Choice->Selected(), FString(TEXT("Med")));
 	TestTrue(TEXT("So Download can go"), Choice->HasSelection());
 	TestTrue(TEXT("The curator chooses Max"), Choice->Choose(TEXT("Max")));
@@ -86,7 +79,6 @@ bool FMantlePlaceLevelChoiceStateTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("A 2.x token is not a level here"), Choice->Choose(TEXT("MIN")));
 	TestEqual(TEXT("And changes nothing"), Choice->Selected(), FString(TEXT("Max")));
 
-	// Download confirms the choice once; after that the choice is fixed for this download.
 	int32 Calls = 0;
 	FString Confirmed;
 	Choice->OnConfirmed = [&Calls, &Confirmed](const FString& Level) { ++Calls; Confirmed = Level; };
@@ -99,7 +91,6 @@ bool FMantlePlaceLevelChoiceStateTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("The level is fixed once downloading"), Choice->Choose(TEXT("Min")));
 	TestEqual(TEXT("Still Max"), Choice->Selected(), FString(TEXT("Max")));
 
-	// The control built again for the same order starts on the recommendation again.
 	TestEqual(TEXT("A new control starts on the recommendation"), FChoice::For(ThreeOrder(TEXT("Med")))->Selected(), FString(TEXT("Med")));
 	return true;
 }
@@ -111,7 +102,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceLevelChoiceNoneRecommendedTest::RunTest(const FString& Parameters)
 {
-	// Told no recommendation, the control preselects none and says nothing is recommended (HPS-59).
 	const TSharedPtr<FMantlePlaceLevelChoice> Choice = FMantlePlaceLevelChoice::For(ThreeOrder(TEXT("")));
 	if (!TestTrue(TEXT("The levels are still offered"), Choice.IsValid()))
 	{
@@ -139,9 +129,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceLevelChoiceFilesTest::RunTest(const FString& Parameters)
 {
-	// The 3.0 request names exactly the files Unreal's import steps read: each step's file, the eight
-	// weight maps and the nine public-record linework files, no more (a georeferenced file Unreal never
-	// reads is not downloaded, and neither is a record's GeoPackage twin: the import draws only the DXF).
 	using F3 = FMantlePlaceManifestThreeLogic;
 	const TArray<FString>& Files = F3::RequestedFiles();
 	for (const TCHAR* Step : { F3::HeightmapPath(), F3::DrapePath(), F3::TerrainMeshPath(), F3::BuildingsPath(), F3::TreesPath(), F3::RoadsPath() })
@@ -153,8 +140,6 @@ bool FMantlePlaceLevelChoiceFilesTest::RunTest(const FString& Parameters)
 		TestTrue(FString::Printf(TEXT("The request names the %s weight map"), Map),
 			Files.Contains(FString::Printf(TEXT("Materials/%s.png"), Map)));
 	}
-	// The nine the published description lists for a 3.0 download, in the platform's own spelling.
-	// Habitat is absent from that description, so it is not asked for.
 	for (const TCHAR* Record : { TEXT("Parcels"), TEXT("Zoning"), TEXT("Floodplain"), TEXT("Wetlands"), TEXT("Soils"),
 			 TEXT("Heritage"), TEXT("Conservation"), TEXT("Hydrography"), TEXT("Contamination") })
 	{
@@ -172,4 +157,4 @@ bool FMantlePlaceLevelChoiceFilesTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

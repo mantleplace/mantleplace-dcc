@@ -1,4 +1,3 @@
-// UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -12,57 +11,6 @@ using Microsoft.Win32;
 
 namespace MantlePlace.Revit.Addin;
 
-/// <summary>
-/// "Probe Terrain": measures what a project and a bundle would actually give
-/// <c>Toposolid.Create</c>, tries every base-plane strategy — and every way of giving a site
-/// subdivision the drape material — against it, and changes nothing.
-/// </summary>
-/// <remarks>
-/// <para>
-/// ⛔ <b>Every transaction this opens is rolled back in a <c>finally</c>.</b> That is what makes it
-/// safe to run in the curator's own project — which is the only place worth running it, because the
-/// numbers that matter are that project's level elevations and toposolid types, not a fresh
-/// template's.
-/// </para>
-/// <para>
-/// It exists because two things cannot be settled by reading. Revit's API documents
-/// <c>Toposolid.Create</c>'s points as building the <em>top face</em> but does not say what the
-/// minimum-thickness check compares against, and <c>Toposolid.Create</c> takes no height offset, so
-/// whether an offset written after it returns is seen by that check is unknowable until it is run.
-/// Both answers change which arm of <see cref="TerrainBasePlanner"/> is the default rather than the
-/// fallback. Guessing would mean shipping a plugin that adds a level to every curator's project for
-/// no reason, or one that still cannot import a coastal site.
-/// </para>
-/// <para>
-/// Same unattended contract as <see cref="ImportLocalBundleCommand"/>: set
-/// <see cref="LocalBundleSource.PathVariable"/> and it skips the picker, writing to
-/// <see cref="LocalBundleSource.ProbeLogPathFor"/>.
-/// </para>
-/// <para>
-/// A third question arrived when the drape landed: every site-boundary subdivision refused it, and
-/// the only record was a count. That refusal is now settled — see
-/// <see cref="ProbeSubDivisionMaterial"/>, which asks what CAN carry the material instead, having
-/// deleted the arms whose question is answered.
-/// </para>
-/// <para>
-/// A fourth arrived when the drape worked and the terrain still read as a faceted mosaic. Vertex
-/// placement was ruled out by observation — the mosaic survived the move to the TIN — leaving how
-/// Revit shades the triangles rather than where they are. That one is settled too, and settled
-/// against the obvious fix: Revit 2025's smooth-shading setting removes the faceting and breaks the
-/// aerial photograph while it is on. <see cref="ProbeSmoothedSurface"/> kept only the reporting
-/// half, having deleted the arms whose question is answered.
-/// </para>
-/// <para>
-/// <b>Deletion trigger:</b> this command is diagnostic scaffolding, not product. Delete this file,
-/// its <c>.SubDivisionMaterial.cs</c> and <c>.Surface.cs</c> partials and its ribbon button once
-/// <em>all four</em> questions are settled by recorded probe runs — the two base-plane ones above
-/// with <see cref="TerrainBasePlanner"/>'s default arm chosen on that evidence, the subdivision
-/// material with its mechanism chosen, and the smooth-shading trade recorded with the importer's
-/// rule chosen on it. Three of the four are now settled; the base-plane pair is what still holds
-/// this file open. A shipped diagnostics command that outlived its question
-/// is UI debt, and extending its life without extending this trigger is how it becomes permanent.
-/// </para>
-/// </remarks>
 [Transaction(TransactionMode.Manual)]
 [Regeneration(RegenerationOption.Manual)]
 public sealed partial class TerrainProbeCommand : IExternalCommand
@@ -110,8 +58,6 @@ public sealed partial class TerrainProbeCommand : IExternalCommand
         {
             Probe(document, zipPath, report);
 
-            // Opt-in, and never from the ribbon alone: renders a dozen arrangements of the terrain
-            // to PNG so the smooth-shading trade can be judged by eye rather than by argument.
             if (Environment.GetEnvironmentVariable(DrapeRenderProbe.DirectoryVariable) is { Length: > 0 } renderDirectory)
             {
                 DrapeRenderProbe.Run(document, renderDirectory, report);
@@ -165,7 +111,6 @@ public sealed partial class TerrainProbeCommand : IExternalCommand
                 ? structure.GetWidth()
                 : type.get_Parameter(BuiltInParameter.TOPOSOLID_TYPE_DEFAULT_THICKNESS_PARAM)?.AsDouble() ?? 0.0;
 
-            // Layer 0's width, not the total — the number the drape actually splits.
             double topLayer = structure is { LayerCount: > 0 } ? structure.GetLayerWidth(0) : thickness;
 
             bool structural = RevitBundleImporter.HasStructuralLayer(structure);
@@ -284,9 +229,6 @@ public sealed partial class TerrainProbeCommand : IExternalCommand
 
         report.AppendLine("STRATEGY TRIALS — every one of these is rolled back");
 
-        // (a) the status quo: whatever the collectors enumerate first, no offset. This is the
-        // negative control. It is what failed, and the trial has to show it still fails, or the
-        // diagnosis was wrong.
         CandidateLevel? firstLevel = levels.Count > 0 ? levels[0] : null;
         CandidateToposolidType firstType = types.Count > 0 ? types[0] : type2;
         if (firstLevel is { } control)
@@ -295,24 +237,13 @@ public sealed partial class TerrainProbeCommand : IExternalCommand
                 revitPoints, firstType.Id, control.Id, offset: 0.0, createLevelAt: null, report);
         }
 
-        // (b) the chosen type and level with the height offset written before commit. If this
-        // works, the plugin never has to add a level to anyone's project.
         Trial(document, "(b) chosen type + chosen level + height offset",
             revitPoints, type2.Id, chosenPlan.LevelId, chosenPlan.HeightOffset, createLevelAt: null, report);
 
-        // (c) the same base plane, reached by a level created at it. The fallback, and the answer if
-        // (b) turns out to be unreachable.
         Trial(document, "(c) chosen type + a level created at the base plane",
             revitPoints, type2.Id, levelId: 0, offset: 0.0, createLevelAt: chosenPlan.BasePlane, report);
     }
 
-    /// <summary>
-    /// Builds a toposolid one way, records what Revit said, and rolls it back.
-    /// </summary>
-    /// <remarks>
-    /// The rollback is in a <c>finally</c> and the transaction is never committed on any path, so
-    /// there is no arrangement of failures that leaves an element — or a level — behind.
-    /// </remarks>
     private static void Trial(
         Document document,
         string label,
@@ -366,8 +297,6 @@ public sealed partial class TerrainProbeCommand : IExternalCommand
         }
         finally
         {
-            // ⛔ Never committed, on any path. The probe's whole licence to run in a real project is
-            // that it cannot change one.
             transaction.RollBack();
             transaction.Dispose();
         }
@@ -404,17 +333,6 @@ public sealed partial class TerrainProbeCommand : IExternalCommand
             $"  crop window: {(step.Crop is { } crop ? $"west={crop.WestM:0.##} south={crop.SouthM:0.##} east={crop.EastM:0.##} north={crop.NorthM:0.##}" : "none published")}");
     }
 
-    /// <summary>
-    /// Dumps every real-world texture property this plugin writes, as Revit stored them.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ Reading these back is the only way to settle the drape's scale. The first successful import
-    /// tiled the aerial photograph roughly ten times across the site while the plugin's own log said
-    /// it had placed it across 1,425 × 1,419 m — so either the value did not land, or the unit it
-    /// landed in is not the unit <see cref="RevitBundleImporter"/> assumed. Both are invisible from
-    /// outside Revit, and a screenshot cannot tell them apart. The property's declared
-    /// <c>GetUnitTypeId</c> is printed alongside the raw value for exactly that reason.
-    /// </remarks>
     private static void DescribeDrapeMaterials(Document document, StringBuilder report)
     {
         report.AppendLine("DRAPE MATERIALS (appearance assets carrying a UnifiedBitmap)");
@@ -459,8 +377,6 @@ public sealed partial class TerrainProbeCommand : IExternalCommand
 
         report.AppendLine(CultureInfo.InvariantCulture, $"{indent}{property.Name} = {value}");
 
-        // The UnifiedBitmap hangs off the diffuse slot as a connected asset, so its scale properties
-        // are one level down from anything a flat enumeration would reach.
         for (int i = 0; i < property.NumberOfConnectedProperties; i++)
         {
             if (property.GetConnectedProperty(i) is Asset connected)
@@ -505,7 +421,6 @@ public sealed partial class TerrainProbeCommand : IExternalCommand
             : $"id {id.Value} \"{document.GetElement(id)?.Name}\"";
     }
 
-    /// <summary>Both units on every number, because the answer depends on telling them apart.</summary>
     private static string Ft(double internalFeet)
         => double.IsNaN(internalFeet)
             ? "n/a"
@@ -519,10 +434,6 @@ public sealed partial class TerrainProbeCommand : IExternalCommand
     private static double ToFeetMetric(double metres)
         => UnitUtils.ConvertToInternalUnits(metres, UnitTypeId.Meters);
 
-    /// <summary>
-    /// The first toposolid that is a TERRAIN, by the same exclusion the importer uses: a subdivision
-    /// is itself a <see cref="Toposolid"/>, so a bare first-of-class collector hands back a patch.
-    /// </summary>
     private static Toposolid? TerrainToposolid(Document document)
     {
         List<Toposolid> toposolids = [.. new FilteredElementCollector(document)
@@ -556,8 +467,6 @@ public sealed partial class TerrainProbeCommand : IExternalCommand
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Best effort, exactly as the import log is: an unwritable path must not turn a probe
-            // that DID measure everything into a failure.
         }
 
         if (unattended)

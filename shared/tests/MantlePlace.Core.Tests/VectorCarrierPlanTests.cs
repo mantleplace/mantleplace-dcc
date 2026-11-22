@@ -2,20 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The Revit host reads its vector layers from the shared carrier: the manifest pointer finds it
-/// (<c>hosts.revit.vectors.gpkg</c>), each layer is the table of its own name, and a bundle with no
-/// carrier — or a layer the carrier cannot serve — keeps the GeoJSON file it always had.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The carrier is a GeoPackage in the order's own CRS, absolute, on every tier
-/// (<c>revit/docs/vector-carrier.md</c>), so a step reading it is placed against the origin in the
-/// origin's unit, not in the Revit files' frame. Where that differs — the <c>local_ft</c> tier, whose
-/// GeoJSON is foot offsets while the carrier is absolute metres — the plan holds both, the carrier
-/// first and the GeoJSON as the fallback.
-/// </para>
-/// </remarks>
 internal static class VectorCarrierPlanTests
 {
     private const string CarrierPath = "Site/Vector/SiteVectors.gpkg";
@@ -33,7 +19,6 @@ internal static class VectorCarrierPlanTests
 
     private static readonly string[] VectorNames = ["road_splines", "land_use", "land_cover", "water", "road_polygons"];
 
-    /// <summary>Every table the producer writes: the Revit layers, the lines of water, and the footprints.</summary>
     private static readonly string[] AllTables =
         [.. VectorNames, "water_line", "flood_zones", "steep_slope", "building_footprints"];
 
@@ -301,7 +286,6 @@ internal static class VectorCarrierPlanTests
                   "units": "{{units}}", "feature_count": 1, "sha256": "{{OwnSha}}"{{(extra is null ? string.Empty : ", " + extra)}} }
                 """));
 
-    /// <summary>A road-surface entry's levels: MAX and a field cut for MED and MIN, RAW the same as MAX.</summary>
     private const string RoadLevels = """
         "levels": {
           "RAW": { "same_as": "MAX", "reason": "not_derived" },
@@ -378,7 +362,6 @@ internal static class VectorCarrierPlanTests
         }
         """;
 
-    /// <summary>An origin whose <c>projected</c> pair names an EPSG code and no <c>linear_unit</c>.</summary>
     private const string UnitlessGeoreference = """
         "georeference": {
           "crs_projected": "EPSG:32613",

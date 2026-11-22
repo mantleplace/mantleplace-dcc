@@ -34,19 +34,11 @@ class MANTLEPLACEEDITOR_API UMantlePlaceAuthSubsystem : public UEditorSubsystem
 	GENERATED_BODY()
 
 public:
-	//~ Begin USubsystem
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
-	//~ End USubsystem
 
-	/** The editor's auth source. Non-null for the life of the subsystem. */
 	UMantlePlaceAuthSystemBase* GetAuthSystem() const { return AuthSystem; }
 
-	/**
-	 * The subsystem for the running editor, or null when there is no editor at all (a commandlet,
-	 * or a cooked build that somehow loaded this module). Callers that can run headless must handle
-	 * the null - see UMantlePlaceVaultImportOrchestrator::EnsureClients.
-	 */
 	static UMantlePlaceAuthSubsystem* Get();
 
 private:

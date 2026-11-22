@@ -4,7 +4,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Client;
 
-/// <summary>The result of a vault call: one of the two is always null.</summary>
 public readonly record struct VaultResult<T>(T? Value, string? Error)
     where T : struct
 {
@@ -15,22 +14,8 @@ public readonly record struct VaultResult<T>(T? Value, string? Error)
     public bool Succeeded => Error is null;
 }
 
-/// <summary>How a bounded poll ended.</summary>
-/// <param name="Result">The terminal status, or the reason there is none.</param>
-/// <param name="OutOfPolls">
-/// Whether the poll stopped because its budget ran out (<c>HPS-25</c>) rather than because the job
-/// finished or failed. The job is still running; only the watching stopped.
-/// </param>
 public readonly record struct PollOutcome(VaultResult<MaterializeStatus> Result, bool OutOfPolls);
 
-/// <summary>How fetching a complete order's download ended.</summary>
-/// <param name="Ready">Whether the cache now holds a zip Import can open.</param>
-/// <param name="NeedsPrepare">
-/// Whether the order turned out to be still building, which is the existing Prepare's to follow.
-/// </param>
-/// <param name="Message">The cache's verdict, or why there is none.</param>
-/// <param name="Bundle">The row the download was checked against — re-listed when the whole archive was fetched.</param>
-/// <param name="Fetched">What was fetched, so the window can say it and a measurement can name it.</param>
 public readonly record struct CompleteDownload(
     bool Ready,
     bool NeedsPrepare,
@@ -38,24 +23,8 @@ public readonly record struct CompleteDownload(
     VaultBundle Bundle,
     ViewFetch Fetched);
 
-/// <summary>
-/// The vault surface: list → materialize → poll → re-list → presign → download (<c>HPS-18</c>).
-/// </summary>
-/// <remarks>
-/// <para>
-/// <b>The re-list after materialize is not optional.</b> It is where the host obtains the integrity
-/// facts — sha256, size, manifest version — that the freshly built bundle now has and the
-/// pre-materialize listing did not. Skipping it means downloading a bundle whose expected digest
-/// nobody knows and reporting it valid-but-unverified forever.
-/// </para>
-/// <para>
-/// Every parse this makes lives in <c>MantlePlace.Core</c>; what is here is HTTP and the
-/// polling loop. Every route is the generated Platform API client's (<see cref="PlatformApiCalls"/>).
-/// </para>
-/// </remarks>
 public sealed class VaultClient
 {
-    /// <summary>The presigned storage link's reader. Storage, not the Platform API: no client header.</summary>
     private static readonly HttpClient Storage = new();
 
     private readonly MantlePlaceEndpoints _endpoints;
@@ -63,13 +32,6 @@ public sealed class VaultClient
     private readonly HttpMessageHandler? _handler;
     private readonly IReadOnlyList<string> _threeFiles;
 
-    /// <param name="endpoints">Where the platform is.</param>
-    /// <param name="session">The sign-in.</param>
-    /// <param name="handler">A message handler for the Platform API calls, for tests; the shared one when <c>null</c>.</param>
-    /// <param name="threeFiles">
-    /// The promised files of a 3.0 bundle this host's import reads, which its shell declares beside its
-    /// import steps; a 3.0 download names them (<see cref="DownloadLevels.BuildRequestBody"/>).
-    /// </param>
     public VaultClient(
         MantlePlaceEndpoints endpoints,
         AuthSession session,
@@ -82,7 +44,6 @@ public sealed class VaultClient
         _threeFiles = threeFiles ?? [];
     }
 
-    /// <summary>Lists the curator's bundles.</summary>
     public async Task<(VaultListing? Listing, string? Error)> ListAsync(CancellationToken cancellationToken)
     {
         (int status, string body, string? error) = await SendAsync(
@@ -97,13 +58,6 @@ public sealed class VaultClient
         return parseError is null ? (listing, null) : (null, parseError);
     }
 
-    /// <summary>
-    /// Starts — or joins — a materialize for one order.
-    /// </summary>
-    /// <remarks>
-    /// ⛔<c>HPS-23</c>: the body carries this host's explicit token list, never a scope keyword the
-    /// server would expand to its own idea of what Revit wants.
-    /// </remarks>
     public async Task<VaultResult<MaterializeStart>> StartMaterializeAsync(
         string orderId,
         string scope,
@@ -126,11 +80,6 @@ public sealed class VaultClient
             return VaultResult<MaterializeStart>.Failed(error);
         }
 
-        // ⛔HPS-24: the start response is recognised by BODY SHAPE, not by status code, so the
-        // single-flight 409 goes to the PARSER — its body carries the running job, and refusing it
-        // here would tell a curator to retry a run that is already going. This exception is the
-        // whole reason `Refusal` is a separate call rather than something SendAsync applies: the
-        // Unreal host makes the identical one, and the two must not drift.
         if (status != Conflict && Refusal(status, body) is { } refusal)
         {
             return VaultResult<MaterializeStart>.Failed(refusal);
@@ -142,15 +91,6 @@ public sealed class VaultClient
             : VaultResult<MaterializeStart>.Failed(parseError);
     }
 
-    /// <summary>
-    /// Starts a materialize once, and reads the answer as the route an Import press takes
-    /// (<see cref="CompleteOrders"/>).
-    /// </summary>
-    /// <remarks>
-    /// The same request a Prepare sends (⛔<c>HPS-23</c>'s explicit token list), so an on-demand
-    /// order this starts is the build a Prepare would have started, and the Prepare that follows
-    /// joins it rather than starting a second.
-    /// </remarks>
     public async Task<ImportRouteDecision> RouteImportAsync(string orderId, CancellationToken cancellationToken)
     {
         (int status, string body, string? error) = await SendAsync(
@@ -161,15 +101,6 @@ public sealed class VaultClient
         return error is not null ? ImportRouteDecision.Refuse(error) : CompleteOrders.FromStart(status, body);
     }
 
-    /// <summary>
-    /// Fetches a complete order's Revit view into the cache — or the whole bundle, when the view
-    /// would leave out a file the import reads (<see cref="HostViews"/>).
-    /// </summary>
-    /// <param name="delivered">What the order delivered, from the no-op; <c>null</c> when unknown.</param>
-    /// <param name="level">
-    /// For a 3.0 order, the level the curator chose; <c>null</c> is the platform's recommendation, which
-    /// is what an export from the web vault fetches. Ignored for a 2.x order.
-    /// </param>
     public async Task<CompleteDownload> DownloadCompleteAsync(
         VaultBundle bundle,
         IReadOnlyCollection<string>? delivered,
@@ -234,8 +165,6 @@ public sealed class VaultClient
 
             default:
             {
-                // The whole archive, either way, so it is checked against the listing's facts for
-                // the bundle as it stands now (HPS-18) rather than a row the window read earlier.
                 say.Report("Fetching the integrity details…");
                 (VaultListing? relisted, string? listError) = await ListAsync(cancellationToken).ConfigureAwait(false);
                 if (listError is not null)
@@ -265,22 +194,6 @@ public sealed class VaultClient
         }
     }
 
-    /// <summary>
-    /// A 3.0 order's download: this host's promised files at one level, into the host's slot at that
-    /// level, replacing whatever level the slot held.
-    /// </summary>
-    /// <remarks>
-    /// The listing's size and digest describe the Max download of every file, so they describe no
-    /// level download of a host's files: the download is checked against the size the link states and
-    /// recorded as its own (<c>holdsView</c>), and the files inside it against the manifest's digests
-    /// at import, as a 2.x view is.
-    /// <para>
-    /// A promised file the bundle does not hold (a layer the site lacks) is refused by name and is not
-    /// an error: the request goes again naming only the rest (<see cref="DownloadLevels.FilesLeftAfterNotInBundle"/>),
-    /// and the import plan shows the absent file's step as skipped. Each try names fewer files, so the
-    /// tries end within the file count; any other refusal is reported as it stands.
-    /// </para>
-    /// </remarks>
     private async Task<CompleteDownload> DownloadLevelAsync(
         VaultBundle bundle,
         FidelityLevel level,
@@ -362,12 +275,6 @@ public sealed class VaultClient
             fetch);
     }
 
-    /// <summary>One poll.</summary>
-    /// <param name="requested">
-    /// The tokens whose delivery decides completion. The platform answers this endpoint with a
-    /// delivery-state document carrying no status word, so without this there is nothing to compare
-    /// against and no way to know the job is done.
-    /// </param>
     public async Task<VaultResult<MaterializeStatus>> PollOnceAsync(
         string orderId,
         IReadOnlyCollection<string> requested,
@@ -387,16 +294,6 @@ public sealed class VaultClient
             : VaultResult<MaterializeStatus>.Failed(parseError);
     }
 
-    /// <summary>
-    /// Polls to a terminal state, bounded on the three axes <c>HPS-25</c> declares.
-    /// </summary>
-    /// <remarks>
-    /// The failure cap is CONSECUTIVE. A job that survives scattered transient errors over ten
-    /// minutes is healthy, and abandoning it would discard an ETL run the curator paid for.
-    /// Abandoning the poll does not abandon the JOB either — a second Prepare on the order rejoins it
-    /// through <c>HPS-24</c>. Running out of polls is reported as such, apart from a failure, because
-    /// the two tell a curator opposite things: wait, or stop waiting.
-    /// </remarks>
     public async Task<PollOutcome> PollToCompletionAsync(
         string orderId,
         IReadOnlyCollection<string> requested,
@@ -452,7 +349,6 @@ public sealed class VaultClient
             OutOfPolls: true);
     }
 
-    /// <summary>Mints a presigned URL. Per import, never cached (<c>HPS-29</c>).</summary>
     public async Task<VaultResult<PresignedDownload>> PresignAsync(string orderId, CancellationToken cancellationToken)
     {
         (int status, string body, string? error) = await SendAsync(
@@ -476,10 +372,6 @@ public sealed class VaultClient
             : VaultResult<PresignedDownload>.Failed(parseError);
     }
 
-    /// <summary>
-    /// Presigns, streams to the cache's <c>.part</c>, verifies and promotes (⛔<c>HPS-26</c>).
-    /// </summary>
-    /// <returns><c>null</c> on success.</returns>
     public async Task<string?> DownloadAsync(
         VaultBundle bundle,
         BundleCache cache,
@@ -505,7 +397,6 @@ public sealed class VaultClient
         return await PromoteWholeAsync(bundle, cache, link.Url, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>Streams the whole archive into the cache, checked against the listing's size and digest.</summary>
     private static Task<string?> PromoteWholeAsync(
         VaultBundle bundle,
         BundleCache cache,
@@ -520,7 +411,6 @@ public sealed class VaultClient
             DateTimeOffset.UtcNow,
             cancellationToken);
 
-    /// <summary>The body writer the cache streams a presigned link into.</summary>
     private static Func<Stream, CancellationToken, Task> StreamFrom(string url)
         => async (destination, token) =>
         {
@@ -533,26 +423,13 @@ public sealed class VaultClient
             await source.CopyToAsync(destination, token).ConfigureAwait(false);
         };
 
-    /// <summary>The single-flight status: a refusal everywhere except the materialize start.</summary>
     private const int Conflict = 409;
 
-    /// <summary>
-    /// <c>HPS-19</c>: trimmed, trailing slashes stripped, and validated to have a host before use.
-    /// </summary>
     private string Base() => AuthUrls.NormaliseBaseUrl(_endpoints.ApiBaseUrl)
         ?? throw new InvalidOperationException(
             $"'{_endpoints.ApiBaseUrl}' is not a usable API base URL. Fix apiBaseUrl in "
             + MantlePlaceEndpoints.ConfigPath + ".");
 
-    /// <summary>
-    /// One Platform API call, with the bearer token attached. Reports the status code alongside the
-    /// body so the caller decides what a non-2xx means.
-    /// </summary>
-    /// <remarks>
-    /// <c>Error</c> is set only when there was no response at all. Whether a response that arrived
-    /// is a refusal is <see cref="Refusal"/>'s question, because one caller — the materialize start —
-    /// legitimately reads a 409 as a success (<c>HPS-24</c>).
-    /// </remarks>
     private async Task<(int Status, string Body, string? Error)> SendAsync(
         Func<PlatformApiClient, CancellationToken, Task> operation,
         string? jsonBody,
@@ -562,9 +439,6 @@ public sealed class VaultClient
         string accessToken = _session.AccessToken;
         if (accessToken.Length == 0)
         {
-            // No access token, but a stored session to rebuild one from: a restore that has not run
-            // yet, or a token that aged out while the window sat open. Renew rather than telling a
-            // signed-in curator to sign in.
             if (!isRetry && _session.CanRenewSession
                 && (await _session.RefreshAsync(cancellationToken).ConfigureAwait(false)).Succeeded)
             {
@@ -581,19 +455,6 @@ public sealed class VaultClient
                 .SendAsync(operation, accessToken, cancellationToken, jsonBody)
                 .ConfigureAwait(false);
 
-            // An access token that aged out mid-session looks exactly like this. Renew once and send
-            // the request again, rather than handing the curator "sign in first" while a perfectly
-            // good refresh token sits on disk.
-            //
-            // Asking the platform beats guessing from the clock: a pre-flight expiry check is a
-            // guess about a decision the platform is already making, and it cannot see a token
-            // revoked a second after it was checked. A long materialize poll can cross the boundary
-            // mid-flight, which no check before the first request would catch.
-            //
-            // Once only, and only when a renewal is possible. RefreshAsync declines while another
-            // renewal is in flight -- a second caller gets Abandoned and reports the refusal rather
-            // than starting a competing refresh, because two refreshes present the same token and a
-            // rotating platform rejects the second as already-used.
             if (status == 401 && !isRetry && _session.CanRenewSession
                 && (await _session.RefreshAsync(cancellationToken).ConfigureAwait(false)).Succeeded)
             {
@@ -613,6 +474,5 @@ public sealed class VaultClient
         }
     }
 
-    /// <summary>A non-2xx reduced to something a curator can act on (<see cref="PlatformErrors.Refusal"/>).</summary>
     private static string? Refusal(int status, string body) => PlatformErrors.Refusal(status, body);
 }

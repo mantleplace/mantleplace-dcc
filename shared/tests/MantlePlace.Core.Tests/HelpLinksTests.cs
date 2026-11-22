@@ -2,14 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The address F1 opens from the ribbon.
-/// </summary>
-/// <remarks>
-/// The shim that applies it to each button is never built in CI (<c>HPS-02</c>), so what can be
-/// pinned is the address itself: it must be a secure URL, and it must name a file that exists in
-/// this tree, because a help link that 404s is worse than Revit's own help falling through.
-/// </remarks>
 internal static class HelpLinksTests
 {
     private const string BlobPrefix = "https://github.com/mantleplace/mantleplace-dcc/blob/main/";

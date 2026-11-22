@@ -1,19 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""Where a later bundle sits against the one already in the scene. Pure: no Blender, no I/O.
-
-Every bundle stores its geometry as offsets from its own site origin (spec/format.md §6.8), so two
-bundles imported into one scene would both sit about the scene origin. The first bundle whose site
-origin is applied becomes the scene's **anchor** and is never replaced. A later bundle is moved by
-the difference of the two projected points, which is the arithmetic §6.8 gives a reader for an
-offset file (the file's offsets added to `projected`), taken relative to the anchor so the scene
-stays near its origin.
-
-Nothing here derives a placement value. It subtracts two published points, and only when they are
-in the same CRS and measure height from the same `z_reference`; in any other case the bundle stays
-at its own offsets and the curator is told why, because relating the two would take a
-reprojection or a datum shift, which this plugin never does.
-"""
 
 from __future__ import annotations
 
@@ -22,18 +8,8 @@ from dataclasses import dataclass
 
 from .bundle import ANCHOR_KEY, ORIGIN_UNITS, Georeference, scene_properties
 
-#: The custom property on a bundle's collection and top-level objects: its own origin and offset.
 BUNDLE_KEY = "mantleplace_bundle"
 
-#: The farthest a bundle is moved from the anchor on any one axis, in metres.
-#:
-#: Blender stores an object's location as a 32-bit float, which has 24 significant bits. Between
-#: 2**13 and 2**14 metres the spacing of representable values is 2**-10 m, just under a
-#: millimetre, and at 2**14 = 16384 m it is a millimetre. Beyond that the spacing doubles for
-#: every doubling of the distance, so a seam between two tiles would open by more than a
-#: millimetre and the viewport's own depth precision would degrade with it. A tile order is a few
-#: kilometres across; 16.4 km from the anchor keeps millimetre fidelity and is far beyond a
-#: realistic order of adjacent bundles.
 MAX_OFFSET_M = 16384.0
 
 _NO_OFFSET = (0.0, 0.0, 0.0)
@@ -41,23 +17,12 @@ _NO_OFFSET = (0.0, 0.0, 0.0)
 
 @dataclass(frozen=True)
 class Placement:
-    """What one import does about the scene's anchor."""
-
-    #: True when this bundle becomes the scene's anchor (the scene keys are written).
     anchor: bool
-    #: Metres to move the bundle's imported objects by, east, north, up.
     offset: tuple
-    #: One sentence for the curator where the bundle could not be moved, else None.
     note: str | None
 
 
 def decide_placement(anchor: object, georeference: Georeference | None) -> Placement:
-    """Decide the anchor and the offset for a bundle whose site origin is `georeference`.
-
-    `anchor` is the `mantleplace_site_origin` record the scene holds (as `scene_properties`
-    writes it), or None where no bundle has been anchored yet. A bundle with no applied origin
-    neither anchors nor moves; `plan_import` has already said why, so no second note is added.
-    """
     if georeference is None:
         return Placement(False, _NO_OFFSET, None)
     if anchor is None:
@@ -85,7 +50,6 @@ def decide_placement(anchor: object, georeference: Georeference | None) -> Place
 
 
 def bundle_record(georeference: Georeference, placement: Placement) -> dict:
-    """The record a bundle keeps of where it came from: its own origin and how far it was moved."""
     return {
         "site_origin": scene_properties(georeference)[ANCHOR_KEY],
         "offset_m": [float(part) for part in placement.offset],
@@ -103,7 +67,6 @@ def _number(value: object) -> bool:
 
 
 def _anchor_problem(anchor: object) -> str | None:
-    """Why the scene's record cannot be an anchor, or None. It is a custom property: untrusted."""
     if not isinstance(anchor, dict):
         return "the scene's anchor record is not readable"
     if not isinstance(anchor.get("crs"), str):
@@ -129,13 +92,10 @@ def _crs_problem(anchor: dict, georeference: Georeference) -> str | None:
 
 
 def _offset(anchor: dict, georeference: Georeference) -> tuple:
-    """The later bundle's projected point minus the anchor's, in metres, each read in its own unit."""
     later = ORIGIN_UNITS[georeference.unit]
     first = ORIGIN_UNITS[anchor["unit"]]
     sums = []
     for axis in ("x", "y", "z"):
         a, b = float(anchor[axis]), float(getattr(georeference, axis))
-        # Subtract before scaling when the units agree: the difference is then exact in the CRS's
-        # own unit, and a seam is never opened by rounding two large coordinates apart.
         sums.append((b - a) * later if later == first else b * later - a * first)
     return tuple(sums)

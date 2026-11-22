@@ -23,7 +23,7 @@
 #include "Slate/SMantlePlaceImportWindow.h"
 #include "Slate/SMantlePlaceVaultDetail.h"
 #include "Slate/SMantlePlaceVaultRow.h"
-#include "Styling/CoreStyle.h" // FCoreStyle "NoBorder" (breadcrumb link button)
+#include "Styling/CoreStyle.h"
 #include "Styling/SlateTypes.h"
 #include "UObject/Package.h"
 #include "Widgets/Images/SImage.h"
@@ -45,21 +45,12 @@ namespace
 {
 	using EFont = FMantlePlaceEditorStyle::EFont;
 
-	/** Case-insensitive substring match of the search query against a bundle's codename (or order id). */
 	bool ItemMatchesQuery(const FMantlePlaceVaultItem& Item, const FString& Query)
 	{
 		const FString Label = Item.AoiLabel.IsEmpty() ? Item.OrderId : Item.AoiLabel;
-		return Label.Contains(Query); // FString::Contains is ESearchCase::IgnoreCase by default
+		return Label.Contains(Query);
 	}
 
-	/**
-	 * Open the web Feedback form in the system browser (HPS-56). The link itself is decided by the
-	 * pure FMantlePlaceFeedbackLogic; this only gathers the two version strings and opens the result.
-	 * OrderId is empty for the general Send Feedback, the bundle's order id for Report a problem and
-	 * for the post-import prompt. Rating is empty except on that prompt, where it is `up` or `down`;
-	 * the builder drops anything else. Opening the link records nothing: the web form stores the
-	 * rating only when the curator presses send. Needs no sign-in: the form is public.
-	 */
 	void OpenFeedbackLink(const FString& OrderId, const FString& Rating = FString())
 	{
 		const TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(TEXT("MantlePlace"));
@@ -67,7 +58,6 @@ namespace
 		const FEngineVersion& Engine = FEngineVersion::Current();
 		const FString HostVersion = FString::Printf(TEXT("%u.%u"), Engine.GetMajor(), Engine.GetMinor());
 
-		// The same configurable web-app host the vault API uses (DefaultGame.ini), compiled-in default.
 		const FString Url = FMantlePlaceFeedbackLogic::BuildFeedbackUrl(
 			GetDefault<UMantlePlaceVaultClient>()->VaultApiBaseUrl, PluginVersion, HostVersion, OrderId, Rating);
 		if (!Url.IsEmpty())
@@ -76,10 +66,6 @@ namespace
 		}
 	}
 
-	/**
-	 * Open the web curator at the link FMantlePlaceCuratorExtentLogic builds: on the extent when the
-	 * level supplied one, plain otherwise. The same configurable web-app host the vault API uses.
-	 */
 	void OpenCuratorLink(const FMantlePlaceResolvedExtent& Resolved)
 	{
 		const FString Url = MantlePlaceLevelExtent::CuratorUrl(Resolved);
@@ -89,11 +75,6 @@ namespace
 		}
 	}
 
-	/**
-	 * A level with no extent source: offer to place an Extent box (or, when the level already has one
-	 * that is not located yet, to select it), or to open the plain curator. Never blocks; it stays until
-	 * one of its three buttons is pressed, because the choice is the point.
-	 */
 	void ShowNoExtentPrompt(UWorld* World)
 	{
 		const bool bHasBox = MantlePlaceLevelExtent::ExtentBoxes(World).Num() > 0;
@@ -138,16 +119,9 @@ namespace
 		*Shown = FSlateNotificationManager::Get().AddNotification(Info);
 	}
 
-	/** Where the order ids the post-import prompt has already asked about are kept (per project, per machine). */
 	const TCHAR* const AskedSection = TEXT("MantlePlace.Feedback");
 	const TCHAR* const AskedKey = TEXT("AskedOrder");
 
-	/**
-	 * "Did this import come in right?" (HPS-56): a small toast after a finished import with Yes, No and
-	 * Dismiss. Yes and No each open the Feedback form at the same link with `rating=up` / `rating=down`;
-	 * Dismiss opens nothing. It never blocks: it fades by itself, and the bundle was already recorded as
-	 * asked about, so none of the three brings it back. No feedback UI of our own: two buttons that open a URL.
-	 */
 	void ShowImportFeedbackPrompt(const FString& OrderId)
 	{
 		const TSharedRef<TWeakPtr<SNotificationItem>> Shown = MakeShared<TWeakPtr<SNotificationItem>>();
@@ -181,16 +155,11 @@ namespace
 		*Shown = FSlateNotificationManager::Get().AddNotification(Info);
 	}
 
-	/**
-	 * Ask about a finished import's bundle, at most once per bundle. The decision and the list are the
-	 * pure FMantlePlaceFeedbackLogic's; this only keeps the list in the project's editor config and
-	 * writes it before the question is shown, so a line the curator ignores is not asked again.
-	 */
 	void MaybeAskAboutImport(bool bImportSucceeded, const FString& OrderId)
 	{
 		if (GConfig == nullptr)
 		{
-			return; // no place to remember the answer, so no question: never twice.
+			return;
 		}
 		TArray<FString> Asked;
 		GConfig->GetArray(AskedSection, AskedKey, Asked, GEditorPerProjectIni);
@@ -207,7 +176,6 @@ namespace
 
 void SMantlePlaceVaultPanel::Construct(const FArguments& InArgs)
 {
-	// Own the controller (GC-rooted) which owns the orchestrator; bind its native events.
 	Controller = TStrongObjectPtr<UMantlePlaceVaultPanelController>(
 		NewObject<UMantlePlaceVaultPanelController>(GetTransientPackage()));
 	Controller->Initialize();
@@ -224,7 +192,6 @@ void SMantlePlaceVaultPanel::Construct(const FArguments& InArgs)
 	ModeOptions.Add(MakeShared<FString>(TEXT("Both")));
 	SelectedModeOption = ModeOptions[0];
 
-	// The details sub-page content is (re)built into this host on demand.
 	DetailHost = SNew(SBox);
 
 	ChildSlot
@@ -247,8 +214,6 @@ void SMantlePlaceVaultPanel::Construct(const FArguments& InArgs)
 				SNew(SSeparator).Thickness(1.f)
 			]
 
-			// "List / Detail" breadcrumb - always visible on both states, centered; the Detail segment is
-			// greyed until a bundle is opened (see BuildBreadcrumb).
 			+ SVerticalBox::Slot()
 			.AutoHeight()
 			.HAlign(HAlign_Center)
@@ -262,12 +227,12 @@ void SMantlePlaceVaultPanel::Construct(const FArguments& InArgs)
 			[
 				SAssignNew(ViewSwitcher, SWidgetSwitcher)
 
-				+ SWidgetSwitcher::Slot() // index 0: list
+				+ SWidgetSwitcher::Slot()
 				[
 					BuildListPage()
 				]
 
-				+ SWidgetSwitcher::Slot() // index 1: detail
+				+ SWidgetSwitcher::Slot()
 				[
 					DetailHost.ToSharedRef()
 				]
@@ -278,13 +243,6 @@ void SMantlePlaceVaultPanel::Construct(const FArguments& InArgs)
 	ShowList();
 	UpdateHeaderState();
 
-	// A cached session means we can list straight away. When there is no live session yet, ask for
-	// one to be rebuilt from the stored refresh token: this is the first moment anything in the
-	// editor actually needs auth, which is why the request is made here and not at startup.
-	//
-	// Restoring succeeds asynchronously, and HandleAuthChanged lists on reaching Authenticated, so
-	// there is nothing to wait for here. A restore with no stored credential is a no-op and leaves
-	// the header on its signed-out copy.
 	if (Controller->IsSignedIn())
 	{
 		Controller->RefreshVaultList();
@@ -307,10 +265,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildHeader()
 {
 	return SNew(SHorizontalBox)
 
-		// Brand lockup: the square "mp" mark + stacked "mantle / place" wordmark.
-		// The mark carries its own trailing gutter rather than leaning on the wordmark's leading
-		// one. A circle used to give the gap back optically as its edge curved away; a full-bleed
-		// tile has a hard edge at every height, so S3 alone reads as a collision.
 		+ SHorizontalBox::Slot()
 		.AutoWidth()
 		.VAlign(VAlign_Center)
@@ -343,7 +297,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildHeader()
 			]
 		]
 
-		// Thin divider + "Vault" title with the status subline beneath.
 		+ SHorizontalBox::Slot()
 		.AutoWidth()
 		.VAlign(VAlign_Center)
@@ -375,16 +328,12 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildHeader()
 			]
 		]
 
-		// Sign In / Sign Out toggle.
 		+ SHorizontalBox::Slot()
 		.AutoWidth()
 		.VAlign(VAlign_Center)
 		.Padding(0.f, 0.f, FMantlePlaceEditorStyle::S3, 0.f)
 		[
 			SNew(SButton)
-			// Automation tags (FTagMetaData via .Tag) name the panel's controls for
-			// tooling — screen readers and UI automation resolve widgets by tag
-			// instead of by pixel position. See UMantlePlaceAutomationLibrary.
 			.Tag(TEXT("MantlePlace.Vault.SignIn"))
 			.ButtonStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FButtonStyle>("MantlePlace.Button.Secondary"))
 			.ContentPadding(FMantlePlaceEditorStyle::ButtonPaddingMd)
@@ -398,7 +347,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildHeader()
 			]
 		]
 
-		// Send Feedback (HPS-56): opens the web Feedback form in the system browser; works signed in or out.
 		+ SHorizontalBox::Slot()
 		.AutoWidth()
 		.VAlign(VAlign_Center)
@@ -418,8 +366,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildHeader()
 			]
 		]
 
-		// Open in curator: opens the web curator on the extent the level already knows (a previous import,
-		// the level's georeference, a Cesium georeference, or an Extent box). Needs no sign-in.
 		+ SHorizontalBox::Slot()
 		.AutoWidth()
 		.VAlign(VAlign_Center)
@@ -460,10 +406,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildHeader()
 
 TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildBreadcrumb()
 {
-	// A persistent "List · Detail" breadcrumb shown on both states (mirrors the web vault breadcrumb).
-	// "List" is always the clickable back affordance; it reads white while the list is the current page
-	// and muted while it's the way back. "Detail" is never a link here - it stays greyed on the list and
-	// turns white once a bundle is open. Colours are bound to bShowingDetail so they update on navigation.
 	return SNew(SHorizontalBox)
 
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
@@ -486,7 +428,7 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildBreadcrumb()
 		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(6.f, 0.f)
 		[
 			SNew(STextBlock)
-			.Text(FText::FromString(FString::Printf(TEXT("%c"), (TCHAR)0x00B7 /* middot */)))
+			.Text(FText::FromString(FString::Printf(TEXT("%c"), (TCHAR)0x00B7)))
 			.Font(FMantlePlaceEditorStyle::GetFont(EFont::Mono))
 			.ColorAndOpacity(FSlateColor(MantlePlacePalette::Faint()))
 		]
@@ -507,7 +449,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildListPage()
 {
 	return SNew(SVerticalBox)
 
-		// Search bar (client-side filter over the owned-bundle list; mirrors the web "Search your vault").
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		.Padding(FMantlePlaceEditorStyle::S2, FMantlePlaceEditorStyle::S2, FMantlePlaceEditorStyle::S2, 0.f)
@@ -517,7 +458,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildListPage()
 			.OnTextChanged(this, &SMantlePlaceVaultPanel::OnSearchChanged)
 		]
 
-		// Owned-bundle card list (fills), with a centered empty-state overlay.
 		+ SVerticalBox::Slot()
 		.FillHeight(1.f)
 		.Padding(FMantlePlaceEditorStyle::S2, FMantlePlaceEditorStyle::S2)
@@ -527,9 +467,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildListPage()
 			+ SOverlay::Slot()
 			[
 				SAssignNew(ListView, SListView<TSharedPtr<FMantlePlaceVaultItem>>)
-				// Transparent container background so the list region reads as the panel's onyx Void (the
-				// editor default paints an opaque warm "Recessed" fill behind the rows). Style is owned by
-				// the persistent editor style set, so the pointer stays valid for the widget's life.
 				.ListViewStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FTableViewStyle>("MantlePlace.ListView"))
 				.ListItemsSource(&Items)
 				.OnGenerateRow(this, &SMantlePlaceVaultPanel::OnGenerateRow)
@@ -543,7 +480,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildListPage()
 				SAssignNew(EmptyStateBox, SVerticalBox)
 				.Visibility(EVisibility::Collapsed)
 
-				// Eyebrow (text swaps to "NO MATCHES" when a search filters everything out).
 				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
 				[
 					SAssignNew(EmptyEyebrow, STextBlock)
@@ -552,7 +488,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildListPage()
 					.ColorAndOpacity(FSlateColor(MantlePlacePalette::Sub()))
 				]
 
-				// Heading.
 				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0.f, FMantlePlaceEditorStyle::S3, 0.f, 0.f)
 				[
 					SAssignNew(EmptyHeading, STextBlock)
@@ -561,7 +496,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildListPage()
 					.ColorAndOpacity(FSlateColor(MantlePlacePalette::White()))
 				]
 
-				// Sub-line (editor-adapted: no globe CTA; point at Sign In / the local-.zip panel below).
 				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0.f, FMantlePlaceEditorStyle::S3, 0.f, 0.f)
 				[
 					SNew(SBox).MaxDesiredWidth(360.f)
@@ -583,7 +517,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildListPage()
 			SNew(SSeparator).Thickness(1.f)
 		]
 
-		// Local-zip import panel.
 		+ SVerticalBox::Slot()
 		.AutoHeight()
 		.Padding(FMantlePlaceEditorStyle::S2)
@@ -690,10 +623,8 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::BuildListPage()
 		];
 }
 
-void SMantlePlaceVaultPanel::HandleVaultListed(bool /*bSuccess*/, const TArray<FMantlePlaceVaultItem>& Bundles, const FString& Message)
+void SMantlePlaceVaultPanel::HandleVaultListed(bool, const TArray<FMantlePlaceVaultItem>& Bundles, const FString& Message)
 {
-	// Only succeeded (Available) bundles are shown - failed / refunded / expired / still-processing
-	// bundles are handled on the website, not in-editor.
 	AllItems.Reset();
 	for (const FMantlePlaceVaultItem& Bundle : Bundles)
 	{
@@ -702,10 +633,9 @@ void SMantlePlaceVaultPanel::HandleVaultListed(bool /*bSuccess*/, const TArray<F
 			AllItems.Add(MakeShared<FMantlePlaceVaultItem>(Bundle));
 		}
 	}
-	// The item shared-ptrs were replaced, so the prior active pointer is stale.
 	ActiveItemPtr.Reset();
 
-	ApplyFilter(); // derive the displayed Items from the search box + refresh the list + empty state
+	ApplyFilter();
 
 	if (HeaderStatus.IsValid() && !Message.IsEmpty())
 	{
@@ -749,7 +679,6 @@ void SMantlePlaceVaultPanel::UpdateEmptyState()
 		EmptyStateBox->SetVisibility((bNoBundles || bNoMatches) ? EVisibility::Visible : EVisibility::Collapsed);
 	}
 
-	// Swap the empty-state copy: a genuinely empty vault vs. a search that matched nothing.
 	if (bNoMatches)
 	{
 		if (EmptyEyebrow.IsValid()) { EmptyEyebrow->SetText(LOCTEXT("NoMatchEyebrow", "NO MATCHES")); }
@@ -773,7 +702,6 @@ void SMantlePlaceVaultPanel::HandleImportPhase(const FString& Phase, const FStri
 			StaticCastSharedPtr<SMantlePlaceVaultRow>(Row)->UpdateProgress(Phase, Message, Fraction);
 		}
 	}
-	// A local-zip import has no list row - show its progress in the local section instead.
 	if (bLocalImportInFlight && LocalStatus.IsValid())
 	{
 		LocalStatus->SetText(FText::FromString(
@@ -788,8 +716,6 @@ void SMantlePlaceVaultPanel::HandleImportPhase(const FString& Phase, const FStri
 
 void SMantlePlaceVaultPanel::HandleImportFinished(bool bSuccess, const FMantlePlaceImportResult& Result)
 {
-	// The imported bundle's order id, before the active row is released. A local-zip import has no row,
-	// so it has no order id and asks nothing.
 	const FString ImportedOrderId = ActiveItemPtr.IsValid() ? ActiveItemPtr->OrderId : FString();
 	if (ImportWindow.IsValid())
 	{
@@ -805,22 +731,17 @@ void SMantlePlaceVaultPanel::HandleImportFinished(bool bSuccess, const FMantlePl
 	}
 	bLocalImportInFlight = false;
 	ActiveItemPtr.Reset();
-	// Repaint rows enabled now the import is done. The controller also kicks a re-list, which will
-	// rebuild the source with fresh integrity facts (Base -> Unreal) shortly after.
 	RebuildRows();
 
-	// Toast the outcome so the user is notified whether they're watching the panel or not.
 	ShowToast(Result.Message.IsEmpty()
 		? (bSuccess ? TEXT("Import complete.") : TEXT("Import failed."))
 		: Result.Message, bSuccess);
 
-	// HPS-56: "Did this import come in right?", once per bundle, after a successful import.
 	MaybeAskAboutImport(bSuccess, ImportedOrderId);
 }
 
 void SMantlePlaceVaultPanel::HandleImportSteps(TSharedRef<FMantlePlaceImportSteps> Steps)
 {
-	// One import at a time, so one window: the previous run's summary gives way to the new run.
 	if (ImportWindow.IsValid())
 	{
 		ImportWindow->Close();
@@ -831,8 +752,6 @@ void SMantlePlaceVaultPanel::HandleImportSteps(TSharedRef<FMantlePlaceImportStep
 
 bool SMantlePlaceVaultPanel::HandleOfferLevelChoice(TSharedRef<FMantlePlaceLevelChoice> Choice)
 {
-	// The window opened on this run's steps shows the control; with no window (it could not open), the
-	// orchestrator takes the recommendation.
 	return ImportWindow.IsValid() && ImportWindow->ShowLevelChoice(Choice);
 }
 
@@ -850,7 +769,6 @@ void SMantlePlaceVaultPanel::HandleAuthChanged(EMantlePlaceAuthState NewState)
 
 	if (NewState == EMantlePlaceAuthState::Authenticated)
 	{
-		// Sign-in completed (async browser round-trip) -> auto-load the vault, no manual Refresh.
 		if (Controller.IsValid())
 		{
 			Controller->RefreshVaultList();
@@ -858,7 +776,6 @@ void SMantlePlaceVaultPanel::HandleAuthChanged(EMantlePlaceAuthState NewState)
 	}
 	else if (NewState == EMantlePlaceAuthState::Unauthenticated)
 	{
-		// Signed out -> clear the list and return to it.
 		AllItems.Reset();
 		Items.Reset();
 		if (ListView.IsValid())
@@ -893,11 +810,9 @@ void SMantlePlaceVaultPanel::HandleRowImportClicked(TSharedPtr<FMantlePlaceVault
 	if (Controller.IsValid() && Item.IsValid() && Controller->StartImport(*Item, SelectedMode()))
 	{
 		ActiveItemPtr = Item;
-		// Re-run every row's paint so bBusy disables the other rows.
 		RebuildRows();
 
-		// Pending toast so the user knows the (possibly long) generate+import sub-process began.
-		const FString Codename = BuildVaultRowView(*Item, /*bBusy*/ true).Codename;
+		const FString Codename = BuildVaultRowView(*Item, true).Codename;
 		FNotificationInfo Info(FText::FromString(FString::Printf(TEXT("Generating & importing %s..."), *Codename)));
 		Info.ExpireDuration = 3.0f;
 		Info.bFireAndForget = true;
@@ -939,7 +854,6 @@ void SMantlePlaceVaultPanel::ShowDetail(TSharedPtr<FMantlePlaceVaultItem> Item)
 		.OnImportClicked(FMantlePlaceOnDetailImport::CreateLambda(
 			[this](TSharedPtr<FMantlePlaceVaultItem> ImportItem)
 			{
-				// Return to the list (where the row shows progress) then start the import.
 				ShowList();
 				HandleRowImportClicked(ImportItem);
 			})));
@@ -950,7 +864,6 @@ void SMantlePlaceVaultPanel::ShowDetail(TSharedPtr<FMantlePlaceVaultItem> Item)
 
 FReply SMantlePlaceVaultPanel::OnBreadcrumbListClicked()
 {
-	// "List" is the back affordance; on the list state this is a harmless no-op.
 	ShowList();
 	return FReply::Handled();
 }
@@ -1044,9 +957,6 @@ void SMantlePlaceVaultPanel::UpdateHeaderState()
 		return;
 	}
 
-	// Say WHY, when there is a why. A restore that failed used to leave this on its neutral prompt
-	// and the reason in a log line, which is indistinguishable to the user from never having been
-	// signed in - and is why a broken refresh went unreported for as long as it did.
 	const FString Reason = Controller.IsValid() ? Controller->GetLastAuthError() : FString();
 	HeaderStatus->SetText(Reason.IsEmpty()
 		? LOCTEXT("SignInPrompt", "Sign in to load your vault.")
@@ -1071,7 +981,7 @@ FReply SMantlePlaceVaultPanel::OnLocalImportClicked()
 	}
 	if (Controller->IsBusy())
 	{
-		return FReply::Handled(); // only one import runs at a time
+		return FReply::Handled();
 	}
 
 	const FString Zip = ZipPathText->GetText().ToString().TrimStartAndEnd();
@@ -1084,18 +994,15 @@ FReply SMantlePlaceVaultPanel::OnLocalImportClicked()
 		return FReply::Handled();
 	}
 
-	// Async now (the local path can trigger a cloud materialize for a bundle missing its Unreal formats):
-	// progress flows through HandleImportPhase into LocalStatus, the result through HandleImportFinished.
 	bLocalImportInFlight = true;
 	if (LocalStatus.IsValid())
 	{
 		LocalStatus->SetText(LOCTEXT("LocalStarting", "Starting import..."));
 	}
-	RebuildRows(); // reflect the busy state on the vault rows too
+	RebuildRows();
 
 	if (!Controller->StartLocalImport(Zip, SelectedMode()))
 	{
-		// Never started (e.g. already busy) - HandleImportFinished won't fire, so clear the flag here.
 		bLocalImportInFlight = false;
 	}
 	return FReply::Handled();
@@ -1115,8 +1022,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::OnGenerateModeWidget(TSharedPtr<FStr
 {
 	const FString Mode = InMode.IsValid() ? *InMode : FString();
 	return SNew(STextBlock)
-		// Per-option tag so tooling can resolve a specific popup entry
-		// ("MantlePlace.Vault.ImportModeOption.Landscape" etc).
 		.Tag(FName(*FString::Printf(TEXT("MantlePlace.Vault.ImportModeOption.%s"), *Mode)))
 		.Text(FText::FromString(Mode))
 		.Font(FMantlePlaceEditorStyle::GetFont(EFont::Body));
@@ -1124,9 +1029,6 @@ TSharedRef<SWidget> SMantlePlaceVaultPanel::OnGenerateModeWidget(TSharedPtr<FStr
 
 void SMantlePlaceVaultPanel::HandleClientUpdateRequired(const FMantlePlaceClientUpdate& Update)
 {
-	// Not a sign-in problem and not a network one: the platform is up, the session is fine, and this plugin
-	// is below the minimum it serves. Say so once, with the way to the newer plugin. The refused call
-	// reports the same sentence through its own failure path, so the list or the import line says it too.
 	if (bUpdatePromptShown)
 	{
 		return;

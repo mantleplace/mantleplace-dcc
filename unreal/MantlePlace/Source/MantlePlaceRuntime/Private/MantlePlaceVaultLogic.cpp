@@ -5,14 +5,13 @@
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "GenericPlatform/GenericPlatformHttp.h"
-#include "Policies/CondensedJsonPrintPolicy.h" // TCondensedJsonPrintPolicy: not transitively available in a game target
+#include "Policies/CondensedJsonPrintPolicy.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonWriter.h"
 #include "Serialization/JsonSerializer.h"
 
 namespace
 {
-	/** Serialize a JSON object to a condensed (single-line) string suitable for a request body. */
 	FString VaultSerializeCondensed(const TSharedRef<FJsonObject>& Root)
 	{
 		FString Out;
@@ -22,7 +21,6 @@ namespace
 		return Out;
 	}
 
-	/** Deserialize a JSON object; returns null on malformed input. */
 	TSharedPtr<FJsonObject> VaultDeserializeObject(const FString& JsonStr)
 	{
 		TSharedPtr<FJsonObject> Root;
@@ -34,10 +32,8 @@ namespace
 		return nullptr;
 	}
 
-	/** Parse one bundle object into Item. Returns false only on a missing required field ("id"). */
 	bool ParseBundle(const TSharedRef<FJsonObject>& B, FMantlePlaceVaultItem& Item, FString& OutError)
 	{
-		// "id" is the download key - required; fail-closed if absent.
 		if (!B->TryGetStringField(TEXT("id"), Item.OrderId) || Item.OrderId.IsEmpty())
 		{
 			OutError = TEXT("Vault bundle entry missing required 'id'");
@@ -52,7 +48,6 @@ namespace
 		B->TryGetStringField(TEXT("status"), StatusStr);
 		Item.Status = FMantlePlaceVaultLogic::ParseStatus(StatusStr);
 
-		// Sidecar fields - null/absent = "unknown" (legacy bundles), tracked by bHas* companions.
 		const TSharedPtr<FJsonObject>* LayersObj = nullptr;
 		if (B->TryGetObjectField(TEXT("layers"), LayersObj) && LayersObj != nullptr && LayersObj->IsValid())
 		{
@@ -62,11 +57,6 @@ namespace
 			(*LayersObj)->TryGetBoolField(TEXT("elevation"), Item.Layers.bElevation);
 		}
 
-		// The vault LIST contract carries `manifestVersion` for each bundle at rest, and the vault
-		// spans both eras: a bundle cut before the MPB re-baseline reports the integer 19, one cut
-		// after reports the string "1.0.0". Both shapes are read because both are live facts about
-		// the listing, and the value is SURFACED rather than gated on — the import gate is the one
-		// place a version decides anything. Absent stays absent (HPS-20: unknown is not zero).
 		if (!B->TryGetStringField(TEXT("manifestVersion"), Item.ManifestVersion))
 		{
 			double NumericManifestVersion = 0.0;
@@ -91,7 +81,6 @@ namespace
 			Item.Sha256 = MoveTemp(Sha256);
 		}
 
-		// formats: array of strings.
 		const TArray<TSharedPtr<FJsonValue>>* FormatsArr = nullptr;
 		if (B->TryGetArrayField(TEXT("formats"), FormatsArr))
 		{
@@ -105,7 +94,6 @@ namespace
 			}
 		}
 
-		// download.formats: array of { format, byteSize }.
 		const TSharedPtr<FJsonObject>* DownloadObj = nullptr;
 		if (B->TryGetObjectField(TEXT("download"), DownloadObj) && DownloadObj != nullptr && DownloadObj->IsValid())
 		{
@@ -149,7 +137,6 @@ FString FMantlePlaceVaultLogic::BuildListBundlesUrl(const FString& BaseUrl)
 
 FString FMantlePlaceVaultLogic::BuildDownloadUrl(const FString& BaseUrl, const FString& OrderId)
 {
-	// OrderId is a UUID (URL-safe), but encode defensively as a path segment.
 	const FString EncodedId = FGenericPlatformHttp::UrlEncode(OrderId);
 	return NormalizeBaseUrl(BaseUrl) + TEXT("/api/v1/vault/bundles/") + EncodedId + TEXT("/download");
 }
@@ -173,7 +160,6 @@ bool FMantlePlaceVaultLogic::ParseListResponse(const FString& JsonStr, TArray<FM
 	const TArray<TSharedPtr<FJsonValue>>* BundlesArr = nullptr;
 	if (!Root->TryGetArrayField(TEXT("bundles"), BundlesArr))
 	{
-		// Surface a platform error body if that's what we got instead.
 		FString Code;
 		if (!ParseErrorBody(JsonStr, OutError, Code))
 		{
@@ -189,7 +175,6 @@ bool FMantlePlaceVaultLogic::ParseListResponse(const FString& JsonStr, TArray<FM
 		const TSharedPtr<FJsonObject>* Obj = nullptr;
 		if (!Value.IsValid() || !Value->TryGetObject(Obj) || Obj == nullptr || !Obj->IsValid())
 		{
-			// One malformed (non-object) entry must not blank the whole vault - skip it.
 			if (OutWarnings != nullptr)
 			{
 				OutWarnings->Add(TEXT("Skipped a vault entry that is not a JSON object."));
@@ -201,7 +186,6 @@ bool FMantlePlaceVaultLogic::ParseListResponse(const FString& JsonStr, TArray<FM
 		FString ItemError;
 		if (!ParseBundle(Obj->ToSharedRef(), Item, ItemError))
 		{
-			// A single unparseable bundle (e.g. missing id) is skipped, not fatal.
 			if (OutWarnings != nullptr)
 			{
 				OutWarnings->Add(FString::Printf(TEXT("Skipped a vault entry: %s"), *ItemError));
@@ -209,8 +193,6 @@ bool FMantlePlaceVaultLogic::ParseListResponse(const FString& JsonStr, TArray<FM
 			continue;
 		}
 
-		// A 3.0 row's offer. One that cannot be read leaves the row as a 2.x row and says so: a
-		// malformed offer must not blank the curator's vault any more than a malformed row does.
 		FString LevelWarning;
 		ReadLevelOffer(*Obj, Item, LevelWarning);
 		if (!LevelWarning.IsEmpty() && OutWarnings != nullptr)
@@ -232,7 +214,6 @@ const TArray<FString>& FMantlePlaceVaultLogic::OfferedLevels()
 
 bool FMantlePlaceVaultLogic::IsOfferedLevel(const FString& Level)
 {
-	// Exact spelling: `MED` is a 2.x category token, never a 3.0 level.
 	return OfferedLevels().ContainsByPredicate(
 		[&Level](const FString& Offered) { return Offered.Equals(Level, ESearchCase::CaseSensitive); });
 }
@@ -247,7 +228,7 @@ void FMantlePlaceVaultLogic::ReadLevelOffer(const TSharedPtr<FJsonObject>& Row, 
 	const TSharedPtr<FJsonObject>* Offer = nullptr;
 	if (!Row.IsValid() || !Row->TryGetObjectField(TEXT("mpb3"), Offer) || Offer == nullptr || !Offer->IsValid())
 	{
-		return; // a 2.x row
+		return;
 	}
 
 	const auto ReadCount = [](const TSharedPtr<FJsonObject>& Parent, const TCHAR* Field, int64& Out) -> bool
@@ -272,8 +253,6 @@ void FMantlePlaceVaultLogic::ReadLevelOffer(const TSharedPtr<FJsonObject>& Row, 
 		if (LevelsObj == nullptr || !LevelsObj->IsValid() || !(*LevelsObj)->TryGetObjectField(Level, Entry)
 			|| Entry == nullptr || !ReadCount(*Entry, TEXT("sizeBytes"), Size.SizeBytes))
 		{
-			// Every level is offered with its size, or the choice is not offered at all: a curator chooses
-			// on the size (HPS-59), and a level shown without one is a choice made blind.
 			OutWarning = FString::Printf(TEXT("its 3.0 levels could not be read (no size for %s), so its level cannot be chosen"), *Level);
 			return;
 		}
@@ -288,15 +267,12 @@ void FMantlePlaceVaultLogic::ReadLevelOffer(const TSharedPtr<FJsonObject>& Row, 
 		Sizes.Add(MoveTemp(Size));
 	}
 
-	// The recommendation is the platform's, applied verbatim; one this build cannot read preselects nothing.
 	FString Recommended;
 	(*Offer)->TryGetStringField(TEXT("recommendedLevel"), Recommended);
 	Item.RecommendedLevel = IsOfferedLevel(Recommended) ? Recommended : FString();
 	Item.Levels = MoveTemp(Sizes);
 	Item.bHasLevels = true;
 
-	// The Extras the row lists. An entry with no id is skipped and the rest are kept: an Extra the plugin does
-	// not use must never cost it the levels above, and one it cannot read is as good as unlisted.
 	Item.Extras.Reset();
 	const TArray<TSharedPtr<FJsonValue>>* ExtrasArr = nullptr;
 	if ((*Offer)->TryGetArrayField(TEXT("extras"), ExtrasArr) && ExtrasArr != nullptr)
@@ -310,7 +286,7 @@ void FMantlePlaceVaultLogic::ReadLevelOffer(const TSharedPtr<FJsonObject>& Row, 
 			{
 				(*Obj)->TryGetStringField(TEXT("name"), Extra.Name);
 				ReadCount(*Obj, TEXT("sizeBytes"), Extra.SizeBytes);
-				(*Obj)->TryGetBoolField(TEXT("locked"), Extra.bLocked); // absent or not a boolean: not locked
+				(*Obj)->TryGetBoolField(TEXT("locked"), Extra.bLocked);
 				Item.Extras.Add(MoveTemp(Extra));
 			}
 		}
@@ -343,7 +319,6 @@ FString FMantlePlaceVaultLogic::BuildLevelDownloadBody(const FString& Level, con
 	Mpb3->SetStringField(TEXT("level"), Level);
 	if (Files.Num() > 0)
 	{
-		// With no files named the platform sends every file of the level, so the plugin always names its own.
 		TArray<TSharedPtr<FJsonValue>> Named;
 		for (const FString& File : Files)
 		{
@@ -366,8 +341,6 @@ bool FMantlePlaceVaultLogic::ParseLevelDownloadResponse(
 	{
 		return false;
 	}
-	// The listing's size and digest are the Max download of every file, so they describe no level download
-	// of this host's files: it is held against what the platform stated for it, as a view is.
 	Parsed.bIsView = true;
 	Parsed.bPartial = false;
 	Parsed.Level = Level;
@@ -399,7 +372,7 @@ bool FMantlePlaceVaultLogic::FilesLeftAfterNotInBundle(int32 ResponseCode, const
 		FString Name;
 		if (!Value.IsValid() || !Value->TryGetString(Name) || !Asked.Contains(Name))
 		{
-			return false; // a name this request never asked for: not a refusal it can answer by asking less
+			return false;
 		}
 		Absent.AddUnique(Name);
 	}
@@ -442,8 +415,6 @@ bool FMantlePlaceVaultLogic::ParseDownloadResponse(const FString& JsonStr, FMant
 
 	Root->TryGetStringField(TEXT("expiresAt"), Parsed.ExpiresAt);
 
-	// A view response states the cut it made. The `view` block is present only for a bundle cut into
-	// parts (a complete one); a whole-archive answer has none, and then the listing describes the zip.
 	const TSharedPtr<FJsonObject>* ViewPtr = nullptr;
 	if (Root->TryGetObjectField(TEXT("view"), ViewPtr) && ViewPtr != nullptr && ViewPtr->IsValid())
 	{
@@ -485,14 +456,8 @@ bool FMantlePlaceVaultLogic::ParseErrorBody(const FString& JsonStr, FString& Out
 		return false;
 	}
 
-	// Optional machine-readable code (e.g. "refunded" / "revoked" on a 410). A separate read,
-	// deliberately unaffected by the message precedence below.
 	Root->TryGetStringField(TEXT("code"), OutCode);
 
-	// ONE precedence order for every platform error-body parser, auth and vault alike (HPS-48):
-	// most-specific human prose first, machine codes last. This parser and auth's
-	// ParseErrorResponse shipped opposite orders once; the order is now corpus-pinned
-	// (vault.errorBodyPrecedence).
 	static const TCHAR* const Keys[] = {
 		TEXT("error_description"),
 		TEXT("msg"),
@@ -578,7 +543,6 @@ const TArray<FString>& FMantlePlaceVaultLogic::KnownFormats()
 
 FString FMantlePlaceVaultLogic::BuildMaterializeUrl(const FString& BaseUrl, const FString& OrderId)
 {
-	// OrderId is a UUID (URL-safe), but encode defensively as a path segment (mirrors BuildDownloadUrl).
 	const FString EncodedId = FGenericPlatformHttp::UrlEncode(OrderId);
 	return NormalizeBaseUrl(BaseUrl) + TEXT("/api/v1/vault/bundles/") + EncodedId + TEXT("/materialize");
 }
@@ -591,24 +555,19 @@ bool FMantlePlaceVaultLogic::IsValidMaterializeScope(const FString& Scope)
 
 const TArray<FString>& FMantlePlaceVaultLogic::TargetedImportTokens()
 {
-	// The targeted layer set: every token this importer can land in the level today. Grows in
-	// lockstep with the importer (raster layers join once the ETL ships their UE-ready variants).
 	static const TArray<FString> Tokens = {
-		TEXT("elevation.heightmap_png"),  // -> ALandscape
-		TEXT("imagery.drape_png"),        // -> drape texture + material
-		TEXT("mesh.glb"),                 // -> terrain static mesh (Nanite)
-		TEXT("buildings.glb"),            // -> buildings static mesh
-		TEXT("vector.geojson"),           // -> road spline actors (Vector/RoadSplines.geojson)
-		TEXT("landcover.tree_points_csv") // -> tree-points DataTable (PCG scatter input)
+		TEXT("elevation.heightmap_png"),
+		TEXT("imagery.drape_png"),
+		TEXT("mesh.glb"),
+		TEXT("buildings.glb"),
+		TEXT("vector.geojson"),
+		TEXT("landcover.tree_points_csv")
 	};
 	return Tokens;
 }
 
 FString FMantlePlaceVaultLogic::BuildMaterializeBody(const FString& Scope)
 {
-	// Web contract: body { "tokens": "unreal" | "all" | PackagingFormatToken[] }. "all" passes
-	// through as the keyword (the full ON_DEMAND set); everything else sends the explicit
-	// targeted-token array so the layers this importer consumes are exactly what materializes.
 	if (!Scope.Equals(TEXT("all"), ESearchCase::IgnoreCase))
 	{
 		return BuildMaterializeBodyForTokens(TargetedImportTokens());
@@ -633,7 +592,6 @@ FString FMantlePlaceVaultLogic::BuildMaterializeBodyForTokens(const TArray<FStri
 
 namespace
 {
-/** Read a string array field, skipping non-strings. Absent or wrong-typed yields an empty array. */
 TArray<FString> VaultStringArray(const TSharedPtr<FJsonObject>& Root, const TCHAR* Field)
 {
 	TArray<FString> Values;
@@ -652,13 +610,11 @@ TArray<FString> VaultStringArray(const TSharedPtr<FJsonObject>& Root, const TCHA
 	return Values;
 }
 
-/** As above, for an array hanging off a nested object. */
 TArray<FString> VaultStringArray(const TSharedPtr<FJsonObject>* Object, const TCHAR* Field)
 {
 	return (Object != nullptr && Object->IsValid()) ? VaultStringArray(*Object, Field) : TArray<FString>();
 }
 
-/** True when any element of Tokens is in Outstanding. */
 bool VaultTouchesAny(const TArray<FString>& Tokens, const TArray<FString>& Outstanding)
 {
 	for (const FString& Token : Tokens)
@@ -674,9 +630,6 @@ bool VaultTouchesAny(const TArray<FString>& Tokens, const TArray<FString>& Outst
 
 bool FMantlePlaceVaultLogic::IsPermanentlyAbsentReason(const FString& Reason)
 {
-	// Mirrors the platform's own non-retryable set exactly. Treating one of these as outstanding
-	// makes a bundle that is as complete as it will ever be poll for its whole budget and then time
-	// out, having been finished the entire time.
 	return Reason.Equals(TEXT("no_features_in_aoi"), ESearchCase::IgnoreCase) || Reason.Equals(TEXT("area_cap_exceeded"), ESearchCase::IgnoreCase) || Reason.Equals(TEXT("outside_coverage"), ESearchCase::IgnoreCase);
 }
 
@@ -696,8 +649,6 @@ bool FMantlePlaceVaultLogic::ParseMaterializeStartResponse(const FString& JsonSt
 		return false;
 	}
 
-	// Nothing to build: everything asked for is already delivered, or the rest can never be produced
-	// for this area. A SUCCESS that names no job - the caller skips polling and downloads.
 	bool bFlag = false;
 	if (Root->TryGetBoolField(TEXT("noop"), bFlag) && bFlag)
 	{
@@ -706,7 +657,6 @@ bool FMantlePlaceVaultLogic::ParseMaterializeStartResponse(const FString& JsonSt
 		return true;
 	}
 
-	// The order's core build has not finished; the picks are parked and fire on their own.
 	if (Root->TryGetBoolField(TEXT("queued"), bFlag) && bFlag)
 	{
 		OutStart.Outcome = EMantlePlaceMaterializeStartOutcome::Queued;
@@ -723,9 +673,6 @@ bool FMantlePlaceVaultLogic::ParseMaterializeStartResponse(const FString& JsonSt
 	FString Code;
 	Root->TryGetStringField(TEXT("code"), Code);
 
-	// A run is already in flight. Checked before the error body because the single-flight response
-	// carries both a job fact and error-ish prose, and the job fact is the useful half. An EMPTY id
-	// still joins: polling is keyed on the order, not the job.
 	if (!ActiveJobId.IsEmpty() || bCoalesced || Code.Equals(TEXT("active_job"), ESearchCase::CaseSensitive))
 	{
 		OutStart.Outcome = EMantlePlaceMaterializeStartOutcome::Joined;
@@ -805,7 +752,6 @@ bool FMantlePlaceVaultLogic::ParseMaterializeStatus(const FString& JsonStr, cons
 		return false;
 	}
 
-	// "status" is canonical; "state" is accepted as an alias.
 	FString StateStr;
 	if (!Root->TryGetStringField(TEXT("status"), StateStr) || StateStr.IsEmpty())
 	{
@@ -814,9 +760,6 @@ bool FMantlePlaceVaultLogic::ParseMaterializeStatus(const FString& JsonStr, cons
 
 	if (StateStr.IsEmpty())
 	{
-		// `delivered` is the discriminator: the delivery-state document always declares it, where
-		// `activeJob` is legitimately null on an idle order and every other field is optional.
-		// Keying on an optional field would misread an idle bundle as a foreign shape.
 		const TArray<TSharedPtr<FJsonValue>>* DeliveredArray = nullptr;
 		if (Root->TryGetArrayField(TEXT("delivered"), DeliveredArray))
 		{
@@ -824,7 +767,6 @@ bool FMantlePlaceVaultLogic::ParseMaterializeStatus(const FString& JsonStr, cons
 			return true;
 		}
 
-		// Neither shape: surface a platform error envelope if that's what we got.
 		FString Code;
 		if (!ParseErrorBody(JsonStr, OutError, Code))
 		{
@@ -835,8 +777,6 @@ bool FMantlePlaceVaultLogic::ParseMaterializeStatus(const FString& JsonStr, cons
 
 	OutStatus.State = ParseMaterializeState(StateStr);
 
-	// progress/fraction in [0,1]; a value > 1 is treated as a percent and normalized. Absent -> -1
-	// (indeterminate), the struct default.
 	double Progress = 0.0;
 	if (Root->TryGetNumberField(TEXT("progress"), Progress) || Root->TryGetNumberField(TEXT("fraction"), Progress))
 	{
@@ -897,17 +837,12 @@ void FMantlePlaceVaultLogic::DeriveMaterializeDelivery(const TSharedPtr<FJsonObj
 		}
 	}
 
-	// Reported on EVERY branch below, terminal ones included: the caller acts on it, and a field
-	// that is only populated when the derivation happens to reach a particular return is a field
-	// no caller can trust.
 	OutStatus.Outstanding = Outstanding;
 
 	const float Fraction = Requested.Num() == 0
 	                           ? -1.0f
 	                           : static_cast<float>(OutStatus.Delivered.Num()) / static_cast<float>(Requested.Num());
 
-	// STOP: no yardstick, no verdict. "Nothing is outstanding" is vacuously true against an empty
-	// requested set, so falling through would report Complete for a bundle nobody asked anything of.
 	if (Requested.Num() == 0)
 	{
 		OutStatus.State = EMantlePlaceMaterializeState::Unknown;
@@ -952,7 +887,6 @@ void FMantlePlaceVaultLogic::DeriveMaterializeDelivery(const TSharedPtr<FJsonObj
 		OutStatus.State = EMantlePlaceMaterializeState::Failed;
 		if (Outcome.Equals(TEXT("completed"), ESearchCase::IgnoreCase))
 		{
-			// STOP: the soft-fail envelope. The run says it finished, and produced none of it.
 			OutStatus.Message = TEXT("The platform reported the job finished but produced none of these ")
 			    TEXT("deliverables. Try generating again; if it repeats, the platform could not build them.");
 		}
@@ -1035,10 +969,9 @@ FString FMantlePlaceVaultLogic::BuildViewDownloadBody()
 
 const TArray<FString>& FMantlePlaceVaultLogic::ReadOutsideHostBlock()
 {
-	// Grows only when a step that reads such a file lands; a file that moves into `hosts.unreal` leaves.
 	static const TArray<FString> Tokens = {
-		TEXT("flood.nfhl"),       // layout.flood_zones: the flood records' GeoPackage
-		TEXT("cesium.terrain")    // layout.cesium_terrain: the quantized-mesh tileset the stream serves
+		TEXT("flood.nfhl"),
+		TEXT("cesium.terrain")
 	};
 	return Tokens;
 }
@@ -1085,19 +1018,9 @@ bool FMantlePlaceVaultLogic::IsIncompleteBundle(const FMantlePlaceVaultItem& Ite
 	{
 		if (Format.Equals(TEXT("glb"), ESearchCase::IgnoreCase))
 		{
-			return false; // ships a UE-importable terrain mesh -> already materialized
+			return false;
 		}
 	}
-	// No glb terrain mesh advertised. That is either a BASE bundle (formats present, no glb) or the
-	// base_on_demand marker with an empty formats list. Both need their Unreal formats
-	// generated, so Import must route through materialize first rather than dead-ending at the
-	// importer's manifest gate. Only a listing that explicitly advertises glb is treated as
-	// confidently complete; anything else materializes.
-	//
-	// That is safe for the unknown/legacy case ONLY because the NothingToDo outcome is handled: an
-	// already-materialized bundle answers with {"noop":true,..} and NO job. This comment used to
-	// claim the platform "coalesces to a no-op job", and it does not - there is no job. Believing
-	// there was is what left the caller polling for a job that never existed.
 	return true;
 }
 
@@ -1113,9 +1036,5 @@ FString FMantlePlaceVaultLogic::DeriveTierLabel(const FMantlePlaceVaultItem& Ite
 bool FMantlePlaceVaultLogic::ShouldRecoverMissingUnrealPayload(
 	bool bManifestReadable, bool bManifestValid, const FString& OrderId, bool bAlreadyRecovered)
 {
-	// Unreadable is the importer's failure to report; valid imports. Only "read it, and it is
-	// honestly incomplete" recovers - and only with an order to materialize against, and only
-	// once, so a bundle the platform cannot complete (or a stale cache the listing cannot
-	// invalidate) fails cleanly on the importer's gate instead of looping.
 	return bManifestReadable && !bManifestValid && !OrderId.IsEmpty() && !bAlreadyRecovered;
 }

@@ -1,66 +1,3 @@
-"""Consumer-conformance against the canonical PUBLISHED bundle-manifest schema.
-
-The Mantle Place platform runs the *producer* leg of this gate: it asserts its live packager emits
-manifests that validate against the canonical schema, and that the schema's `version.const` matches
-the producer's manifest version.
-
-This is the *consumer* leg. It deliberately does **not** duplicate the schema — it fetches the
-published copy from `https://mantle.place/.well-known/schemas/bundle-manifest/`, which is the
-artifact the Mantle Place platform publishes, served publicly. One contract, one source, checked
-from both ends.
-
-**Two version families.** The manifest contract has an integer pre-history (`version: 19`, published
-at `v19.json`) and a semver era (`version: "1.0.0"`, published at `1.0.0.json` — no `v` prefix; the
-`v` belonged to the integer era). Consumers tell them apart by JSON type. Both families are served
-forever, so this gate reads both, orders them (the whole integer era precedes the whole semver era,
-it being pre-history by definition), and holds a host to whichever one it pins.
-
-What it catches: the platform ships a new manifest MINOR or MAJOR and a host consumer has never
-been verified against that shape. A newer PATCH is exempt — `spec/compatibility.md` §2 makes a patch
-editorial and says it "obliges a host to nothing" — but the exemption is earned, not assumed: the
-gate fetches both documents and requires them to be identical once prose and the version stamp are
-stripped, so a release mislabelled as a patch fails here instead of passing unread. This is the gate that scales as hosts go from one to four — each new
-DCC host adds its own entry to `verified-against.json` and is held to the same line.
-
-**A staged release.** A major can be served for readers before it is frozen: its schema answers at
-its URL and the freeze ledger does not name it yet. A host pinned to it is verified against the
-served document, and reported as staged rather than published, so the hosts can verify against a
-major before it is ledgered. Only the next release can be staged: a pin that is served but sorts
-at or below the ledger's newest version is neither frozen nor staged, and fails. A staged version
-is never drift for a host pinned below it, because "is anything newer published?" is the ledger's
-answer alone.
-
-**N hosts, one gate.** Nothing here knows what a host is written in. Every host declares, in its own
-`verified-against.json` entry, where its version floor lives (`floorSource.path` +
-`floorSource.pattern`) and which test file a reviewer should touch when the pin moves
-(`tests`). A C++ header, a C# constant and a Python module are all just a file and a regex
-(`HPS-39`).
-
-It also checks the shared conformance corpus (`corpus/`) for integrity, offline: every case the
-index names must exist, parse, and agree with the index about its declared manifest version. Host
-test suites consume the same corpus (`HPS-40`), so a corpus that has rotted breaks every host at
-once and should break here first.
-
-Two further offline legs:
-
-- **Self-test corpus** (`corpus/self-test/`, `HPS-46`): the deliberately broken fixtures every
-  host READER must reject. This gate verifies the set is *well-formed-broken* — each fixture wrong
-  in exactly its declared way — so a host suite that trusts it is trusting something true.
-- **Coverage ratchet** (`coverage-baseline.json`): per-case host coverage is derived from each
-  host's claimed `groups` × the case's `appliesTo`, printed on every run, and compared against the
-  committed baseline. Any difference fails; `--update-baseline` records a deliberate change as a
-  reviewable diff. Coverage drift surfaced in review once; it surfaces at the gate now.
-
-**Two modes.** `--mode live` (the default, and what the scheduled job runs) holds each pin against
-what the platform publishes right now, so it goes red when the platform publishes ahead of
-`verified-against.json`. `--mode pinned` (what pull requests run) compares only against the pins:
-each host's entry, its corpus review, its consumer's declared floor, and a changelog entry for each
-pinned semver version. It fetches nothing, so a publication that landed after a pull request was
-opened cannot fail it; the drift is the scheduled job's to report.
-
-Exit 0 == conformant. Exit 1 == drift. Exit 2 == could not check (network/parse).
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -77,14 +14,6 @@ import reader_cases
 SCHEMA_BASE_URL = "https://mantle.place/.well-known/schemas/bundle-manifest"
 SCHEMA_URL = SCHEMA_BASE_URL + "/{version}.json"
 
-#: The platform's append-only freeze ledger, served beside the schemas: one sha256 entry per
-#: PUBLISHED version, the current one included. It is the published index of what exists.
-#:
-#: This is how "is anything newer published?" is answered. The integer era could be probed by
-#: counting (`v19` then `v20`, `v21`, …); semver cannot — nothing about `1.0.0` tells you whether
-#: the next release is `1.0.1`, `1.1.0` or `2.0.0`, and a walk that guesses one axis silently
-#: misses the others. A missed bump is exactly the silent failure this gate exists to prevent, so
-#: it reads the index rather than guessing at it.
 LEDGER_URL = SCHEMA_BASE_URL + "/frozen.lock.json"
 
 _SEMVER_RE = re.compile(r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$")
@@ -97,32 +26,20 @@ _CORPUS = _HERE / "corpus"
 _BASELINE = _HERE / "coverage-baseline.json"
 _CHANGELOG = _REPO_ROOT / "spec" / "changelog.md"
 
-#: A changelog entry for a semver version is a level-3 heading that opens with the version.
-#: "Within 1.0.1" and the integer-era "v19" headings do not match: only the semver era is specified.
 _CHANGELOG_HEADING_RE = re.compile(r"^###\s+(\d+\.\d+\.\d+)\b", re.MULTILINE)
 
-#: The one-way-broken classes a self-test fixture may declare (HPS-46). Anything else is a typo.
 _SELFTEST_CLASSES = frozenset({
     "unknownExpectationKey", "wrongTypeExpectation", "nestedUnreadExpectation", "missingFile",
     "malformedCase", "duplicateId",
 })
 
-#: Keys in verified-against.json that are documentation, not hosts.
 _NON_HOST_KEYS = frozenset({"$comment"})
 
-#: Hosts whose corpus cases are written before the host exists. A case's `appliesTo` may name one,
-#: and no registered host covers it, so the coverage baseline records it as `[]`. This is not a
-#: roster: a host registers in verified-against.json from its first commit (HPS-38), and registering
-#: removes it from this set in the same change. Empty today: `autocad` registered with its plugin tree.
 _PLANNED_HOSTS: frozenset[str] = frozenset()
 
-#: The documented corpus groups. A typo'd group silently excludes a case from every host suite
-#: that dispatches on it, so it is checked rather than trusted.
 _CORPUS_GROUPS = frozenset({"manifest", "vault", "auth", "cache", "digest", "projection", "bundle",
                             reader_cases.READER_GROUP, *platform_cases.PLATFORM_GROUPS})
 
-#: Every host entry must carry these. A host that omits one is a silent hole in the gate, so this
-#: is checked before anything is fetched.
 _REQUIRED_HOST_FIELDS = ("verifiedAgainstManifestVersion", "verifiedAgainstCorpusVersion",
                          "evidence", "consumer", "floorSource", "tests", "owner", "groups")
 
@@ -131,15 +48,6 @@ _ledger_cache: list[str] | None = None
 
 
 def version_key(value: object) -> str | None:
-    """The published identity of a manifest version const, or None if it is neither family.
-
-    `19` (a JSON number) -> `"v19"`; `"1.0.0"` (a JSON string) -> `"1.0.0"`. The key IS the mirror
-    filename stem, so it is also what the URL and the ledger are keyed by. Returns None rather than
-    raising: every caller here is reporting drift, not crashing on it.
-
-    An integer-as-string (`"19"`), a partial semver (`"1.0"`) and any pre-release tag are all None
-    — published versions carry none of those.
-    """
     if isinstance(value, bool):
         return None
     if isinstance(value, int):
@@ -150,12 +58,6 @@ def version_key(value: object) -> str | None:
 
 
 def sort_key(key: str) -> tuple[int, tuple[int, ...]]:
-    """Total order over version keys.
-
-    The whole integer era precedes the whole semver era — it is pre-history by definition, so a
-    leading rank of 0 vs 1 decides it before any component comparison. Within a family, numeric
-    component order (so `v7 < v12`, and `1.9.0 < 1.10.0` rather than the lexical opposite).
-    """
     integer = _INTEGER_KEY_RE.match(key)
     if integer:
         return (0, (int(integer.group(1)),))
@@ -163,25 +65,13 @@ def sort_key(key: str) -> tuple[int, tuple[int, ...]]:
 
 
 def describe(key: str) -> str:
-    """A version key as it should read in a message: `v19`, or `MPB 1.0.0`.
-
-    The integer era's key already carries its own `v` marker; the semver era's does not, and a bare
-    `1.0.0` in a sentence about a bundle reads as a plugin version as easily as a manifest one.
-    """
     return key if _INTEGER_KEY_RE.match(key) else f"MPB {key}"
 
 
-#: Keys whose contents are prose or the document's own identity — everything a PATCH is allowed to
-#: change, and nothing a reader parses. Stripped at every depth before two schemas are compared.
 _EDITORIAL_KEYS = frozenset({"$id", "title", "description", "$comment", "examples"})
 
 
 def is_patch_over(pinned: str, other: str) -> bool:
-    """True when `other` is a higher PATCH of `pinned` — same era, same MAJOR.MINOR.
-
-    The integer pre-history has no patch component, so a key from that family is never a patch of
-    anything: `v19` and `v20` are a whole contract apart.
-    """
     if _INTEGER_KEY_RE.match(pinned) or _INTEGER_KEY_RE.match(other):
         return False
     left, right = pinned.split("."), other.split(".")
@@ -189,7 +79,6 @@ def is_patch_over(pinned: str, other: str) -> bool:
 
 
 def strip_editorial(node: object) -> object:
-    """`node` with every editorial key removed, recursively."""
     if isinstance(node, dict):
         return {k: strip_editorial(v) for k, v in node.items() if k not in _EDITORIAL_KEYS}
     if isinstance(node, list):
@@ -198,15 +87,6 @@ def strip_editorial(node: object) -> object:
 
 
 def patch_is_editorial(pinned_schema: dict, newer_schema: dict) -> bool:
-    """True when two published schemas differ ONLY in prose and their own version stamp.
-
-    `spec/compatibility.md` §2 defines a PATCH as editorial — "documentation and description text
-    only; no change to what validates" — which is what lets §2 promise that a patch "obliges a host
-    to nothing". This function is that promise checked rather than trusted: strip the editorial
-    keys and the `version.const` each document uses to name itself, and what remains must be
-    identical. Anything else differing means the release is mislabelled, and a host that skipped it
-    on the strength of its version number would have skipped a real change.
-    """
     left = strip_editorial(pinned_schema)
     right = strip_editorial(newer_schema)
     for doc in (left, right):
@@ -217,11 +97,6 @@ def patch_is_editorial(pinned_schema: dict, newer_schema: dict) -> bool:
 
 
 def fetch_schema(version: str, timeout: int = 20) -> dict | None:
-    """Return the published schema for version key `version`, or None if it is not published.
-
-    Memoized: with N hosts pinned at the same version the lookups overlap heavily, and the weekly
-    scheduled run should stay one-cheap-GET-per-version regardless of host count.
-    """
     if version in _schema_cache:
         return _schema_cache[version]
     url = SCHEMA_URL.format(version=version)
@@ -231,9 +106,6 @@ def fetch_schema(version: str, timeout: int = 20) -> dict | None:
             result = json.loads(resp.read().decode("utf-8")) if resp.status == 200 else None
     except urllib.error.HTTPError as exc:
         if exc.code != 404:
-            # Anything other than "not published" means we could not CHECK, which is exit 2.
-            # Letting it propagate would surface as exit 1 == drift, and a CDN 503 would read
-            # as a failed contract rather than a gate that never ran.
             print(f"error: {url} returned HTTP {exc.code}: {exc.reason}", file=sys.stderr)
             raise SystemExit(2)
         result = None
@@ -245,12 +117,6 @@ def fetch_schema(version: str, timeout: int = 20) -> dict | None:
 
 
 def fetch_published_versions(timeout: int = 20) -> list[str]:
-    """Every published version key, newest last, from the platform's freeze ledger.
-
-    Unreachable or unparseable is exit 2 (could not CHECK), never exit 1 (drift) — the same
-    distinction `fetch_schema` draws. A gate that reported "no newer version" because the network
-    was down would be silently green in exactly the situation it cannot see.
-    """
     global _ledger_cache
     if _ledger_cache is not None:
         return _ledger_cache
@@ -281,11 +147,6 @@ def fetch_published_versions(timeout: int = 20) -> list[str]:
         if version_key(key) is not None or _INTEGER_KEY_RE.match(key):
             keys.append(key)
         elif not is_documentation_key(key):
-            # A frozen key in neither family — a bare "19", a partial "1.0" — may be a published
-            # version this gate cannot place in its total order, which means a version it cannot
-            # see past. Silently dropping it would turn ledger rot into a green run, which is the
-            # exact failure the ledger read exists to prevent — so it is loud, and exit 2 (could
-            # not CHECK), never exit 1 (drift).
             print(
                 f"error: {LEDGER_URL} 'frozen' names {key!r}, which is not a version key in "
                 "either family (integer-era keys read 'v19'; semver keys read '1.0.0'). A key "
@@ -301,32 +162,11 @@ def fetch_published_versions(timeout: int = 20) -> list[str]:
 
 
 def newest_published(start: str) -> str:
-    """Highest published version key at or above `start`.
-
-    `start` itself is the floor of the answer: a host pinned above everything the ledger names is
-    reported by the pin check, not silently downgraded here.
-    """
     published = [key for key in fetch_published_versions() if sort_key(key) > sort_key(start)]
     return published[-1] if published else start
 
 
 def read_declared_floor(host: str, entry: dict) -> tuple[str | None, Path, str]:
-    """Parse a host's minimum-supported manifest version out of the file the host declares.
-
-    Returns `(floor, resolved_path, pattern)` where `floor` is a version KEY; it is None when the
-    file is missing, the pattern does not match, or the captured text is not a version in either
-    family — all of which the caller reports as drift.
-
-    The capture is read as source text, so it arrives as a string either way: a semver floor
-    captures as `1.0.0` and is already its own key, while an integer floor captures as `18` and
-    becomes `v18`. That asymmetry lives here so a host's `floorSource.pattern` stays a plain regex
-    over its own constant and never has to encode which era it is in.
-
-    Deliberately a regex over source rather than a build-time export: this check must run on a cheap
-    hosted runner with no Unreal Engine, no Revit and no Blender present. The cost of that choice is
-    that a host which moves or renames its floor constant must update its own entry here — which is
-    exactly the failure this gate is meant to make loud.
-    """
     source = entry["floorSource"]
     path = (_REPO_ROOT / source["path"]).resolve()
     pattern = source["pattern"]
@@ -345,17 +185,10 @@ def read_declared_floor(host: str, entry: dict) -> tuple[str | None, Path, str]:
 
 
 def host_entries(pinned_doc: dict) -> list[tuple[str, dict]]:
-    """Every host key in `verified-against.json`, in a stable order."""
     return [(k, v) for k, v in sorted(pinned_doc.items()) if k not in _NON_HOST_KEYS]
 
 
 def read_corpus_version() -> int | None:
-    """The corpus's own top-level `corpusVersion`, or None if unreadable.
-
-    Distinct from `manifestVersion`: this tracks the shape of the corpus's case fields, not the
-    bundle-manifest contract. A host whose `verifiedAgainstCorpusVersion` trails this is a host
-    that has not reviewed a corpus-shape change — exactly the drift `check_host` reports.
-    """
     index_path = _CORPUS / "index.json"
     try:
         index = json.loads(index_path.read_text(encoding="utf-8"))
@@ -367,12 +200,6 @@ def read_corpus_version() -> int | None:
 
 def check_corpus(entries: list[tuple[str, dict]] | None = None,
                  update_baseline: bool = False, served_spec: dict | None = None) -> list[str]:
-    """Offline integrity check of the shared conformance corpus. Returns failure lines.
-
-    With `entries` (the FULL host roster, never a `--host`-filtered slice), also validates the
-    self-test corpus and computes the per-case coverage report + ratchet. Bare calls keep the
-    integrity-only behaviour so a synthetic corpus can be checked without a host roster.
-    """
     failures: list[str] = []
     index_path = _CORPUS / "index.json"
     if not index_path.is_file():
@@ -411,7 +238,7 @@ def check_corpus(entries: list[tuple[str, dict]] | None = None,
             body = json.loads(case_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             if case.get("malformedJson"):
-                continue  # A case whose whole point is to be unparseable.
+                continue
             failures.append(f"FAIL: corpus case '{case_id}' ({case['file']}) is not valid JSON: {exc}")
             continue
 
@@ -428,10 +255,6 @@ def check_corpus(entries: list[tuple[str, dict]] | None = None,
                 "only 'accept', 'reject' and 'vector' are meaningful to a host suite."
             )
 
-    # `self-test/` is excluded from THIS sweep on purpose: it is a nested corpus with its own
-    # index.json, and `check_selftest` runs its own recursive sweep over it — one that honours the
-    # index's `orphanFiles` declaration, which this sweep would misreport as rot (the deliberate
-    # orphan fixture is declared, not forgotten).
     orphans = sorted(
         p.relative_to(_CORPUS).as_posix()
         for p in _CORPUS.rglob("*")
@@ -447,8 +270,6 @@ def check_corpus(entries: list[tuple[str, dict]] | None = None,
 
     failures.extend(check_selftest(required=entries is not None))
 
-    # The Platform API exchanges (`platform`, `client`) are held to the spec's own schemas: the
-    # vendored copy always, offline, and the served copy too when a live run fetched it.
     vendored = platform_cases.load_vendored_spec()
     failures.extend(platform_cases.check_platform_cases(raw_cases, _CORPUS, vendored, "the vendored spec"))
     if served_spec is not None:
@@ -462,13 +283,9 @@ def check_corpus(entries: list[tuple[str, dict]] | None = None,
                 "client cases against it, and raise the records."
             )
 
-    # The reader cases are held to their shape and to the bundle each one is the answer for.
     failures.extend(reader_cases.check_reader_cases(raw_cases, _CORPUS))
 
     if entries is not None:
-        # Never record a baseline from a corpus that does not pass its own integrity checks: a
-        # case dropped for a bad `appliesTo` would be written out MISSING and become permanently
-        # invisible to the ratchet — a silent hole in the very file that exists to catch holes.
         if update_baseline and failures:
             failures.append(
                 "FAIL: refusing to write coverage-baseline.json while the corpus has integrity "
@@ -480,28 +297,17 @@ def check_corpus(entries: list[tuple[str, dict]] | None = None,
             try:
                 baseline_doc = json.loads(_BASELINE.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
-                baseline_doc = {}  # check_coverage has already reported it
+                baseline_doc = {}
             failures.extend(platform_cases.check_records(
                 platform_cases.spec_identity(vendored), baseline_doc, entries))
     return failures
 
 
 def is_documentation_key(key: str) -> bool:
-    """Whether `key` is prose for a human rather than an assertion for a host (HPS-46).
-
-    The convention, at every depth: `$comment`, or a name ending in `Note`.
-    """
     return key == "$comment" or key.endswith("Note")
 
 
 def nested_expectation_entries(expectations: dict) -> list[tuple[str, str, object]]:
-    """Every `(path, key, value)` BELOW the top level of an `expectations` object (HPS-46b).
-
-    The top level is `HPS-46`'s and is excluded. Paths follow `HPS-46a`'s precedent
-    (`items[1].hasManifestVersion`) so a failure names something actionable. A documentation key
-    is yielded — the caller decides what that means — but its subtree is not walked, because
-    prose is exempt along with everything under it.
-    """
     found: list[tuple[str, str, object]] = []
 
     def walk(value: object, path: str, depth: int) -> None:
@@ -521,12 +327,6 @@ def nested_expectation_entries(expectations: dict) -> list[tuple[str, str, objec
 
 
 def _corpus_manifest_version() -> object | None:
-    """The corpus proper's top-level `manifestVersion`, or None if unreadable or absent.
-
-    Kept verbatim (int for the pre-history, string for the MPB era) so the self-test cross-check
-    compares JSON values, never coerced ones — coercion across the era break is the reader bug the
-    whole gate exists to catch.
-    """
     try:
         index = json.loads((_CORPUS / "index.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -535,10 +335,6 @@ def _corpus_manifest_version() -> object | None:
 
 
 def check_selftest(required: bool = True) -> list[str]:
-    """Verify `corpus/self-test/` is *well-formed-broken*: each fixture wrong in exactly its
-    declared way (HPS-46). A host suite asserts these fixtures are rejected; that assertion is
-    only worth anything if the breakage it detects is really there.
-    """
     selftest = _CORPUS / "self-test"
     index_path = selftest / "index.json"
     if not index_path.is_file():
@@ -554,11 +350,6 @@ def check_selftest(required: bool = True) -> list[str]:
 
     failures: list[str] = []
 
-    # The self-test fixtures must be written in the dialect the host readers actually speak, or an
-    # `expect: accept` fixture is refused on the VERSION GATE and its self-test passes for the
-    # wrong reason — the reader never reaches the breakage the fixture declares. The corpus
-    # proper's `manifestVersion` is the pin the readers are held to, so the self-test index is
-    # cross-checked against it whenever both declare one.
     corpus_pin = _corpus_manifest_version()
     selftest_pin = index.get("manifestVersion")
     if corpus_pin is not None and selftest_pin is not None and selftest_pin != corpus_pin:
@@ -593,10 +384,6 @@ def check_selftest(required: bool = True) -> list[str]:
             except json.JSONDecodeError:
                 parse_error = True
 
-        # The same declared-vs-actual cross-check the corpus proper gets in `check_corpus`: a
-        # self-test case whose `manifestVersion` disagrees with its fixture's own `version` is rot,
-        # and rot here is worse than in the corpus proper — the fixture's breakage stops being the
-        # reason the reader rejects it.
         declared_version = case.get("manifestVersion")
         if declared_version is not None and isinstance(parsed, dict) \
                 and parsed.get("version") != declared_version:
@@ -666,8 +453,6 @@ def check_selftest(required: bool = True) -> list[str]:
                     "top-level expectation holds a container — the breakage must sit BELOW a key "
                     "the reader can assert, or the top-level rule catches it first."
                 )
-            # A `*Note` key IS documentation and exempt, so it can never be the breakage. Without
-            # this the fixture would still pass with its only reserved key renamed to prose.
             if not any(k.startswith("selfTest") and not is_documentation_key(k)
                        for _, k, _ in nested):
                 failures.append(
@@ -698,10 +483,6 @@ def check_selftest(required: bool = True) -> list[str]:
                 "it cannot be both."
             )
 
-    # Recursive, and skipping any subdirectory that carries its own index.json (a nested corpus:
-    # the broken-index-* dirs). The main sweep excludes this whole subtree, so anything shallower
-    # than the host readers' own sweep is a hole they would report and this gate would not —
-    # which is the asymmetry HPS-46 exists to prevent, inverted.
     declared_orphans = set(index.get("orphanFiles", []))
     for path in sorted(selftest.rglob("*")):
         if not path.is_file():
@@ -712,7 +493,7 @@ def check_selftest(required: bool = True) -> list[str]:
         parts = rel.split("/")
         if any((selftest.joinpath(*parts[:depth]) / "index.json").is_file()
                for depth in range(1, len(parts))):
-            continue  # inside a nested corpus — not this index's to sweep
+            continue
         if rel not in listed_files and rel not in declared_orphans:
             failures.append(
                 f"FAIL: self-test file '{rel}' is neither listed as a case nor declared in "
@@ -754,14 +535,6 @@ def check_selftest(required: bool = True) -> list[str]:
 
 def check_coverage(raw_cases: list[dict], entries: list[tuple[str, dict]],
                    update_baseline: bool = False) -> list[str]:
-    """Derive per-case host coverage from claimed `groups` × `appliesTo`, print it, and ratchet
-    it against the committed baseline.
-
-    The derivation is mechanical on purpose: a host covers a case iff the case's group is in the
-    host's claimed `groups` and the case is not scoped to another host. HPS-41 makes both inputs
-    binding (a claimed group is run in full; `appliesTo` scopes a case to one host), so the gate
-    can compute coverage instead of trusting a review to notice it.
-    """
     failures: list[str] = []
     hosts: dict[str, set[str]] = {}
     for host, entry in entries:
@@ -788,7 +561,7 @@ def check_coverage(raw_cases: list[dict], entries: list[tuple[str, dict]],
     for case in raw_cases:
         case_id, group = case.get("id"), case.get("group")
         if not case_id or group not in _CORPUS_GROUPS:
-            continue  # integrity failures already reported by check_corpus
+            continue
         applies_to = case.get("appliesTo")
         if applies_to is not None and applies_to not in set(hosts) | _PLANNED_HOSTS:
             failures.append(
@@ -823,8 +596,6 @@ def check_coverage(raw_cases: list[dict], entries: list[tuple[str, dict]],
 
     if update_baseline:
         if failures:
-            # A case dropped here (an `appliesTo` naming no registered host) would be written out
-            # missing, not wrong — and a missing case is one the ratchet can never regress.
             failures.append(
                 "FAIL: refusing to write coverage-baseline.json while cases fail coverage "
                 "derivation. Fix the failures above, then rerun with --update-baseline."
@@ -894,10 +665,6 @@ def check_coverage(raw_cases: list[dict], entries: list[tuple[str, dict]],
 
 
 def _check_floor(host: str, entry: dict, pinned: str) -> tuple[list[str], str | None]:
-    """The offline half of a host check: its declared version floor against its own pin.
-
-    Reads only the consumer's source, so it runs identically in both modes.
-    """
     failures: list[str] = []
     floor, floor_path, pattern = read_declared_floor(host, entry)
     if floor is None:
@@ -912,12 +679,6 @@ def _check_floor(host: str, entry: dict, pinned: str) -> tuple[list[str], str | 
             f"{describe(pinned)}. The consumer rejects manifests it claims to support."
         )
     elif _INTEGER_KEY_RE.match(floor) and not _INTEGER_KEY_RE.match(pinned):
-        # `floor <= pinned` meant "reads everything from the floor up" while there was one family.
-        # Across the era break it does not: a reader whose floor is an integer compares the version
-        # NUMERICALLY, so a semver string reads as 0 (or fails to parse) and is refused below the
-        # floor like any ancient bundle. Such a host would pass every check above while refusing
-        # every manifest it claims to be verified against — the ordering says it is in range, and
-        # the reader never agrees.
         failures.append(
             f"FAIL [{host}]: consumer floor {describe(floor)} is in the integer pre-history while "
             f"the pin {describe(pinned)} is in the MPB semver era.\n"
@@ -929,13 +690,6 @@ def _check_floor(host: str, entry: dict, pinned: str) -> tuple[list[str], str | 
 
 
 def _check_live(host: str, entry: dict, pinned: str) -> tuple[list[str], str, str, bool]:
-    """The network half of a host check: the pin against what the platform publishes right now.
-
-    Returns `(failures, staged_note, patch_note, unpublished)`; `unpublished` means the pinned
-    schema is not served, so nothing further can be said about the host. Only the live mode runs this: it is the part
-    that turns red when the platform publishes ahead of `verified-against.json` with no commit
-    landing here, which is drift worth a scheduled alarm and not a reason to block a pull request.
-    """
     failures: list[str] = []
     tests = entry["tests"]
 
@@ -958,11 +712,6 @@ def _check_live(host: str, entry: dict, pinned: str) -> tuple[list[str], str, st
     staged_note = ""
     ledgered = fetch_published_versions()
     if pinned not in ledgered:
-        # Served but not ledgered. A STAGED release is served for readers before it is frozen,
-        # and it is the next release: above everything the ledger names. A host exercised against
-        # the served document is verified against it, and says so; the pin freezes with it. A
-        # served version below the ledger's newest is not the next release, so it is not staged:
-        # nothing published stands behind the pin.
         head = ledgered[-1]
         if sort_key(pinned) <= sort_key(head):
             failures.append(
@@ -981,15 +730,6 @@ def _check_live(host: str, entry: dict, pinned: str) -> tuple[list[str], str, st
     newest = newest_published(pinned)
     patch_note = ""
     if sort_key(newest) > sort_key(pinned) and is_patch_over(pinned, newest):
-        # A newer PATCH is not drift. `spec/compatibility.md` §2: a patch is editorial, and
-        # "obliges a host to nothing: no re-pin and no re-verification, because nothing a reader
-        # parses has changed." Demanding a re-pin here made this gate contradict the spec it
-        # enforces, and would turn every editorial republication into two red hosts.
-        #
-        # What IS worth checking is the label. "Editorial" is a claim the publisher makes with a
-        # version number, and a mislabelled patch would be waved through by the rule above and
-        # never looked at again. So the exemption is earned per release, by comparing the two
-        # published documents rather than trusting the number that separates them.
         newer_schema = fetch_schema(newest)
         if newer_schema is None:
             failures.append(
@@ -1026,12 +766,6 @@ def _check_live(host: str, entry: dict, pinned: str) -> tuple[list[str], str, st
 
 def check_host(host: str, entry: dict, corpus_version: int | None = None,
                live: bool = True) -> tuple[list[str], int | None]:
-    """Verify one host. Returns `(failure lines, pinned version or None)`.
-
-    `live=True` also holds the pin against the platform's published schema and freeze ledger.
-    `live=False` is the pull-request mode: the host's entry, its corpus review and its consumer's
-    declared floor are checked against each other and nothing is fetched.
-    """
     failures: list[str] = []
 
     missing = [f for f in _REQUIRED_HOST_FIELDS if f not in entry]
@@ -1096,12 +830,6 @@ def check_host(host: str, entry: dict, corpus_version: int | None = None,
 
 
 def check_changelog(versions: list[str], changelog_text: str) -> list[str]:
-    """One failure per ledgered semver version that `spec/changelog.md` has no entry for.
-
-    The integer era is public pre-history and is summarised there, not specified, so it is not
-    required. A version the platform publishes without an entry would leave an outside implementer
-    unable to see what changed, which is what the changelog is for.
-    """
     described = set(_CHANGELOG_HEADING_RE.findall(changelog_text))
     return [
         f"FAIL: the freeze ledger names manifest {version}, but spec/changelog.md has no "
@@ -1182,8 +910,6 @@ def main(argv: list[str] | None = None) -> int:
         failures.extend(host_failures)
 
     if not args.skip_corpus:
-        # The full roster, never the --host-filtered slice: coverage is a property of the whole
-        # corpus, and a filtered run must not read as a coverage regression.
         served_spec = None
         if args.mode == "live":
             served_spec = platform_cases.fetch_served_spec()
@@ -1192,8 +918,6 @@ def main(argv: list[str] | None = None) -> int:
                                 f"{platform_cases.SERVED_SPEC_URL}.")
         failures.extend(check_corpus(full_entries, served_spec=served_spec))
 
-    # The whole ledger, never the --host-filtered slice: the changelog describes the contract. In
-    # pinned mode the ledger is not read, so the versions the whole roster pins stand in for it.
     if args.mode == "live":
         changelog_versions = fetch_published_versions()
     else:

@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-"""Tests for the generated-name drift gate.
-
-Each test builds a throwaway tree rather than asserting against the real one, so the suite says what
-the gate MEANS rather than what the tree happens to contain today. The false-positive cases matter as
-much as the true ones: a gate that fires on a legitimate line gets silenced wholesale, and then it
-guards nothing.
-"""
 
 from __future__ import annotations
 
@@ -136,7 +129,6 @@ class AllowedTests(GateTestCase):
         self.assertEqual(code, 0)
 
     def test_the_plugin_mount_path_is_not_a_game_path(self) -> None:
-        """The drape template is shipped content, addressed through the plugin's own mount."""
         self.write(
             "Drape.cpp",
             'static const TCHAR* const T = TEXT("/MantlePlace/Material/M_MantlePlace_Drape");\n',
@@ -145,19 +137,16 @@ class AllowedTests(GateTestCase):
         self.assertEqual(code, 0, out)
 
     def test_a_subfolder_word_outside_a_path_is_left_alone(self) -> None:
-        """The vault panel offers "Mesh" as an import mode. That is a UI string, not a path."""
         self.write("Panel.cpp", 'Options.Add(MakeShared<FString>(TEXT("Mesh")));\n')
         code, out = self.run_gate()
         self.assertEqual(code, 0, out)
 
     def test_a_paint_layer_name_read_from_the_manifest_is_left_alone(self) -> None:
-        """HPS-33: the layer name is applied verbatim. Reading one is not naming one."""
         self.write("Landscape.cpp", "LayerInfo->SetLayerName(FName(*Material), false);\n")
         code, out = self.run_gate()
         self.assertEqual(code, 0, out)
 
     def test_an_on_disk_folder_of_the_same_name_is_left_alone(self) -> None:
-        """The bundle cache lives at MantlePlace/VaultCache on disk. Not an outliner folder."""
         self.write("Cache.cpp", 'const FString Sub = TEXT("MantlePlace/VaultCache");\n')
         code, out = self.run_gate()
         self.assertEqual(code, 0, out)
@@ -209,7 +198,6 @@ class ScopeTests(GateTestCase):
         self.assertEqual(code, 0, out)
 
     def test_a_missing_source_tree_is_not_a_pass_by_accident(self) -> None:
-        """No files scanned should be visible in the output, not silently reported as OK."""
         code, out = self.run_gate()
         self.assertEqual(code, 0)
         self.assertIn("0 files", out)

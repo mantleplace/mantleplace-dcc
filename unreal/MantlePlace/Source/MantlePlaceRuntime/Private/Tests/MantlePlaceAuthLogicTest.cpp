@@ -10,16 +10,10 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
-// PKCE, the callback query grammar, the auth state machine and the token-response shape are read
-// from tools/manifest-conformance/corpus/auth/ (HPS-40). These are the vectors where a second host
-// most easily goes subtly wrong — an unescaped '+' in a base64url verifier, a case-insensitive
-// state comparison, an `expires_in: 0` taken literally — and every one of those failures is silent.
-
 namespace
 {
 using namespace MantlePlaceConformanceCorpus;
 
-/** Parse a JSON body and read a string field; returns "" if absent. */
 FString ReadStringField(const FString& JsonStr, const TCHAR* Field)
 {
 	TSharedPtr<FJsonObject> Root;
@@ -33,7 +27,6 @@ FString ReadStringField(const FString& JsonStr, const TCHAR* Field)
 	return FString();
 }
 
-/** "14fb9c03d97e" -> the six bytes it names. */
 TArray<uint8> BytesFromHex(const FString& Hex)
 {
 	TArray<uint8> Bytes;
@@ -93,7 +86,7 @@ bool EventFromName(const FString& Name, EMantlePlaceAuthEvent& OutEvent)
 	}
 	return false;
 }
-} // namespace
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 	FMantlePlaceAuthLogicTest,
@@ -130,7 +123,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		return Found;
 	};
 
-	// --- PKCE: base64url, verifier shape, the RFC 7636 challenge, the loopback redirect --------
 	if (const FCase* Case = Take(TEXT("auth.pkceVectors")))
 	{
 		const TSharedPtr<FJsonObject> Root = Case->PayloadObject;
@@ -140,9 +132,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		}
 		else
 		{
-			// Each sub-table below is read through an `if (TryGetObjectField(...))`, which does
-			// nothing at all if the key is renamed. Assert the keys exist first, or a rename turns
-			// the whole PKCE section into a silent no-op.
 			for (const TCHAR* Required : { TEXT("base64url"), TEXT("verifier"), TEXT("challengeS256"),
 			                               TEXT("redirectUri"), TEXT("authorizeQueryOrder"),
 			                               TEXT("percentEncoding") })
@@ -151,7 +140,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 					Root->HasField(Required));
 			}
 
-			// base64url (RFC 4648 §5): '+' -> '-', '/' -> '_', no '=' padding.
 			const TSharedPtr<FJsonObject>* Base64Url = nullptr;
 			if (Root->TryGetObjectField(TEXT("base64url"), Base64Url) && Base64Url != nullptr)
 			{
@@ -169,7 +157,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 				}
 			}
 
-			// A verifier built from the stated entropy must have the stated length and charset.
 			const TSharedPtr<FJsonObject>* Verifier = nullptr;
 			if (Root->TryGetObjectField(TEXT("verifier"), Verifier) && Verifier != nullptr)
 			{
@@ -189,7 +176,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 				}
 			}
 
-			// The RFC 7636 Appendix B known answer — the one vector that pins S256 end to end.
 			const TSharedPtr<FJsonObject>* Challenge = nullptr;
 			if (Root->TryGetObjectField(TEXT("challengeS256"), Challenge) && Challenge != nullptr)
 			{
@@ -202,17 +188,12 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 				}
 			}
 
-			// The literal loopback IP, never "localhost" (RFC 8252 §8.3): a hosts-file entry or an
-			// IPv6-first resolver can point "localhost" somewhere the callback server is not.
 			const TSharedPtr<FJsonObject>* Redirect = nullptr;
 			FString RedirectExample;
 			if (Root->TryGetObjectField(TEXT("redirectUri"), Redirect) && Redirect != nullptr)
 			{
 				RedirectExample = RowString(*Redirect, TEXT("example"));
 
-				// The template is the normative shape; the example must be the template
-				// instantiated, and the host's constructor must reproduce both — asserting the
-				// example alone would let the template drift unread.
 				FString Template = RowString(*Redirect, TEXT("template"));
 				TestFalse(Case->What(TEXT("states a redirectUri.template")), Template.IsEmpty());
 				Template.ReplaceInline(TEXT("{port}"), TEXT("51000"));
@@ -225,7 +206,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 					RedirectExample.Contains(TEXT("localhost")));
 			}
 
-			// The authorize URL: every required param, in the stated order, redirect percent-encoded.
 			const FString Url = FLogic::BuildAuthorizeUrl(
 				TEXT("https://mantle.place/auth/native"), RedirectExample, TEXT("CHALLENGE123"), TEXT("STATE456"));
 			const TArray<FString> QueryOrder = RowStrings(Root, TEXT("authorizeQueryOrder"));
@@ -239,7 +219,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 					At > Previous);
 				Previous = At;
 			}
-			// The order list names bare keys, so it cannot catch a param emitted with an empty value.
 			TestTrue(Case->What(TEXT("code_challenge carries its value")),
 				Url.Contains(TEXT("code_challenge=CHALLENGE123")));
 			TestTrue(Case->What(TEXT("state carries its value")), Url.Contains(TEXT("state=STATE456")));
@@ -255,13 +234,8 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- The redirect callback query grammar, and the CSRF state comparison --------------------
 	if (const FCase* Case = Take(TEXT("auth.callbackQueryVectors")))
 	{
-		// The recognised-key set is normative: every key the corpus lists must be recognised on
-		// its own (a query carrying only that key parses), and its value must land in the matching
-		// callback field rather than merely flipping the parsed bit. A key the corpus lists that
-		// this host maps nowhere lands nothing and fails here.
 		TArray<FString> RecognisedKeys;
 		if (Case->PayloadObject.IsValid())
 		{
@@ -297,8 +271,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 			{
 				continue;
 			}
-			// Absent in the row means "must be empty" — a parser that leaks a code onto an error
-			// callback would otherwise slip through.
 			TestEqual(Where + TEXT(" code"), Callback.Code, RowString(Row, TEXT("code")));
 			TestEqual(Where + TEXT(" state"), Callback.State, RowString(Row, TEXT("state")));
 			TestEqual(Where + TEXT(" error"), Callback.Error, RowString(Row, TEXT("error")));
@@ -318,9 +290,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- The state machine, driven exhaustively over every (state, event) pair -----------------
-	// The corpus lists ordered rules with '*' wildcards and an "unchanged" default; resolving them
-	// here — first match wins — asserts all 5x9 cells, not just the ones somebody thought to write.
 	if (const FCase* Case = Take(TEXT("auth.stateMachine")))
 	{
 		const TArray<TSharedPtr<FJsonObject>> Transitions = Rows(*Case, TEXT("transitions"));
@@ -332,7 +301,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 			Case->PayloadObject->TryGetStringArrayField(TEXT("states"), StateNames);
 		}
 
-		// Every event named anywhere in the table, deduplicated in first-seen order.
 		TArray<FString> EventNames;
 		for (const TSharedPtr<FJsonObject>& Rule : Transitions)
 		{
@@ -359,7 +327,7 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 					continue;
 				}
 
-				FString ExpectedName = FromName; // the stated default: unchanged
+				FString ExpectedName = FromName;
 				for (const TSharedPtr<FJsonObject>& Rule : Transitions)
 				{
 					if (RowString(Rule, TEXT("event")) != EventName)
@@ -373,7 +341,7 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 					}
 					const FString To = RowString(Rule, TEXT("to"));
 					ExpectedName = (To == TEXT("unchanged")) ? FromName : To;
-					break; // first match wins
+					break;
 				}
 
 				TestEqual(
@@ -390,7 +358,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- Token responses: the lifetime substitution, the error message, refresh-token retention -
 	if (const FCase* Case = Take(TEXT("auth.tokenResponseVectors")))
 	{
 		for (const TCHAR* Required : { TEXT("vectors"), TEXT("errorPrecedence"),
@@ -415,8 +382,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 
 			if (bParsed)
 			{
-				// The tokens themselves — without these, a parser that returns true with an empty
-				// access token satisfies every other assertion in this file.
 				FString Text;
 				if (Row->TryGetStringField(TEXT("accessToken"), Text))
 				{
@@ -427,7 +392,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 				{
 					TestEqual(Where + TEXT(" refreshToken"), Tokens.RefreshToken, Text);
 				}
-				// A body with no `user` object must leave UserId empty rather than inventing one.
 				if (!Row->HasField(TEXT("userId")))
 				{
 					TestTrue(Where + TEXT(" userId empty when the body carries no user"),
@@ -456,8 +420,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 			}
 		}
 
-		// Error-key precedence: build a body carrying every key from position i onward and assert
-		// the key at i is the one whose value surfaces.
 		TArray<FString> Precedence;
 		if (Case->PayloadObject.IsValid())
 		{
@@ -482,8 +444,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 				Error, FString::Printf(TEXT("value-of-%s"), *Precedence[Index]));
 		}
 
-		// A grant that omits refresh_token must not wipe the cached one — that would strand the
-		// session with a live access token and no way to renew it.
 		const TArray<TSharedPtr<FJsonObject>> RefreshRows = Rows(*Case, TEXT("chooseRefreshToken"));
 		TestTrue(Case->What(TEXT("has chooseRefreshToken rows")), RefreshRows.Num() > 0);
 		for (const TSharedPtr<FJsonObject>& Row : RefreshRows)
@@ -495,9 +455,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 				RowString(Row, TEXT("chosen")));
 		}
 
-		// Expiry: the corpus's defaultSkewSeconds must equal the host's own constant (pins the
-		// corpus value to the code rather than passing it in as an argument, HPS-11), and the
-		// boundary is INCLUSIVE (equal counts as expired).
 		const TSharedPtr<FJsonObject>* IsExpired = nullptr;
 		if (Case->PayloadObject.IsValid()
 			&& Case->PayloadObject->TryGetObjectField(TEXT("isExpired"), IsExpired)
@@ -516,16 +473,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- Definitive rejection vs transient failure ---------------------------------------------
-	//
-	// The asymmetry under test is deliberate. Treating a transient failure as definitive throws
-	// away a working session over a dropped packet; treating a definitive rejection as transient
-	// retries a dead credential forever and never prompts the sign-in that would fix it. Only the
-	// second is silent, so everything unrecognised is transient.
-	//
-	// Corpus-driven, since both hosts now implement this identically: the codes are a platform
-	// contract, so a host that starts honouring a fifth spelling fails here rather than drifting
-	// away from its sibling in silence. It was a host-local table on both sides until then.
 	if (const FCase* Case = Take(TEXT("auth.rejectionClassification")))
 	{
 		TArray<FString> CodeKeys;
@@ -538,7 +485,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		TestTrue(Case->What(TEXT("declares the code keys")), CodeKeys.Num() > 0);
 		TestTrue(Case->What(TEXT("declares the definitive codes")), DefinitiveCodes.Num() > 0);
 
-		// Every key x code pair, rather than the diagonal this suite used to hand-write.
 		const int32 MatrixStatus =
 			static_cast<int32>(RowNumber(Case->PayloadObject, TEXT("matrixStatus"), 400.0));
 		for (const FString& Key : CodeKeys)
@@ -562,13 +508,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- The two browser pages: the copy, the structure, and the hand-off (HPS-08) -------------
-	//
-	// Driven from the corpus rather than from literals here, because literals here are exactly how
-	// the two hosts drifted: the pages are the same moment in the same flow and had grown two
-	// headings and two sentences, with both suites green the whole time. Against one fixture they
-	// cannot disagree silently. HPS-43's share model for two hosts in two languages is
-	// specifications plus this corpus, and this is that.
 	if (const FCase* Case = Take(TEXT("auth.browserPageVectors")))
 	{
 		const TSharedPtr<FJsonObject> Root = Case->PayloadObject;
@@ -578,9 +517,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		}
 		else
 		{
-			// Each section is named on its own rather than in one && chain: short-circuiting would
-			// report the first missing section and silently drop every assertion after it, which is
-			// the failure mode this whole case exists to prevent.
 			const TSharedPtr<FJsonObject>* Copy = nullptr;
 			const TSharedPtr<FJsonObject>* Palette = nullptr;
 			const TSharedPtr<FJsonObject>* Structure = nullptr;
@@ -601,12 +537,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 			const bool bShaped = bCopy && bPalette && bStructure && bHandOff && bEscaping;
 			if (bShaped)
 			{
-				// Fail CLOSED on a corpus key this host does not recognise. RowString returns an
-				// empty FString for a missing key and FString::Contains("") is true, so a key
-				// renamed upstream would leave every assertion built on it passing while asserting
-				// nothing -- Revit goes red on the same rename through its unread-leaf check, and
-				// this host would have stayed green. That asymmetry is the drift hole the fixture
-				// exists to close, so it cannot be allowed to open inside the reader.
 				auto Required = [this, Case](const TSharedPtr<FJsonObject>& Row, const TCHAR* Key) -> FString
 				{
 					const FString Value = RowString(Row, Key);
@@ -622,8 +552,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 					return Values;
 				};
 
-				// The whole host-name map is read, not just this host's row, so a third host added
-				// upstream turns red here rather than being silently absent.
 				FString ThisHostName;
 				const TSharedPtr<FJsonObject>* HostNames = nullptr;
 				if ((*Copy)->TryGetObjectField(TEXT("hostNames"), HostNames))
@@ -660,17 +588,12 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 							Html.Contains(Token, ESearchCase::CaseSensitive));
 					}
 
-					// HPS-08 as the absence of every way to reach off-page for something the
-					// renderer NEEDS. The hand-off below is not one of these: it is a navigation the
-					// page survives failing.
 					for (const FString& Forbidden : RequiredList(*Structure, TEXT("bothPagesLack")))
 					{
 						TestFalse(Case->What(*FString::Printf(TEXT("%s has no %s"), What, *Forbidden)),
 							Html.Contains(Forbidden, ESearchCase::CaseSensitive));
 					}
 
-					// Whole declarations, not bare colours: a page shipping the value in a comment
-					// and rendering default white would pass the looser check.
 					TestTrue(Case->What(*FString::Printf(TEXT("%s: the brand ground"), What)),
 						Html.Contains(Required(*Palette, TEXT("groundDeclaration")), ESearchCase::CaseSensitive));
 					TestTrue(Case->What(*FString::Printf(TEXT("%s: the brand accent"), What)),
@@ -706,20 +629,12 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 						Success.Contains(Token, ESearchCase::CaseSensitive));
 				}
 
-				// A meta refresh would navigate whether or not the done page answered, so an offline
-				// curator would land on the browser's own error page and the branded page would have
-				// been for nothing -- in exactly the case it exists for.
 				for (const FString& Forbidden : RequiredList(*HandOff, TEXT("successPageLacks")))
 				{
 					TestFalse(Case->What(*FString::Printf(TEXT("the hand-off is not %s"), *Forbidden)),
 						Success.Contains(Forbidden, ESearchCase::CaseSensitive));
 				}
 
-				// successOnly drives behaviour rather than restating itself: when the corpus says
-				// only success hands off, the failure page must not carry the hand-off target. The
-				// reason it must not is that the failure body interpolates an error_description the
-				// authorization server wrote, and a page that executes nothing is a page where the
-				// escape pass is the only thing that has to be right about that string.
 				const bool bSuccessOnly = RowBool(*HandOff, TEXT("successOnly"));
 				TestTrue(Case->What(TEXT("the corpus says only success hands off")), bSuccessOnly);
 				if (bSuccessOnly)
@@ -734,10 +649,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 						Failure.Contains(Forbidden, ESearchCase::CaseSensitive));
 				}
 
-				// Stated as "the raw character does not survive", not "an entity appears somewhere".
-				// The latter is vacuous for '&': an implementation that drops the ampersand pass
-				// still emits a page whose body begins with one, and the assertion passes having
-				// proved nothing.
 				const FString BodyPrefix = Required(*Copy, TEXT("failureBodyPrefix"));
 				for (const FString& Character : RequiredList(*Escaping, TEXT("order")))
 				{
@@ -746,8 +657,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 							.Contains(BodyPrefix + Character + TEXT("<"), ESearchCase::CaseSensitive));
 				}
 
-				// The vectors are what pin the ORDER. Run '<' before '&' over the first of them and
-				// the '<' just written comes back as &amp;lt; -- a different string, so it fails.
 				const TArray<TSharedPtr<FJsonValue>>* EscapeVectors = nullptr;
 				const bool bHasVectors =
 					(*Escaping)->TryGetArrayField(TEXT("vectors"), EscapeVectors) && EscapeVectors != nullptr;
@@ -772,7 +681,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		}
 	}
 
-	// --- HPS-41 coverage guard ----------------------------------------------------------------
 	for (const FString& Missing : UndrivenCases(Cases, Driven))
 	{
 		AddError(FString::Printf(
@@ -780,9 +688,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 			*Missing));
 	}
 
-	// A scheme-only value (a half-typed "https:" left in a config) slips through an IsEmpty() check
-	// and builds a hostless URL, which DNS-fails and used to be reported as the misleading
-	// "Network error: no response from the platform." The vault base URL is still checked with it.
 	{
 		TestTrue(TEXT("Full https base is valid"), FLogic::IsValidBaseUrl(TEXT("https://abc.supabase.co")));
 		TestTrue(TEXT("Trailing slash is valid"), FLogic::IsValidBaseUrl(TEXT("https://abc.supabase.co/")));
@@ -798,7 +703,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		TestFalse(TEXT("Scheme-relative '//host' is invalid"), FLogic::IsValidBaseUrl(TEXT("//mantle.place")));
 	}
 
-	// Request bodies: assert fields, not byte order.
 	{
 		TestEqual(TEXT("Refresh body token"),
 			ReadStringField(FLogic::BuildRefreshGrantBody(TEXT("refresh-abc-123")), TEXT("refresh_token")),
@@ -809,7 +713,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("pkce body code_verifier"), ReadStringField(PkceBody, TEXT("code_verifier")), FString(TEXT("verifier-abc")));
 	}
 
-	// The authorize URL joins onto a base that already carries a query.
 	{
 		const FString UrlWithQuery = FLogic::BuildAuthorizeUrl(
 			TEXT("https://mantle.place/auth/native?foo=bar"),
@@ -818,23 +721,12 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 			UrlWithQuery.Contains(TEXT("?foo=bar&response_type=code")));
 	}
 
-	// A callback path without a leading slash still produces a well-formed URI.
 	{
 		TestEqual(TEXT("loopback redirect uri adds leading slash"),
 			FLogic::BuildLoopbackRedirectUri(51000, TEXT("callback")),
 			FString(TEXT("http://127.0.0.1:51000/callback")));
 	}
 
-	// ----- Loopback port selection -----
-	//
-	// This fallback was dead code in shipped builds: the shim committed to the first candidate
-	// before any real bind was attempted, so a reserved or occupied first port opened a browser tab
-	// onto nothing. The loop is only observable once acquisition is injected, which is what these
-	// cover — the fall-through, the give-up, and that each candidate is tried once, in order.
-
-	// No configuration means the OS picks the port. Every fixed list this shipped with was
-	// eventually swallowed by a Windows reserved block that moved under it; 51000-51009 sat inside
-	// one entirely and took sign-in down outright.
 	{
 		TestTrue(TEXT("no configured ports means the OS picks"),
 		         FLogic::ResolveLoopbackPortMode(TArray<int32>()) == FLogic::ELoopbackPortMode::Ephemeral);
@@ -842,8 +734,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		         FLogic::ResolveLoopbackPortMode({ 41000 }) == FLogic::ELoopbackPortMode::DeclaredList);
 	}
 
-	// A lost probe-to-bind race must be retried with a FRESH port. Retrying the same number just
-	// re-runs the race that was already lost; re-proposing lands somewhere the allocator has moved on to.
 	{
 		TArray<int32> Proposed;
 		TArray<int32> Attempted;
@@ -860,9 +750,9 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		    [&Attempted](int32 Port)
 		    {
 			    Attempted.Add(Port);
-			    return Port == 60002; // the first two are taken from under us
+			    return Port == 60002;
 		    },
-		    /*MaxAttempts=*/5, Selected);
+		    5, Selected);
 
 		TestTrue(TEXT("an ephemeral acquire recovers from a lost race"), bAcquired);
 		TestEqual(TEXT("it returns the port that actually bound"), Selected, 60002);
@@ -871,25 +761,21 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("every proposal was actually attempted"), Attempted == Proposed);
 	}
 
-	// A probe that cannot produce a port at all (no socket subsystem) is a failure, not a bind on
-	// whatever OutPort happened to contain.
 	{
 		int32 Proposals = 0;
-		int32 Selected = -7; // sentinel: must survive untouched
+		int32 Selected = -7;
 		const bool bAcquired = FLogic::AcquireEphemeralLoopbackPort(
 		    [&Proposals](int32&)
 		    { ++Proposals; return false; },
 		    [](int32)
 		    { return true; },
-		    /*MaxAttempts=*/4, Selected);
+		    4, Selected);
 
 		TestFalse(TEXT("a probe that never yields a port fails"), bAcquired);
 		TestEqual(TEXT("and leaves the out port untouched"), Selected, -7);
 		TestEqual(TEXT("having tried its full budget"), Proposals, 4);
 	}
 
-	// Exhausting the attempt budget must be reported, not silently treated as success — otherwise
-	// the caller opens a browser onto a port nothing is listening on.
 	{
 		int32 Proposals = 0;
 		int32 Selected = -7;
@@ -898,14 +784,13 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 		    { OutPort = 60000 + ++Proposals; return true; },
 		    [](int32)
 		    { return false; },
-		    /*MaxAttempts=*/3, Selected);
+		    3, Selected);
 
 		TestFalse(TEXT("an ephemeral acquire that never binds fails"), bAcquired);
 		TestEqual(TEXT("after exactly its allowed attempts"), Proposals, 3);
 		TestEqual(TEXT("leaving the out port untouched"), Selected, -7);
 	}
 
-	// The first candidate failing must not abort the search — the regression that broke sign-in.
 	{
 		TArray<int32> Attempted;
 		int32 Selected = 0;
@@ -922,11 +807,9 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 			Attempted == TArray<int32>({ 51000, 51512 }));
 	}
 
-	// Every candidate failing must be reported, not silently treated as success — otherwise the
-	// caller opens a browser onto a port nothing is listening on.
 	{
 		TArray<int32> Attempted;
-		int32 Selected = -7; // sentinel: must survive untouched
+		int32 Selected = -7;
 		const bool bAcquired = FLogic::SelectLoopbackPort({ 51000, 51512 },
 			[&Attempted](int32 Port)
 			{
@@ -940,7 +823,6 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 			Attempted == TArray<int32>({ 51000, 51512 }));
 	}
 
-	// An empty candidate list is a failure, not a crash or an accidental success.
 	{
 		int32 Selected = 0;
 		const bool bAcquired = FLogic::SelectLoopbackPort({},
@@ -951,4 +833,4 @@ bool FMantlePlaceAuthLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

@@ -1,34 +1,6 @@
-# Revit pure-core tests — the headless half of the Revit plugin's triad.
-#
-# HPS-42: conformance tests run headless, with no DCC application required. That is the whole
-# reason the protocol lives in the shared MantlePlace.Core with no host API anywhere near it — a
-# suite that needs a licensed Revit install is a suite that runs when someone remembers.
-#
-# So this job builds and runs the shared pure core, the client and their conformance suite
-# (shared/), the one place CI runs that suite. It runs as the Revit plugin: its cases were written
-# against Revit's block and the add-in's committed files, which is why it is this host's job and
-# keeps the required check names it always had. ci-autocad-tests drives the shared conformance
-# runners again as AutoCAD, which is that host's claim, not a second run of this suite. The add-in
-# shim (MantlePlace.Revit.Addin) references RevitAPI.dll from a local Autodesk install and is
-# deliberately NOT built here: a hosted runner has no Revit, and there is no honest way to fake it.
-# The shim is compiled on a developer machine — `dotnet build revit/MantlePlace.Revit.slnx` — and
-# proven by the tester import gate, not by CI. Skipping it silently would be the failure mode this
-# comment exists to prevent, so: it is skipped, on purpose, and this is where that is written down.
-#
-# MantlePlace.Client is in scope even though it does real I/O. It references no host API, so
-# a hosted runner can build and run it — which is what turns ⛔HPS-26's second enforcer
-# (`automation-test`, on the write-to-.part-then-rename path) from a promise into a job.
-#
-# Hosted runner, and no NuGet restore: the tree has zero package references (shared/Directory.Build.props),
-# so this job cannot be broken by a registry outage or a transitive bump.
 name: ci-revit-tests
 
 on:
-  # NO path filter on pull_request, deliberately. This job is one of the two required status checks
-  # on main, and a required check that is path-filtered never reports on a pull request outside its
-  # paths — so the check sits pending forever and the pull request cannot be merged. The published
-  # merge bar says both workflows run on every pull request; this is what makes that true. The job
-  # restores nothing and costs under a minute, so running it always is cheaper than the trap.
   pull_request:
   push:
     branches: [main]
@@ -36,8 +8,6 @@ on:
       - "revit/**"
       - "shared/**"
       - "tools/manifest-conformance/corpus/**"
-      # A pin bump can touch nothing but this file, and it is exactly the change whose claim
-      # ("the parser was exercised against that shape") this job is the evidence for.
       - "tools/manifest-conformance/verified-against.json"
   workflow_dispatch:
 
@@ -51,13 +21,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          lfs: false # the suite reads JSON vectors and C#; no binary payload is involved
+          lfs: false
 
-      # Two runtimes, because the add-in's net8.0 Core and Client are loaded on .NET 8 by an
-      # un-updated Revit 2025 or 2026 and on .NET 10 by every later one. Supporting three Revit versions from one
-      # build is a forward-compatibility bet; running the suite on both runtimes is the cheapest
-      # honest test of it. The 8.0 runtime comes first so the 10.0 SDK from global.json stays the
-      # one that drives the build.
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
@@ -69,31 +34,12 @@ jobs:
       - name: Build the pure core, the client and their suite
         run: dotnet build shared/tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj -c Release
 
-      # The corpus is checked into this repo, and the reader FAILS rather than skips when it cannot
-      # reach it (HPS-40). A green run here therefore means cases actually ran.
       - name: Drive the shared conformance corpus on .NET 8 (Revit 2025, 2026)
         run: dotnet run --project shared/tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj -c Release -f net8.0 --no-build
 
       - name: Drive the shared conformance corpus on .NET 10 (Revit 2027)
         run: dotnet run --project shared/tests/MantlePlace.Core.Tests/MantlePlace.Core.Tests.csproj -c Release -f net10.0 --no-build
 
-  # The same suite on Windows, and NOT a matrix leg of the job above.
-  #
-  # Why a second job: `pure-core` is a required status check on main. Turning it into a matrix
-  # renames it to `pure-core (ubuntu-latest)` / `pure-core (windows-latest)`, branch protection
-  # keeps waiting on a check name that no longer reports, and every pull request blocks forever.
-  # A separate job leaves that name alone; add this one to branch protection whenever, with no
-  # window where merges are stuck.
-  #
-  # Why Windows at all: System.Net.HttpListener is a managed socket implementation on Linux and
-  # HTTP.SYS on Windows -- a different bind path, a different reservation namespace, and different
-  # errors. The loopback failure that took Revit sign-in down (a port inside a Hyper-V/WinNAT
-  # reserved block, refused while nothing was listening, reported as "used by another process")
-  # is invisible to a Linux-only job by construction. It is the exact failure this suite now
-  # covers, so it has to run somewhere that can reproduce it.
-  #
-  # Hosted Windows runners carry their own excluded port ranges, which is a feature here: it means
-  # no test may hardcode a port, and none do -- the loopback cases all ask the OS for one.
   pure-core-windows:
     runs-on: windows-latest
     steps:

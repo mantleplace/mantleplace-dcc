@@ -10,12 +10,6 @@
 #include "MantlePlaceImportStepsLogic.h"
 #include "MantlePlaceImportTiming.h"
 
-// The import window's steps, with no editor and no bundle: the six states and their words (HPS-51),
-// the clock, the status line, a skip with its reason, and a cancel that takes effect between steps --
-// the running step finishes, the later ones do not start, and a step part of which had run reads
-// Cancelled rather than Not Run. Then the same cancel through the orchestration's walk of the handlers,
-// which is what decides which handlers' work runs.
-
 namespace
 {
 using EState = EMantlePlaceImportStepState;
@@ -30,7 +24,6 @@ FString States(const FMantlePlaceImportSteps& Steps)
 	return FString::Join(Words, TEXT(" "));
 }
 
-/** A handler that records its calls, optionally prepares, and optionally fails its import. */
 class FStepRecordingHandler final : public IMantlePlaceArtifactHandler
 {
 public:
@@ -86,7 +79,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceImportStepsStatesTest::RunTest(const FString& Parameters)
 {
-	// --- The window's words: HPS-51's heading and stop button, and the six a row says ------------------
 	TestEqual(TEXT("the heading"), FMantlePlaceImportSteps::Heading(), FString(TEXT("Bundle Import")));
 	TestEqual(TEXT("the stop button"), FMantlePlaceImportSteps::CancelWord(), FString(TEXT("Cancel")));
 	TestEqual(TEXT("the word before the run's clock"), FMantlePlaceImportSteps::ElapsedWord(), FString(TEXT("Elapsed")));
@@ -98,13 +90,11 @@ bool FMantlePlaceImportStepsStatesTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("Cancelled"), FMantlePlaceImportSteps::StateWord(EState::Cancelled), TEXT("Cancelled"));
 	TestEqual(TEXT("Not Run"), FMantlePlaceImportSteps::StateWord(EState::NotRun), TEXT("Not Run"));
 
-	// --- The clock: whole seconds, truncated; minutes past a minute; no seconds past an hour ------------
 	TestEqual(TEXT("under a minute"), FMantlePlaceImportSteps::Elapsed(12.9), TEXT("12 s"));
 	TestEqual(TEXT("minutes and seconds"), FMantlePlaceImportSteps::Elapsed(250.0), TEXT("4 min 10 s"));
 	TestEqual(TEXT("hours and minutes"), FMantlePlaceImportSteps::Elapsed(3900.0), TEXT("1 h 5 min"));
 	TestEqual(TEXT("a negative span reads as nothing elapsed"), FMantlePlaceImportSteps::Elapsed(-3.0), TEXT("0 s"));
 
-	// --- A run, step by step ---------------------------------------------------------------------------
 	FMantlePlaceImportSteps Steps;
 	int32 Changes = 0;
 	Steps.OnChanged = [&Changes]() { ++Changes; };
@@ -147,7 +137,6 @@ bool FMantlePlaceImportStepsStatesTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("between its halves the step is Waiting again"), Steps.Steps()[2].State, EState::Waiting);
 	TestTrue(TEXT("but marked started"), Steps.Steps()[2].bStarted);
 
-	// --- The run ends without a cancel: a step left Waiting never ran ---------------------------------------
 	Steps.Finish(130.0);
 	TestTrue(TEXT("the run is finished"), Steps.IsFinished());
 	TestEqual(TEXT("the run clock stops at Finish, after HPS-60's word"), Steps.RunElapsed(500.0), FString(TEXT("Elapsed 30 s")));
@@ -157,7 +146,6 @@ bool FMantlePlaceImportStepsStatesTest::RunTest(const FString& Parameters)
 	Steps.RequestCancel();
 	TestFalse(TEXT("a cancel after the run is over is ignored"), Steps.IsCancelRequested());
 
-	// --- A run that stops inside a step, with no cancel: the step failed ------------------------------------
 	FMantlePlaceImportSteps Refused;
 	Refused.Add(TEXT("integrity_check"), TEXT("Integrity Check"));
 	Refused.Add(TEXT("a"), TEXT("Imagery drape"));
@@ -175,7 +163,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceImportStepsCancelTest::RunTest(const FString& Parameters)
 {
-	// --- Cancel between steps: the running step finishes, the later ones do not start -------------------
 	{
 		FMantlePlaceImportSteps Steps;
 		Steps.Add(TEXT("a"), TEXT("Imagery drape"));
@@ -184,7 +171,6 @@ bool FMantlePlaceImportStepsCancelTest::RunTest(const FString& Parameters)
 		Steps.Add(TEXT("d"), TEXT("Public records"));
 		Steps.Skip(TEXT("d"), TEXT("Not in this download: it was left out of the selection."));
 
-		// b's first half (a Prepare) runs before a: it is started when the cancel comes.
 		Steps.Begin(TEXT("b"), 0.0);
 		Steps.Pause(TEXT("b"), 1.0);
 		Steps.Begin(TEXT("a"), 1.0);
@@ -209,7 +195,6 @@ bool FMantlePlaceImportStepsCancelTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("and says importing again completes it"), Closing.Contains(TEXT("importing this bundle again")));
 	}
 
-	// --- A cancel the run ends on inside a step (the download): that step was stopped partway -------------
 	{
 		FMantlePlaceImportSteps Steps;
 		Steps.Add(TEXT("download"), TEXT("Download"));
@@ -222,7 +207,6 @@ bool FMantlePlaceImportStepsCancelTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("no status line once the run is over"), Steps.StatusLine(3.0).IsEmpty());
 	}
 
-	// --- A cancel that came after the last step stopped nothing ------------------------------------------
 	{
 		FMantlePlaceImportSteps Steps;
 		Steps.Add(TEXT("a"), TEXT("Landscape"));
@@ -242,8 +226,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceImportStepsOrchestrationTest::RunTest(const FString& Parameters)
 {
-	// The registry's two passes with steps watching: a (prepares), b, c (prepares), d (fails), and e,
-	// whose only payload the archive's view leaves out.
 	const auto Build = [](TArray<FString>& Calls)
 	{
 		MantlePlaceArtifacts::FHandlers Handlers;
@@ -263,7 +245,6 @@ bool FMantlePlaceImportStepsOrchestrationTest::RunTest(const FString& Parameters
 	FMantlePlaceImportSelection Selection;
 	Selection.Excluded.Add(FName(TEXT("excluded")));
 
-	// Runs the three passes, cancelling when the step named CancelWhen begins (NAME_None: never).
 	const auto Run = [&](FName CancelWhen, FMantlePlaceImportSteps& Steps, TArray<FString>& Calls)
 	{
 		const MantlePlaceArtifacts::FHandlers Handlers = Build(Calls);
@@ -273,7 +254,7 @@ bool FMantlePlaceImportStepsOrchestrationTest::RunTest(const FString& Parameters
 			const int32 Current = Steps.CurrentIndex();
 			if (Current != INDEX_NONE && Steps.Steps()[Current].Id == CancelWhen)
 			{
-				Steps.RequestCancel(); // the Cancel click a Slate tick delivers at this boundary
+				Steps.RequestCancel();
 			}
 		};
 		MantlePlaceImportTiming::FTimeline Timeline;
@@ -288,7 +269,6 @@ bool FMantlePlaceImportStepsOrchestrationTest::RunTest(const FString& Parameters
 		return Log;
 	};
 
-	// --- The plan: one row per artifact, named for what it builds; a left-out one Not Run, with why -------
 	{
 		FMantlePlaceImportSteps Steps;
 		TArray<FString> Calls;
@@ -303,7 +283,6 @@ bool FMantlePlaceImportStepsOrchestrationTest::RunTest(const FString& Parameters
 		TestFalse(TEXT("an import nobody cancelled was not cancelled"), Steps.WasCancelled());
 	}
 
-	// --- Cancel while b imports: b finishes, c (prepared) is Cancelled, d never runs ----------------------
 	{
 		FMantlePlaceImportSteps Steps;
 		TArray<FString> Calls;
@@ -318,7 +297,6 @@ bool FMantlePlaceImportStepsOrchestrationTest::RunTest(const FString& Parameters
 			FString::Join(Log, TEXT("\n")).Contains(TEXT("Step c skipped")));
 	}
 
-	// --- Cancel during the first Prepare: that half finishes, nothing else runs -----------------------------
 	{
 		FMantlePlaceImportSteps Steps;
 		TArray<FString> Calls;
@@ -329,7 +307,6 @@ bool FMantlePlaceImportStepsOrchestrationTest::RunTest(const FString& Parameters
 			States(Steps), TEXT("a=Cancelled b=Not Run c=Not Run d=Not Run e=Not Run"));
 	}
 
-	// --- Two failures in one run: each failing step reads Failed, the one between them Done ---------------
 	{
 		TArray<FString> Calls;
 		MantlePlaceArtifacts::FHandlers Handlers;
@@ -353,4 +330,4 @@ bool FMantlePlaceImportStepsOrchestrationTest::RunTest(const FString& Parameters
 	return true;
 }
 
-#endif // WITH_EDITOR && WITH_DEV_AUTOMATION_TESTS
+#endif

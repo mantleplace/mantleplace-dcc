@@ -6,35 +6,17 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Client;
 
-/// <summary>What <see cref="PrepareWatcher"/> tells the record as a Prepare starts and ends.</summary>
-/// <remarks>
-/// The seam exists so that the watcher is asserted without a disk (<c>HPS-42</c>). The real one is
-/// <see cref="InterruptedPrepareStore"/>. Neither call may throw: a record that cannot be written
-/// costs a re-join, never a Prepare.
-/// </remarks>
 public interface IPrepareLedger
 {
-    /// <summary>A Prepare of <paramref name="orderId"/>, asked for at <paramref name="startedAt"/>, is being watched.</summary>
     void Started(string orderId, DateTimeOffset startedAt);
 
-    /// <summary>The Prepare of <paramref name="orderId"/> ended this way.</summary>
     void Ended(string orderId, PrepareEnding ending);
 }
 
-/// <summary>This process, and whether the process that wrote an entry still runs.</summary>
 public static class PrepareOwners
 {
-    /// <summary>This Revit process.</summary>
     public static PrepareOwner Current { get; } = Of(Process.GetCurrentProcess());
 
-    /// <summary>
-    /// Whether <paramref name="owner"/> still runs: a process of its id, started when it started.
-    /// </summary>
-    /// <remarks>
-    /// A process of that id this user cannot inspect is not the owner: the owner was a Revit this
-    /// user ran. Reading it as dead risks one order polled twice, which the platform answers as one
-    /// job (<c>HPS-24</c>); reading it as live would lose the re-join for a week.
-    /// </remarks>
     public static bool IsAlive(PrepareOwner owner)
     {
         try
@@ -52,21 +34,6 @@ public static class PrepareOwners
         => new(process.Id, process.StartTime.ToUniversalTime().Ticks);
 }
 
-/// <summary>
-/// This machine's record of Prepares being watched, on disk, shared by every Revit process on it —
-/// so that one Revit closed or crashed during is re-joined by the next (<see cref="InterruptedPrepares"/>).
-/// </summary>
-/// <remarks>
-/// <para>
-/// ⚠ <b>A record that cannot be read or written does nothing, silently.</b> Unlike the announced-order
-/// record, nothing here is worth a guess: a lost entry costs one re-join, and a claim made against a
-/// record this process could not read might take a Prepare another Revit is still watching.
-/// </para>
-/// <para>
-/// A file that is not a record — damaged, or emptied by a write that failed halfway — holds no
-/// entries, which costs the re-joins it held and nothing else.
-/// </para>
-/// </remarks>
 public sealed class InterruptedPrepareStore : IPrepareLedger
 {
     private readonly MachineRecordFile _file;
@@ -75,10 +42,6 @@ public sealed class InterruptedPrepareStore : IPrepareLedger
     private readonly Func<string?> _email;
     private readonly object _gate = new();
 
-    /// <param name="path">The record's file.</param>
-    /// <param name="self">This process.</param>
-    /// <param name="isAlive">Whether an owner's process still runs.</param>
-    /// <param name="email">The signed-in address, or empty when the grant named none.</param>
     public InterruptedPrepareStore(string path, PrepareOwner self, Func<PrepareOwner, bool> isAlive, Func<string?> email)
     {
         _file = new MachineRecordFile(path);
@@ -87,17 +50,14 @@ public sealed class InterruptedPrepareStore : IPrepareLedger
         _email = email;
     }
 
-    /// <summary>Where the record lives: beside the bundle cache, under the curator's local app data.</summary>
     public static string DefaultPath => MachineRecordFile.InLocalAppData("interrupted-prepares.json");
 
-    /// <inheritdoc/>
     public void Started(string orderId, DateTimeOffset startedAt)
     {
         InterruptedPrepare entry = new(orderId, startedAt, AnnouncedOrders.AccountKey(_email()), _self);
         Change(record => InterruptedPrepares.Started(record, entry));
     }
 
-    /// <inheritdoc/>
     public void Ended(string orderId, PrepareEnding ending)
     {
         if (!InterruptedPrepares.KeepsEntry(ending))
@@ -106,11 +66,9 @@ public sealed class InterruptedPrepareStore : IPrepareLedger
         }
     }
 
-    /// <summary>Removes this process's entry for <paramref name="orderId"/>: the order is not one to re-join.</summary>
     public void Drop(string orderId)
         => Change(record => InterruptedPrepares.Ended(record, orderId, _self));
 
-    /// <summary>Takes the interrupted Prepares this process may re-join, and drops the stale ones.</summary>
     public IReadOnlyList<InterruptedPrepare> Claim(DateTimeOffset now)
     {
         string? account = AnnouncedOrders.AccountKey(_email());
@@ -179,7 +137,6 @@ public sealed class InterruptedPrepareStore : IPrepareLedger
         return entries;
     }
 
-    /// <summary>One entry, or <c>null</c> for one missing a field: an entry that cannot be re-joined is no entry.</summary>
     private static InterruptedPrepare? Entry(JsonElement item)
     {
         if (item.ValueKind != JsonValueKind.Object

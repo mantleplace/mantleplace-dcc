@@ -1,25 +1,3 @@
-"""The reader leg of the conformance gate: the `reader` corpus group.
-
-A `reader` case says what a correct reader finds in one synthetic bundle, as language-neutral data
-(`corpus/README.md`, "The reader group"). The case file names the bundle by the `bundle` group's case
-file that describes it, and holds the `result` a reader must reach on it: the version it read, where
-it found the manifest, the download's level, each file it found with its family, its frame and the
-count the catalog states, each file it skipped and why, and for a 3.x bundle the two frames its manifest
-states once (format.md section 9.4). A reader in any language builds the bundle, reads it, and
-compares.
-
-This module holds every case file to that shape, and to its bundle. Two checks, both offline:
-
-- **The shape.** The keys, their types and the closed vocabularies are exactly the ones the README
-  documents, so a reader's runner is written once against one shape; the lists are sorted and hold
-  no path twice, so a comparison is by path and nothing else.
-- **The answer.** The result is re-derived from the bundle's own manifest, with the rules the format
-  text states, and must equal what the case file says. The answer sheet cannot drift from the
-  fixture it is the answer for: editing the fixture, or the answer, without the other fails here.
-
-Stdlib only, like the rest of the gate.
-"""
-
 from __future__ import annotations
 
 import json
@@ -28,42 +6,29 @@ from pathlib import Path
 
 READER_GROUP = "reader"
 
-#: The one place each major keeps its manifest (compatibility.md section 1).
 MANIFEST_PATH_3 = "Manifest.json"
 MANIFEST_PATH_2 = "Metadata/manifest.json"
-#: The newest major this corpus's readers read; a manifest of a later one is refused.
 NEWEST_MAJOR = 3
-#: The members a 3.x manifest states these in, as the served 3.0.0 schema names them: the catalog,
-#: an object from a path to its entry; the level; the files it does not hold, a list of
-#: `{"path", "reason"}`; and an entry's count, `{"kind", "value"}`, whose `value` a reader reports.
 CATALOG = "catalog"
 LEVEL = "level"
 NOT_HELD = "not_held"
 COUNT = "count"
-#: Where a 2.x manifest keeps its catalog.
 CATALOG_2 = "file_entries"
 
 LEVELS = ("Max", "Med", "Min")
 WHY = ("not-held", "file-missing")
-#: `major-ahead`: a major above the newest. `unreadable`: a major the reader reads, whose manifest
-#: states a unit, a datum, an axis order or a frame it does not understand (format.md section 4).
 REFUSALS = ("major-ahead", "unreadable")
-#: A family and the one frame its coordinates are in (format.md section 4).
 FRAME_OF = {"georeferenced": "order", "host-ready": "site"}
 _GEOREFERENCED = frozenset({"tif", "gpkg", "dxf", "landxml", "ifc"})
 _HOST_READY = frozenset({"glb", "usdz", "obj", "png", "csv"})
-#: What a 2.x file's own frame statement says about its family.
 _FAMILY_OF_MODE = {"absolute": "georeferenced", "offset": "host-ready"}
 
 _RESULT_KEYS = ("outcome", "major", "version", "manifestPath", "level", "refusal", "files", "skipped")
-#: A 3.x read also states the frames, between the level's group and the refusal's: right after `level`.
 _RESULT_KEYS_WITH_FRAMES = _RESULT_KEYS[:5] + ("frames",) + _RESULT_KEYS[5:]
 FRAMES = "frames"
 _FRAME_KEYS = ("georeferenced", "local")
-#: The axis orders and the one local axes statement the served 3.0.0 schema names.
 _AXIS_ORDERS = ("east-north", "north-east")
 _LOCAL_AXES = {"x": "east", "y": "north", "z": "up"}
-#: The factors to metres a reader understands: the metre, the international foot, the US survey foot.
 _KNOWN_FACTORS = (1.0, 0.3048, 1200 / 3937)
 _FACTOR_TOLERANCE = 1e-9
 _CRS_CODE = re.compile(r"^[A-Z]+:[0-9A-Za-z.]+$")
@@ -77,7 +42,6 @@ def _is_int(value: object) -> bool:
 
 
 def family_of_3(path: str) -> str | None:
-    """The family a 3.x file's extension states (format.md section 4); None for a file in neither."""
     extension = path.rsplit(".", 1)[-1].lower() if "." in path.rsplit("/", 1)[-1] else ""
     if extension in _GEOREFERENCED:
         return "georeferenced"
@@ -90,7 +54,6 @@ def _major(version: object) -> int | None:
 
 
 def _entries(label: str, rows: object, keys: tuple[str, ...]) -> tuple[list[dict], list[str]]:
-    """The rows of `label` when each is an object with exactly `keys`, sorted by a unique path."""
     if not isinstance(rows, list):
         return [], [f"`result.{label}` is not a list"]
     problems: list[str] = []
@@ -111,7 +74,6 @@ def _entries(label: str, rows: object, keys: tuple[str, ...]) -> tuple[list[dict
 
 
 def check_result_shape(result: object) -> list[str]:
-    """The problems with `result` as a shape, one line each; empty when it is the documented one."""
     if not isinstance(result, dict):
         return ["`result` is not an object"]
     keys = _RESULT_KEYS_WITH_FRAMES if FRAMES in result else _RESULT_KEYS
@@ -182,7 +144,6 @@ def _is_number(value: object) -> bool:
 
 
 def _unit_problem(unit: object, where: str) -> str | None:
-    """Why a linear unit is not one a reader understands, or None: a name, and a known factor."""
     if not isinstance(unit, dict) or not isinstance(unit.get("name"), str) or not unit["name"]:
         return f"{where} states no unit name"
     factor = unit.get("to_metres")
@@ -194,7 +155,6 @@ def _unit_problem(unit: object, where: str) -> str | None:
 
 
 def _crs_problem(crs: object, where: str) -> str | None:
-    """Why a CRS names nothing a reader can apply, or None: a code, PROJJSON or WKT2, each well formed."""
     if not isinstance(crs, dict):
         return f"{where} is not an object"
     if "code" in crs and not (isinstance(crs["code"], str) and _CRS_CODE.match(crs["code"])):
@@ -214,11 +174,6 @@ def _number_problem(frame: object, name: str, where: str) -> str | None:
 
 
 def frames_refusal(frames: object) -> str | None:
-    """Why a reader of the served 3.0.0 frames (format.md section 9.4) refuses them, or None.
-
-    A unit it does not understand, an axis order it does not know, a datum that names nothing, and a
-    local unit that is not the metre are refused; so is a member the frames need and lack.
-    """
     if not isinstance(frames, dict):
         return "the manifest states no frames"
     order, local = frames.get("georeferenced"), frames.get("local")
@@ -258,11 +213,6 @@ def frames_refusal(frames: object) -> str | None:
 
 
 def expected_frames(frames: dict) -> dict:
-    """The answer for a readable `frames`: the manifest's own words, with each `geoid_model` stated.
-
-    Nothing is derived or renamed; a geoid the manifest names none for is `null`, so a reader that
-    leaves it out and one that reports `null` give the answer sheet one shape.
-    """
     answer = json.loads(json.dumps(frames))
     for member in _FRAME_KEYS:
         answer[member].setdefault("geoid_model", None)
@@ -283,7 +233,6 @@ def _expected_file(path: str, entry: object, major: int) -> dict:
 
 
 def check_result_against_bundle(result: dict, fixture: object) -> list[str]:
-    """The problems with `result` as the answer for `fixture`, re-derived from its manifest."""
     files = fixture.get("files") if isinstance(fixture, dict) else None
     if not isinstance(files, dict):
         return ["the bundle's case file has no `files` object"]
@@ -344,7 +293,6 @@ def check_result_against_bundle(result: dict, fixture: object) -> list[str]:
 
 
 def check_case(entry: dict, body: object, fixture: object) -> list[str]:
-    """Failure lines for one `reader` case: its case file `body`, held to its bundle `fixture`."""
     case_id = entry["id"]
     problems: list[str] = []
     if not isinstance(body, dict):
@@ -375,7 +323,6 @@ def check_case(entry: dict, body: object, fixture: object) -> list[str]:
 
 
 def check_reader_cases(raw_cases: list[dict], corpus: Path) -> list[str]:
-    """Failure lines for every `reader` case of the index; a case that cannot be read is one."""
     bundle_files = {c.get("file") for c in raw_cases if c.get("group") == "bundle"}
     failures: list[str] = []
     for entry in raw_cases:
@@ -384,7 +331,7 @@ def check_reader_cases(raw_cases: list[dict], corpus: Path) -> list[str]:
         try:
             body = json.loads((corpus / entry["file"]).read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            continue  # check_corpus has already reported a missing or unparseable file
+            continue
         named = body.get("bundle") if isinstance(body, dict) else None
         if named not in bundle_files:
             failures.append(f"FAIL: reader case '{entry['id']}' names the bundle {named!r}, which is "
@@ -393,6 +340,6 @@ def check_reader_cases(raw_cases: list[dict], corpus: Path) -> list[str]:
         try:
             fixture = json.loads((corpus / named).read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            continue  # likewise reported by the bundle case's own check
+            continue
         failures.extend(check_case(entry, body, fixture))
     return failures

@@ -36,26 +36,6 @@
 #include "WorldPartition/WorldPartitionHelpers.h"
 #include "WorldPartition/WorldPartitionSubsystem.h"
 
-// A re-import over a prior import that is partly in unloaded World Partition regions (dcc 339).
-//
-// The prior import as a user's saved level holds it: a split landscape (Terrain) and a building
-// (Buildings, which streams so an HLOD can stand in for it) claimed by the import context's own
-// Claim in a partitioned world, saved to disk, then all but one of the landscape's streaming proxies
-// and the building unloaded, the way unloading their region does: nothing holds them loaded, and a
-// garbage collection takes them out of memory. Only their descriptors are left.
-//
-// What it pins:
-//  - v1's read counts exactly those unloaded actors (no test reached a truly unloaded one before);
-//  - the wipe loads every one of them through the descriptor walk and destroys them with the loaded
-//    ones: zero orphans, loaded or not, and the references it took are released after;
-//  - a re-import and another, with no save between them, find no unloaded prior actor in the
-//    descriptors the wipe left behind (the regression dcc 348 fixed);
-//  - the fallback: when one cannot be loaded (its package is gone from disk), the re-import refuses
-//    with v1's message and changes nothing: no actor destroyed, nothing left loaded by the attempt.
-//
-// The saved level lives under a mount point in Intermediate, never in the project's Content, and is
-// deleted at the end.
-
 namespace MantlePlaceWorldPartitionUnloadedTest
 {
 constexpr int32 ComponentsPerAxis = 4;
@@ -77,7 +57,7 @@ ALandscape* BuildFlatLandscape(UWorld* World, UMaterialInterface* Material)
 	HeightDataPerLayers.Add(FGuid(), MoveTemp(Heights));
 	TMap<FGuid, TArray<FLandscapeImportLayerInfo>> MaterialLayerDataPerLayers;
 	MaterialLayerDataPerLayers.Add(FGuid(), TArray<FLandscapeImportLayerInfo>());
-	Landscape->Import(FGuid::NewGuid(), 0, 0, Size - 1, Size - 1, /*NumSubsections*/ 1, QuadsPerSection,
+	Landscape->Import(FGuid::NewGuid(), 0, 0, Size - 1, Size - 1, 1, QuadsPerSection,
 		HeightDataPerLayers, TEXT(""), MaterialLayerDataPerLayers, ELandscapeImportAlphamapType::Additive,
 		TArrayView<const FLandscapeLayer>());
 	return Landscape;
@@ -104,7 +84,6 @@ int32 CountProxiesInLevel(UWorld* World)
 	return Count;
 }
 
-/** The descriptors of this order's tagged actors that read as unloaded and are not ones this session destroyed. */
 int32 CountUnloadedTaggedDescriptors(UWorld* World, const FString& Identity)
 {
 	UWorldPartition* WorldPartition = World->GetWorldPartition();
@@ -119,7 +98,6 @@ int32 CountUnloadedTaggedDescriptors(UWorld* World, const FString& Identity)
 		{
 			if (Desc != nullptr && Desc->GetTags().Contains(Tag) && !Desc->IsLoaded())
 			{
-				// A destroyed actor's package is in memory, dirty, with no live actor; an unloaded one's is not in memory.
 				const UPackage* Package = FindPackage(nullptr, *Desc->GetActorPackage().ToString());
 				Count += (Package == nullptr || !Package->IsDirty()) ? 1 : 0;
 			}
@@ -128,10 +106,6 @@ int32 CountUnloadedTaggedDescriptors(UWorld* World, const FString& Identity)
 	return Count;
 }
 
-/**
- * A saved partitioned level holding one order's prior import, partly unloaded. Build() makes it;
- * the destructor removes every trace of it: no dirty package offered for saving, no file, no mount.
- */
 struct FPartlyUnloadedLevel
 {
 	explicit FPartlyUnloadedLevel(const TCHAR* InName)
@@ -144,7 +118,7 @@ struct FPartlyUnloadedLevel
 	{
 		if (World != nullptr)
 		{
-			World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+			World->DestroyWorld(false);
 			World->RemoveFromRoot();
 		}
 		for (TObjectIterator<UPackage> It; It; ++It)
@@ -159,7 +133,6 @@ struct FPartlyUnloadedLevel
 		Mount.Unmount();
 	}
 
-	/** Save every package under the mount points that is dirty, the world's first. False on any failure. */
 	bool SaveAll()
 	{
 		TArray<UPackage*> Packages;
@@ -192,11 +165,10 @@ struct FPartlyUnloadedLevel
 			}
 		}
 		IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
-		AssetRegistry.ScanFilesSynchronous(Saved, /*bForceRescan*/ true);
+		AssetRegistry.ScanFilesSynchronous(Saved, true);
 		return bAll;
 	}
 
-	/** One World Partition tick, as the editor's: the always-loaded actors referenced, the saved ones pinned. */
 	void Tick()
 	{
 		if (UWorldPartitionSubsystem* Subsystem = World->GetSubsystem<UWorldPartitionSubsystem>())
@@ -205,10 +177,6 @@ struct FPartlyUnloadedLevel
 		}
 	}
 
-	/**
-	 * The prior import, saved, with every proxy but the first and the building unloaded. Returns
-	 * false, having said why, when the fixture could not be made.
-	 */
 	bool Build(FAutomationTestBase& Test)
 	{
 		Mount.Mount();
@@ -216,8 +184,8 @@ struct FPartlyUnloadedLevel
 		UPackage* WorldPackage = CreatePackage(*(Mount.Root + Name));
 		UWorld::InitializationValues IVS;
 		IVS.CreateWorldPartition(true).EnableWorldPartitionStreaming(true);
-		World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
-			FName(*Name), WorldPackage, /*bAddToRoot*/ true, ERHIFeatureLevel::Num, &IVS);
+		World = UWorld::CreateWorld(EWorldType::Editor, false,
+			FName(*Name), WorldPackage, true, ERHIFeatureLevel::Num, &IVS);
 		if (!Test.TestNotNull(TEXT("fixture: a partitioned world in a package of its own"), World))
 		{
 			return false;
@@ -249,7 +217,6 @@ struct FPartlyUnloadedLevel
 		Order.Family = EMantlePlaceLayerFamily::Terrain;
 		Order.Claim(Landscape, MantlePlaceImportNaming::ActorLabel(MantlePlaceImportNaming::EActorKind::Landscape, Identity));
 
-		// On the landscape, away from its origin: a building of the import, in a cell of its own.
 		const FVector BuildingAt(3.5 * QuadsPerSection * 100.0, 3.5 * QuadsPerSection * 100.0, 0.0);
 		AStaticMeshActor* Building = World->SpawnActor<AStaticMeshActor>(BuildingAt, FRotator::ZeroRotator);
 		if (Building != nullptr)
@@ -285,20 +252,18 @@ struct FPartlyUnloadedLevel
 		Landscape = nullptr;
 		Building = nullptr;
 
-		// --- Saved, as File > Save All leaves it -------------------------------------------------
 		if (!Test.TestTrue(TEXT("fixture: the level and its actors save"), SaveAll()))
 		{
 			return false;
 		}
 		Tick();
 
-		// --- A region unloaded: all but the first proxy, and the building --------------------------
 		Unloaded = ProxyGuids;
 		Unloaded.RemoveAt(0);
 		Unloaded.Add(BuildingGuid);
 		WorldPartition->UnpinActors(Unloaded);
 		Tick();
-		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS, /*bPerformFullPurge*/ true);
+		CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS, true);
 
 		Test.TestEqual(TEXT("fixture: the loaded half is the parent and one proxy"),
 			CountTaggedInLevel(World, Identity), 2);
@@ -307,18 +272,15 @@ struct FPartlyUnloadedLevel
 	}
 
 	const FString Name;
-	/** Under the plugin's root, its files in Intermediate (FMantlePlaceTestMount). */
 	FMantlePlaceTestMount Mount;
 	const FString Identity = TEXT("abababab-3390");
 	UWorld* World = nullptr;
 	UWorldPartition* WorldPartition = nullptr;
 	FGuid LandscapeGuid;
 	FGuid BuildingGuid;
-	/** What the fixture unloaded: three proxies and the building. */
 	TArray<FGuid> Unloaded;
 };
 
-/** One more import of the order into the level: a landscape split and claimed, as the importer does. */
 void ImportAgain(UWorld* World, const FString& Identity, const FString& ContentRoot)
 {
 	FMantlePlaceVaultManifest Manifest;
@@ -361,12 +323,10 @@ bool FMantlePlaceWorldPartitionUnloadedRoundTripTest::RunTest(const FString& Par
 	MantlePlaceImportTiming::FTimeline Timeline;
 	Timeline.Start();
 
-	// --- v1's read: the unloaded half counts --------------------------------------------------------
 	TestEqual(TEXT("v1's read refuses, counting the unloaded half"),
 		MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(World, Identity),
 		MantlePlaceWorldPartitionLogic::ExplainUnloadedPriorActors(Level.Unloaded.Num()));
 
-	// --- v2: loaded through the descriptor walk, then wiped with the rest ---------------------------
 	int32 Destroyed = 0;
 	const FDelegateHandle DeletedHandle = GEngine->OnLevelActorDeleted().AddLambda([&Destroyed](AActor*) { ++Destroyed; });
 	{
@@ -382,16 +342,14 @@ bool FMantlePlaceWorldPartitionUnloadedRoundTripTest::RunTest(const FString& Par
 	}
 	GEngine->OnLevelActorDeleted().Remove(DeletedHandle);
 	TestEqual(TEXT("and destroyed exactly those"), Destroyed, 2 + Level.Unloaded.Num());
-	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS, /*bPerformFullPurge*/ true);
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS, true);
 
-	// --- Zero orphans, loaded or not ----------------------------------------------------------------
 	TestEqual(TEXT("zero orphans: no tagged actor is left in the level"), CountTaggedInLevel(World, Identity), 0);
 	TestEqual(TEXT("no streaming proxy is left, tagged or not"), CountProxiesInLevel(World), 0);
 	TestEqual(TEXT("zero orphans: no tagged actor is left unloaded"), CountUnloadedTaggedDescriptors(World, Identity), 0);
 	TestTrue(TEXT("so v1's read finds nothing unloaded"),
 		MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(World, Identity).IsEmpty());
 
-	// --- A re-import, and another, with no save between them (dcc 348) ------------------------------
 	for (const TCHAR* Pass : { TEXT("re-import"), TEXT("re-import again") })
 	{
 		ImportAgain(World, Identity, Level.Mount.Root + TEXT("Content"));
@@ -432,7 +390,6 @@ bool FMantlePlaceWorldPartitionUnloadableFallbackTest::RunTest(const FString& Pa
 	MantlePlaceImportTiming::FTimeline Timeline;
 	Timeline.Start();
 
-	// The building's package is gone from disk, so its descriptor cannot be loaded.
 	const FWorldPartitionActorDescInstance* BuildingDesc = Level.WorldPartition->GetActorDescInstance(Level.BuildingGuid);
 	if (!TestNotNull(TEXT("fixture: the building is described"), BuildingDesc))
 	{
@@ -461,10 +418,10 @@ bool FMantlePlaceWorldPartitionUnloadableFallbackTest::RunTest(const FString& Pa
 	TestEqual(TEXT("nothing was destroyed"), Destroyed, 0);
 	TestEqual(TEXT("nothing it loaded is left in the level: the loaded half is as it was"),
 		CountTaggedInLevel(World, Identity), 2);
-	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS, /*bPerformFullPurge*/ true);
+	CollectGarbage(GARBAGE_COLLECTION_KEEPFLAGS, true);
 	TestEqual(TEXT("and the unloaded half is unloaded again"),
 		CountUnloadedTaggedDescriptors(World, Identity), Level.Unloaded.Num());
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

@@ -1,13 +1,3 @@
-"""Tests for the Platform API leg of the conformance gate (`platform_cases.py`).
-
-The `platform` and `client` corpus groups hold request/response exchanges with the Platform API.
-Each one must be an exchange the served spec allows, so the gate validates every case against the
-spec's own schemas. These tests prove two things: the shipped cases pass, and a case the spec does
-not allow fails, for each way a case can be wrong.
-
-Run: `python -m unittest discover -s tools/manifest-conformance`
-"""
-
 from __future__ import annotations
 
 import copy
@@ -169,7 +159,6 @@ class ACaseTheSpecDoesNotAllowFailsTest(unittest.TestCase):
         self.assertTrue(any("accept" in f for f in _check(entry, exchange)))
 
     def test_the_gate_fails_a_case_the_spec_stops_allowing(self) -> None:
-        # The same corpus, held to a spec whose 426 code is another: the gate itself goes red.
         moved = copy.deepcopy(_SPEC)
         moved["components"]["schemas"]["ClientUpdateRequired"]["properties"]["code"]["const"] = "client_too_old"
         with mock.patch.object(platform, "load_vendored_spec", return_value=moved):

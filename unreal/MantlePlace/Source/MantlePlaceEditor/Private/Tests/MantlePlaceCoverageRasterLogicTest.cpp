@@ -9,7 +9,6 @@
 
 namespace
 {
-/** `slope` as v19 ships it: a 16-bit ramp in degrees with a nodata sentinel. */
 FMantlePlaceRasterValueMapping MakeScaleMapping()
 {
 	FMantlePlaceRasterValueMapping Mapping;
@@ -22,7 +21,6 @@ FMantlePlaceRasterValueMapping MakeScaleMapping()
 	return Mapping;
 }
 
-/** `worldcover`: ESA class codes that ARE the legend. */
 FMantlePlaceRasterValueMapping MakeLegendMapping()
 {
 	FMantlePlaceRasterValueMapping Mapping;
@@ -30,7 +28,6 @@ FMantlePlaceRasterValueMapping MakeLegendMapping()
 	return Mapping;
 }
 
-/** `water_mask`. */
 FMantlePlaceRasterValueMapping MakeMaskMapping()
 {
 	FMantlePlaceRasterValueMapping Mapping;
@@ -38,7 +35,7 @@ FMantlePlaceRasterValueMapping MakeMaskMapping()
 	Mapping.FalseValue = 0.0;
 	return Mapping;
 }
-} // namespace
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(
     FMantlePlaceCoverageRasterLogicTest,
@@ -47,7 +44,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceCoverageRasterLogicTest::RunTest(const FString& Parameters)
 {
-	// --- Which layers are coverage rasters ---------------------------------------------------
 	{
 		TestFalse(TEXT("material_weights is not a coverage raster"),
 		    FMantlePlaceCoverageRasterLogic::IsCoverageRaster(TEXT("material_weights")));
@@ -57,12 +53,10 @@ bool FMantlePlaceCoverageRasterLogicTest::RunTest(const FString& Parameters)
 			TestTrue(FString::Printf(TEXT("%s is a coverage raster"), Name),
 			    FMantlePlaceCoverageRasterLogic::IsCoverageRaster(Name));
 		}
-		// A sub-block the ETL adds later defaults IN rather than being silently ignored.
 		TestTrue(TEXT("an unknown future layer defaults to coverage raster"),
 		    FMantlePlaceCoverageRasterLogic::IsCoverageRaster(TEXT("soil_moisture")));
 	}
 
-	// --- Mapping kinds -----------------------------------------------------------------------
 	{
 		EMantlePlaceCoverageMapping Kind = EMantlePlaceCoverageMapping::Identity;
 		FString Error;
@@ -90,18 +84,15 @@ bool FMantlePlaceCoverageRasterLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("hillshade is Identity"), Kind, EMantlePlaceCoverageMapping::Identity);
 	}
 
-	// --- Mapping kinds fail closed on a mapping that cannot mean anything --------------------
 	{
 		EMantlePlaceCoverageMapping Kind = EMantlePlaceCoverageMapping::Identity;
 		FString Error;
 
-		// A legend with no classes: the codes would have nothing to resolve against.
 		TestFalse(TEXT("an indexed raster with no classes is refused"),
 		    FMantlePlaceCoverageRasterLogic::ResolveMappingKind(
 		        TEXT("png-8bit-indexed"), FMantlePlaceRasterValueMapping(), Kind, Error));
 		TestTrue(TEXT("and says why"), Error.Contains(TEXT("classes")));
 
-		// A 16-bit ramp with min == max: every sample decodes to one value.
 		Error.Reset();
 		FMantlePlaceRasterValueMapping Flat = MakeScaleMapping();
 		Flat.MaxValue = Flat.MinValue;
@@ -109,7 +100,6 @@ bool FMantlePlaceCoverageRasterLogicTest::RunTest(const FString& Parameters)
 		    FMantlePlaceCoverageRasterLogic::ResolveMappingKind(
 		        TEXT("png-16bit-grayscale"), Flat, Kind, Error));
 
-		// A mask whose two values are the same masks nothing.
 		Error.Reset();
 		FMantlePlaceRasterValueMapping DegenerateMask = MakeMaskMapping();
 		DegenerateMask.FalseValue = DegenerateMask.TrueValue;
@@ -124,7 +114,6 @@ bool FMantlePlaceCoverageRasterLogicTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("and names the encoding"), Error.Contains(TEXT("png-32bit-float")));
 	}
 
-	// --- Texture settings: the 16-bit channels stay 16-bit ------------------------------------
 	{
 		FMantlePlaceCoverageTextureSettings Settings;
 		FString Error;
@@ -132,22 +121,16 @@ bool FMantlePlaceCoverageRasterLogicTest::RunTest(const FString& Parameters)
 		    FMantlePlaceCoverageRasterLogic::ResolveTextureSettings(
 		        TEXT("png-16bit-grayscale"), TSF_G16, Settings, Error));
 
-		// TC_Grayscale on a TSF_G16 source is the one combination that reaches PF_G16. This is the
-		// assertion that would fail if someone "simplified" it to TC_HalfFloat, whose 10-bit
-		// mantissa cannot represent uint16 above 2048.
 		TestEqual(TEXT("G16 uses TC_Grayscale"), Settings.Compression, TC_Grayscale);
 		TestFalse(TEXT("never sRGB"), Settings.bSRGB);
 		TestEqual(TEXT("never mipped"), Settings.MipGen, TMGS_NoMipmaps);
 		TestFalse(TEXT("never virtual"), Settings.bVirtualTextureStreaming);
 	}
 
-	// --- Texture settings: the 8-bit landings, both of which are legitimate -------------------
 	{
 		FMantlePlaceCoverageTextureSettings Settings;
 		FString Error;
 
-		// Interchange leaves an all-gray RGBA image as BGRA8; the legacy factory collapses it to
-		// G8. Same bytes, both valid, different correct compression setting.
 		TestTrue(TEXT("an indexed raster landing BGRA8 resolves"),
 		    FMantlePlaceCoverageRasterLogic::ResolveTextureSettings(
 		        TEXT("png-8bit-indexed"), TSF_BGRA8, Settings, Error));
@@ -171,10 +154,6 @@ bool FMantlePlaceCoverageRasterLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("continuous shading keeps the default filter"), Settings.Filter, TF_Default);
 	}
 
-	// --- Texture settings: a landing that contradicts the encoding is REFUSED -----------------
-	//
-	// The one failure mode that would otherwise produce a plausible-looking wrong answer instead
-	// of a missing asset: a 16-bit channel silently read at 8 bits.
 	{
 		FMantlePlaceCoverageTextureSettings Settings;
 		FString Error;
@@ -204,4 +183,4 @@ bool FMantlePlaceCoverageRasterLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

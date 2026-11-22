@@ -6,8 +6,6 @@
 
 namespace
 {
-	// The one encoding that carries four weight bands in one file. Anything else under
-	// material_weights.ue_ready[] is a companion for some other purpose and is not a weight source.
 	const TCHAR* const RgbaEncoding = TEXT("png-8bit-rgba");
 	constexpr int32 RgbaChannels = 4;
 }
@@ -20,9 +18,6 @@ int32 FMantlePlaceLandscapeWeightsLogic::SampleIndex(int32 Post, int32 PostCount
 	{
 		return 0;
 	}
-	// Posts are samples of a span; pixels are cells covering that same span. u in [0,1] is the
-	// position along the span, floor(u*PixelCount) the cell it falls in, and the clamp catches
-	// u == 1 landing one past the last cell.
 	const double U = static_cast<double>(Post) / static_cast<double>(PostCount - 1);
 	return FMath::Clamp(FMath::FloorToInt32(U * PixelCount), 0, PixelCount - 1);
 }
@@ -46,8 +41,6 @@ bool FMantlePlaceLandscapeWeightsLogic::ResolveBands(
 		bool bFound = false;
 		for (const FMantlePlaceUeReadyRaster& Raster : Layer.UeReady)
 		{
-			// An MPB 3.x weight map is one 8-bit grayscale PNG per material (format.md section 6): its one
-			// band is the material it names, and the RGBA decode carries that band in every colour channel.
 			if (Raster.Encoding == GrayscaleEncoding)
 			{
 				if (Raster.ValueMapping.Bands.Num() == 1 && Raster.ValueMapping.Bands[0] == Material)
@@ -123,8 +116,6 @@ bool FMantlePlaceLandscapeWeightsLogic::BuildWeightPlanes(
 			return false;
 		}
 
-		// The manifest states each companion's dimensions; bytes that disagree are not the raster it
-		// advertised, so this fails closed rather than sampling whatever did arrive.
 		const FMantlePlaceUeReadyRaster* Declared = Layer.UeReady.FindByPredicate(
 			[&Band](const FMantlePlaceUeReadyRaster& Candidate) { return Candidate.Path == Band.ImagePath; });
 		if (Declared != nullptr && (Declared->Width != Image->Width || Declared->Height != Image->Height))
@@ -149,13 +140,9 @@ bool FMantlePlaceLandscapeWeightsLogic::BuildWeightPlanes(
 		Plane.Data.SetNumUninitialized(Size * Size);
 		for (int32 Y = 0; Y < Size; ++Y)
 		{
-			// Transposed, exactly as the heightmap is in MantlePlaceLandscapeImporter: landscape X is
-			// North so it indexes the PNG's ROWS, landscape Y is East so it indexes the COLUMNS. The
-			// resample axes swap with it — Y (east) resamples against Image->Width, X against Height.
 			const int32 SrcCol = SampleIndex(Y, Size, Image->Width);
 			for (int32 X = 0; X < Size; ++X)
 			{
-				// Landscape X=0 is the south edge; the PNG's row 0 is the north edge when the bundle says so.
 				const int32 SampledRow = SampleIndex(X, Size, Image->Height);
 				const int32 SrcRow = bRow0IsNorth ? (Image->Height - 1 - SampledRow) : SampledRow;
 				const int64 SrcIndex =

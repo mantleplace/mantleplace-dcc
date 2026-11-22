@@ -3,15 +3,8 @@ using System.Text;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Builds the bytes of a synthetic vector carrier: GeoPackage geometry blobs (the <c>GP</c> header and
-/// WKB) and, for the Windows suite, the SQL that makes them a table. No binary file is checked in; the
-/// carrier a case reads is written here, in the test, and thrown away.
-/// </summary>
 internal static class GeoPackageFixture
 {
-    /// <summary>A GeoPackage geometry blob: the <c>GP</c> header, an envelope of the given kind, then the WKB.</summary>
-    /// <param name="envelope">0 none, 1 XY, 2 XYZ, 3 XYM, 4 XYZM — the header's envelope code.</param>
     internal static byte[] Blob(int srsId, byte[] wkb, int envelope = 1, bool empty = false)
     {
         using MemoryStream stream = new();
@@ -32,7 +25,6 @@ internal static class GeoPackageFixture
         return stream.ToArray();
     }
 
-    /// <summary>A 3-D line, ISO WKB (type 1002), from x, y, z triples.</summary>
     internal static byte[] LineStringZ(params double[] xyz)
         => Wkb(writer =>
         {
@@ -45,7 +37,6 @@ internal static class GeoPackageFixture
             }
         });
 
-    /// <summary>A 4-D line (X, Y, Z, M), ISO WKB (type 3002), from x, y, z, m quadruples.</summary>
     internal static byte[] LineStringZm(params double[] xyzm)
         => Wkb(writer =>
         {
@@ -58,7 +49,6 @@ internal static class GeoPackageFixture
             }
         });
 
-    /// <summary>A multi-line, planar, each part from x, y pairs.</summary>
     internal static byte[] MultiLineString(params double[][] parts)
         => Wkb(writer =>
         {
@@ -77,11 +67,9 @@ internal static class GeoPackageFixture
             }
         });
 
-    /// <summary>A polygon, each ring from x, y pairs and exterior first; the caller closes its rings.</summary>
     internal static byte[] Polygon(params double[][] ringsXy)
         => Wkb(writer => WritePolygon(writer, ringsXy));
 
-    /// <summary>A multi-polygon: each polygon its rings, each ring x, y pairs.</summary>
     internal static byte[] MultiPolygon(params double[][][] polygons)
         => Wkb(writer =>
         {
@@ -94,7 +82,6 @@ internal static class GeoPackageFixture
             }
         });
 
-    /// <summary>A point, which is not linework and must be passed over.</summary>
     internal static byte[] Point(double x, double y)
         => Wkb(writer =>
         {
@@ -104,7 +91,6 @@ internal static class GeoPackageFixture
             writer.Write(y);
         });
 
-    /// <summary>A closed axis-aligned square ring, counter-clockwise, as x, y pairs.</summary>
     internal static double[] Square(double west, double south, double side)
         =>
         [
@@ -115,7 +101,6 @@ internal static class GeoPackageFixture
             west, south,
         ];
 
-    /// <summary>SQLite's blob literal for <paramref name="bytes"/>: <c>X'4750…'</c>.</summary>
     internal static string Hex(byte[] bytes)
     {
         StringBuilder text = new("X'");

@@ -1,4 +1,3 @@
-// UseWPF switches the SDK to the WindowsDesktop implicit-usings set, which drops System.IO.
 using System.IO;
 using Autodesk.Revit.DB;
 using MantlePlace.Client;
@@ -6,22 +5,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-// What more than one vector step shares — roads, polygon layers, vegetation: reading a layer,
-// naming a feature, and turning geometry into a DirectShape.
 internal sealed partial class RevitBundleImporter
 {
-    /// <summary>
-    /// Extracts and parses one vector layer, from its table of the shared carrier or from its GeoJSON
-    /// file, or logs why it could not be read.
-    /// </summary>
-    /// <remarks>
-    /// A layer the planner sent to the carrier that the carrier cannot give — the file will not open,
-    /// has no table for it, or is stored in a CRS other than this project's — is read from the same
-    /// layer's GeoJSON file where the plan holds one, and says so. A carrier is never placed in a frame
-    /// it cannot be shown to be in (<c>HPS-53</c>); a layer the same bundle can place by its other file
-    /// is not lost to it.
-    /// </remarks>
-    /// <returns><c>null</c> when there is nothing to build.</returns>
     private IReadOnlyList<SiteFeature>? ReadVectorLayer(ImportStep step, SiteGeometryKinds accept, string label)
     {
         ImportStep source = step;
@@ -58,8 +43,6 @@ internal sealed partial class RevitBundleImporter
         return features;
     }
 
-    // The planner states the route for every vector step it plans: lon/lat for the shared set,
-    // subtraction or offsets for this host's own copy.
     private string? TryReadGeoJson(ImportStep step, SiteGeometryKinds accept, string label, out IReadOnlyList<SiteFeature> features)
     {
         features = [];
@@ -102,14 +85,6 @@ internal sealed partial class RevitBundleImporter
     private static string? LevelField(ImportStep step)
         => step.Level is { Kind: FidelityLevelKind.FieldCut } level ? level.LowestLevelField : null;
 
-    /// <summary>
-    /// Creates one DirectShape, or reports nothing and returns <c>null</c>.
-    /// </summary>
-    /// <remarks>
-    /// Per-element rather than per-layer, because Revit rejects individual shapes — a self-touching
-    /// polyline, a crown whose radius rounds to nothing — and losing one road must not abort the
-    /// transaction that holds the other forty-four.
-    /// </remarks>
     private DirectShape? TryCreateDirectShape(ElementId category, IList<GeometryObject> geometry, string name)
     {
         try
@@ -125,14 +100,6 @@ internal sealed partial class RevitBundleImporter
         }
     }
 
-    /// <summary>
-    /// The preferred category, or Generic Model where this Revit does not allow a DirectShape in it.
-    /// </summary>
-    /// <remarks>
-    /// Generic Model is the fallback because it is the category Forma itself uses for context
-    /// geometry, and because a DirectShape that cannot be created at all is worse than one filed a
-    /// category away from where a curator would look for it.
-    /// </remarks>
     private ElementId DirectShapeCategory(BuiltInCategory preferred)
     {
         ElementId category = new(preferred);

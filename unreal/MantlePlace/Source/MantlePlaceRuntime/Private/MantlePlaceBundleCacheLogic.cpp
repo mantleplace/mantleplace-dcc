@@ -2,11 +2,11 @@
 
 #include "MantlePlaceBundleCacheLogic.h"
 
-#include "Containers/StringConv.h" // StringConv::Is{High,Low}Surrogate / EncodeSurrogate
+#include "Containers/StringConv.h"
 #include "Dom/JsonObject.h"
 #include "Misc/DateTime.h"
 #include "Misc/Paths.h"
-#include "Policies/CondensedJsonPrintPolicy.h" // TCondensedJsonPrintPolicy: not transitively available in a game target
+#include "Policies/CondensedJsonPrintPolicy.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonWriter.h"
 #include "Serialization/JsonSerializer.h"
@@ -41,15 +41,10 @@ namespace
 FString FMantlePlaceBundleCacheLogic::SanitizeKeySegment(const FString& OrderId)
 {
 	FString Out;
-	Out.Reserve(OrderId.Len()); // one code point in, at most one character out - never grows
+	Out.Reserve(OrderId.Len());
 	const int32 Length = OrderId.Len();
 	for (int32 Index = 0; Index < Length; ++Index)
 	{
-		// Walk code POINTS. A surrogate pair is one character spread over two UTF-16 code units,
-		// and consuming it as two emitted two underscores where Revit emits one - same order id,
-		// two cache directories, re-downloaded on whichever host did not create it.
-		// Where TCHAR is already wide enough to hold a whole code point this branch never fires
-		// and the classification below still lands in the right place.
 		uint32 CodePoint = static_cast<uint32>(OrderId[Index]);
 		if (StringConv::IsHighSurrogate(CodePoint) && Index + 1 < Length
 			&& StringConv::IsLowSurrogate(static_cast<uint32>(OrderId[Index + 1])))
@@ -59,10 +54,6 @@ FString FMantlePlaceBundleCacheLogic::SanitizeKeySegment(const FString& OrderId)
 			++Index;
 		}
 
-		// HPS-30 bounds "alphanumeric" to the BMP. Above U+FFFF the answer is "not alphanumeric"
-		// on every host - which needs no Unicode table anywhere, where "keep U+1D7CE because it
-		// is category Nd" would need one here and one in every host after this. An UNPAIRED
-		// surrogate is not a code point at all and takes the same path.
 		const bool bIsBmpCodePoint = CodePoint <= 0xFFFF
 			&& !StringConv::IsHighSurrogate(CodePoint) && !StringConv::IsLowSurrogate(CodePoint);
 		const TCHAR C = static_cast<TCHAR>(CodePoint);
@@ -70,7 +61,6 @@ FString FMantlePlaceBundleCacheLogic::SanitizeKeySegment(const FString& OrderId)
 			&& (FChar::IsAlnum(C) || C == TEXT('.') || C == TEXT('_') || C == TEXT('-'));
 		Out.AppendChar(bKeep ? C : TEXT('_'));
 	}
-	// A bare "." / ".." would be a directory-traversal segment; neutralize it.
 	if (Out.IsEmpty() || Out == TEXT(".") || Out == TEXT(".."))
 	{
 		Out = TEXT("_");
@@ -81,9 +71,6 @@ FString FMantlePlaceBundleCacheLogic::SanitizeKeySegment(const FString& OrderId)
 FString FMantlePlaceBundleCacheLogic::DeriveBundleDir(const FString& CacheRoot, const FString& OrderId)
 {
 	const FString Sanitized = SanitizeKeySegment(OrderId);
-	// When sanitization was lossy, two distinct order ids could collapse to the same segment
-	// (e.g. "a/b" and "a:b" both -> "a_b"). Suffix a short hash of the RAW id to keep their caches
-	// distinct. Lossless ids (UUIDs) are left untouched so existing caches keep their clean paths.
 	if (Sanitized != OrderId)
 	{
 		const FTCHARToUTF8 Utf8(*OrderId);
@@ -130,7 +117,6 @@ FMantlePlaceCacheValidity FMantlePlaceBundleCacheLogic::DecideValidity(
 		return Validity;
 	}
 
-	// Size is the cheapest discriminator - check it first when the vault advertised one.
 	if (bHasExpectedSize && OnDiskSizeBytes != ExpectedSizeBytes)
 	{
 		Validity.bValid = false;
@@ -139,8 +125,6 @@ FMantlePlaceCacheValidity FMantlePlaceBundleCacheLogic::DecideValidity(
 		return Validity;
 	}
 
-	// Integrity: only when BOTH a hash was advertised AND we actually computed one (a legacy
-	// bundle or an over-cap file leaves ComputedSha256 empty -> integrity simply not checked).
 	const bool bDidHash = bHasExpectedSha && !ComputedSha256.IsEmpty();
 	if (bDidHash && !Sha256Equal(ComputedSha256, ExpectedSha256))
 	{
@@ -150,10 +134,6 @@ FMantlePlaceCacheValidity FMantlePlaceBundleCacheLogic::DecideValidity(
 		return Validity;
 	}
 
-	// Across the era break this is not a numeric comparison any more: a sidecar written before the
-	// MPB re-baseline carries an integer-era version, and the whole integer era sorts below the
-	// semver floor. `bHasManifestVersion` still carries the unknown-is-not-zero rule (HPS-20) — a
-	// legacy sidecar that reported nothing is not treated as reporting something old.
 	if (bHasManifestVersion && MantlePlaceIsManifestVersionBelowFloor(ManifestVersion, MinVersion))
 	{
 		Validity.bValid = false;
@@ -162,7 +142,6 @@ FMantlePlaceCacheValidity FMantlePlaceBundleCacheLogic::DecideValidity(
 		return Validity;
 	}
 
-	// Valid. "Verified" only if we actually compared a hash; otherwise valid-but-unverified.
 	Validity.bValid = true;
 	Validity.Reason = EMantlePlaceCacheInvalidReason::None;
 	Validity.bIntegrityChecked = bDidHash;
@@ -200,7 +179,6 @@ bool FMantlePlaceBundleCacheLogic::ParseExpiry(const FString& Iso8601, FDateTime
 
 bool FMantlePlaceBundleCacheLogic::IsExpired(const FDateTime& NowUtc, const FDateTime& ExpiresAtUtc, int32 SkewSeconds)
 {
-	// Treat as expired once we are within SkewSeconds of (or past) the expiry.
 	return (NowUtc + FTimespan::FromSeconds(SkewSeconds)) >= ExpiresAtUtc;
 }
 
@@ -211,9 +189,6 @@ bool FMantlePlaceBundleCacheLogic::Sha256Equal(const FString& A, const FString& 
 
 namespace
 {
-	// Standard FIPS 180-4 SHA-256 single-block compression. Self-contained because the engine's
-	// GetSHA256Signature is an unimplemented stub here; correctness is pinned by the known-answer
-	// tests (sha256("") / "abc" / the 56-byte NIST vector) plus the streaming-equivalence test.
 	const uint32 Sha256K[64] = {
 		0x428a2f98u, 0x71374491u, 0xb5c0fbcfu, 0xe9b5dba5u, 0x3956c25bu, 0x59f111f1u, 0x923f82a4u, 0xab1c5ed5u,
 		0xd807aa98u, 0x12835b01u, 0x243185beu, 0x550c7dc3u, 0x72be5d74u, 0x80deb1feu, 0x9bdc06a7u, 0xc19bf174u,
@@ -268,7 +243,6 @@ void FMantlePlaceSha256::Update(const uint8* Data, int64 NumBytes)
 	TotalBytes += static_cast<uint64>(NumBytes);
 
 	int64 Offset = 0;
-	// Top up a partial block carried over from a previous Update.
 	if (PendingLen > 0)
 	{
 		const int32 Take = static_cast<int32>(FMath::Min<int64>(64 - PendingLen, NumBytes));
@@ -281,13 +255,11 @@ void FMantlePlaceSha256::Update(const uint8* Data, int64 NumBytes)
 			PendingLen = 0;
 		}
 	}
-	// Process whole blocks straight from the caller's buffer (no copy).
 	while (NumBytes - Offset >= 64)
 	{
 		Sha256ProcessBlock(H, Data + Offset);
 		Offset += 64;
 	}
-	// Buffer the trailing partial block for next time / Final.
 	const int32 Rem = static_cast<int32>(NumBytes - Offset);
 	if (Rem > 0)
 	{
@@ -298,7 +270,6 @@ void FMantlePlaceSha256::Update(const uint8* Data, int64 NumBytes)
 
 FString FMantlePlaceSha256::Final()
 {
-	// Buffered remainder + 0x80 + zero pad + 64-bit big-endian bit length.
 	const uint64 BitLen = TotalBytes * 8;
 	uint8 Tail[128] = { 0 };
 	const int32 Rem = PendingLen;
@@ -329,7 +300,6 @@ FString FMantlePlaceSha256::Final()
 
 FString FMantlePlaceBundleCacheLogic::Sha256Hex(const uint8* Data, int64 NumBytes)
 {
-	// One-shot convenience over the incremental hasher (single source of truth for the algorithm).
 	FMantlePlaceSha256 Hasher;
 	Hasher.Update(Data, NumBytes);
 	return Hasher.Final();
@@ -392,8 +362,6 @@ bool FMantlePlaceBundleCacheLogic::IsViewRecut(
 
 FString FMantlePlaceBundleCacheLogic::SerializeMeta(const FMantlePlaceCachedBundle& Meta)
 {
-	// State is recomputed at inspect time (it depends on the live vault item), so it is NOT
-	// persisted - the sidecar records only the integrity facts about the cached bytes.
 	const TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
 	Root->SetStringField(TEXT("orderId"), Meta.OrderId);
 	Root->SetStringField(TEXT("localPath"), Meta.LocalPath);
@@ -406,7 +374,6 @@ FString FMantlePlaceBundleCacheLogic::SerializeMeta(const FMantlePlaceCachedBund
 	Root->SetStringField(TEXT("listingSha256"), Meta.ListingSha256);
 	if (!Meta.Level.IsEmpty())
 	{
-		// Written only for a 3.0 download, so a 2.x sidecar is byte for byte what it was.
 		Root->SetStringField(TEXT("level"), Meta.Level);
 	}
 	return BundleCacheSerializeCondensed(Root);
@@ -437,13 +404,6 @@ bool FMantlePlaceBundleCacheLogic::ParseMeta(const FString& Json, FMantlePlaceCa
 		Parsed.SizeBytes = static_cast<int64>(SizeBytes);
 	}
 
-	// The sidecar is OUR cache format, not the manifest contract, and sidecars written by the
-	// shipped plugin are on users' disks right now with this field as a JSON NUMBER. Reading both
-	// shapes here is not the dual-parsing HPS-31 forbids — that rule governs the manifest — and the
-	// alternative is worse than it sounds: a cache entry whose version reads as "unknown" stays
-	// VALID, so a pre-MPB bundle would sit in the cache looking importable and be refused by the
-	// importer instead. Stringifying the old number lets it sort below the semver floor and
-	// invalidate honestly, which re-downloads it once.
 	if (!Root->TryGetStringField(TEXT("manifestVersion"), Parsed.ManifestVersion))
 	{
 		double LegacyManifestVersion = 0.0;
@@ -455,9 +415,9 @@ bool FMantlePlaceBundleCacheLogic::ParseMeta(const FString& Json, FMantlePlaceCa
 
 	Root->TryGetStringField(TEXT("downloadedAtUtc"), Parsed.DownloadedAtUtc);
 	Root->TryGetStringField(TEXT("format"), Parsed.Format);
-	Root->TryGetBoolField(TEXT("holdsView"), Parsed.bHoldsView); // absent in a sidecar older than views: false
+	Root->TryGetBoolField(TEXT("holdsView"), Parsed.bHoldsView);
 	Root->TryGetStringField(TEXT("listingSha256"), Parsed.ListingSha256);
-	Root->TryGetStringField(TEXT("level"), Parsed.Level); // absent for a 2.x download and before 3.0: none
+	Root->TryGetStringField(TEXT("level"), Parsed.Level);
 
 	Out = MoveTemp(Parsed);
 	return true;

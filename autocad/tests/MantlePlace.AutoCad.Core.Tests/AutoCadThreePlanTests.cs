@@ -10,37 +10,16 @@ namespace MantlePlace.AutoCad.Tests;
 
 using CorpusCase = ConformanceCorpus.CorpusCase;
 
-/// <summary>
-/// The AutoCAD import plan for an MPB 3.0 bundle: every part a 2.x bundle's <c>hosts.autocad</c> block
-/// places is planned from the file 3.0 promises for it, found by name in the catalog and in the frame and
-/// unit the manifest states for that file's family, or skipped with a stated reason.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The bundles are the shared corpus's own (<c>corpus/bundle/v3-*.json</c>), read by
-/// <see cref="BundleReader"/> exactly as the plugin reads them. A case that needs a value the corpus
-/// bundle does not state edits a copy of its manifest and says which value, as the Revit 3.0 cases do.
-/// </para>
-/// <para>
-/// Each file kind has a case that fails on a frame mix-up: a 3.0 bundle states two frames, the order's
-/// (georeferenced) and the local site frame, and an AutoCAD drawing takes only the order's. The feet
-/// cases graft the corpus's feet frames, whose local frame is in metres, onto the full bundle, so a part
-/// that read the local frame's unit would say metres where the order is in US survey feet.
-/// </para>
-/// </remarks>
 internal static class AutoCadThreePlanTests
 {
     private const string FullBundle = "bundle/v3-full.json";
     private const string FeetBundle = "bundle/v3-frames-feet.json";
     private const string ReleaseNotes = "autocad/docs/release-notes-1.2.0.md";
 
-    /// <summary>A 2.x fixture with the contours, the surface and the aerial.</summary>
     private const string CompleteBlock = "autocad-complete-block.json";
 
-    /// <summary>A 2.x fixture with the public-record layers and the site linework.</summary>
     private const string RecordsBlock = "autocad-records-linework-present.json";
 
-    /// <summary>The ten public-record layers the full bundle holds, by the name each file gives it (A06).</summary>
     private static readonly string[] RecordNames =
     [
         "Conservation", "Contamination", "Floodplain", "Habitat", "Heritage",
@@ -324,8 +303,6 @@ internal static class AutoCadThreePlanTests
 
         run.Case("GeoTIFF aerial: the PNG's local rectangle is never the insertion", () =>
         {
-            // The PNG states [-512, -512, 512, 512] in the local frame; a plan that read it would place
-            // the image a few hundred metres from the drawing's origin, thousands of kilometres off site.
             PlannedPart aerial = Plan(Full(WithTifRectangle)).Part(AutoCadPart.Aerial);
 
             run.True(aerial.Insertion is { X: > 0, Y: > 0 }, "the insertion is in the order's CRS");
@@ -347,7 +324,6 @@ internal static class AutoCadThreePlanTests
 
         run.Case("GeoTIFF aerial: a raster entry with no rectangle is skipped, the insertion never worked out", () =>
         {
-            // The corpus's full bundle states no rectangle for Imagery.tif.
             PlannedPart aerial = Plan(Full()).Part(AutoCadPart.Aerial);
 
             run.False(aerial.Place, "skipped");
@@ -428,12 +404,6 @@ internal static class AutoCadThreePlanTests
         });
     }
 
-    /// <summary>
-    /// The surface's own file checked against the frame the manifest states for it, as the Civil 3D step
-    /// reads it before Civil 3D is asked to build anything: a LandXML that states another unit or another
-    /// coordinate system than the order's, or states none, builds no surface, and says which (HPS-53). Its
-    /// one linear unit must be both the order's horizontal and its vertical unit.
-    /// </summary>
     private static void RunSurfaceFileCases(TestRun run)
     {
         const string Metres = "<Units><Metric linearUnit=\"meter\" areaUnit=\"squareMeter\" volumeUnit=\"cubicMeter\"/></Units>";
@@ -565,14 +535,6 @@ internal static class AutoCadThreePlanTests
         });
     }
 
-    /// <summary>
-    /// The drawing's Civil 3D drawing units held to the order's, as the Civil 3D step reads them before
-    /// Civil 3D is asked to build anything. Civil 3D converts a LandXML file's linear unit to the drawing's
-    /// units as it reads the file (feet or metres, a drawing setting), so in a drawing of the other units the
-    /// surface would be built away from every other part, which is placed as written. The plugin never sets
-    /// a drawing's units: there the surface is skipped, saying which units the drawing is in, which the
-    /// order is in, and what to set. A drawing in feet reads a file in either foot as written.
-    /// </summary>
     private static void RunDrawingUnitsCases(TestRun run)
     {
         AutoCadImportPlan metric = Civil(Full(), DrawingZone.None);
@@ -726,8 +688,6 @@ internal static class AutoCadThreePlanTests
 
         run.Case("a record layer the catalog names is placed though a 3.0 download does not ask for it by name", () =>
         {
-            // Habitat is not among the files the vault's description promises, so the download does not
-            // name it; a bundle that holds it anyway is placed whole.
             run.False(AutoCadImportPlan.ThreeFiles.Contains("Records/Habitat.dxf"), "not asked for");
             run.True(Plan(Full()).Part(AutoCadPart.Records).Files.Any(f => f.Name == "Habitat"), "and placed when held");
         });
@@ -833,7 +793,6 @@ internal static class AutoCadThreePlanTests
 
     private static void RunReleaseNotesCases(TestRun run)
     {
-        // RepoTree finds folders: the notes' folder, holding them.
         string? notes = RepoTree.Find(Path.GetDirectoryName(ReleaseNotes)!.Replace('\\', '/'), dir => File.Exists(Path.Combine(dir, Path.GetFileName(ReleaseNotes)))) is { } folder
             ? File.ReadAllText(Path.Combine(folder, Path.GetFileName(ReleaseNotes)))
             : null;
@@ -859,12 +818,9 @@ internal static class AutoCadThreePlanTests
         });
     }
 
-    // --- helpers ---
-
     private static AutoCadImportPlan Plan(Dictionary<string, string> files) =>
         AutoCadImportPlanner.Plan(Read(files), DrawingGeolocation.None, null);
 
-    /// <summary>The plan in Civil 3D, the part on, under the drawing's <paramref name="zone"/>.</summary>
     private static AutoCadImportPlan Civil(Dictionary<string, string> files, DrawingZone zone) =>
         AutoCadImportPlanner.Plan(Read(files), DrawingGeolocation.None, zone);
 
@@ -873,35 +829,24 @@ internal static class AutoCadThreePlanTests
 
     private static Dictionary<string, string> Full(Action<JsonObject>? edit = null) => ThreePlanTests.Load(FullBundle, edit);
 
-    /// <summary>The surface step's check of its file against <paramref name="plan"/>: the problem, or <c>null</c> and the surface's name.</summary>
     private static string? Check(AutoCadImportPlan plan, string landXml, out string? name)
     {
         using StringReader reader = new(landXml);
         return LandXmlSurface.TryReadName(reader, plan, out name);
     }
 
-    /// <summary>A LandXML file of one surface named <c>Terrain</c>, with the <c>Units</c> element and the EPSG code given, or neither.</summary>
     private static string LandXml(string? units, string? epsg) =>
         LandXmlWith(units, epsg is null ? null : $"<CoordinateSystem epsgCode=\"{epsg}\" horizontalCoordinateSystemName=\"Synthetic\"/>");
 
-    /// <summary>A LandXML file of one surface named <c>Terrain</c>, with the <c>Units</c> and <c>CoordinateSystem</c> elements given as written, or neither.</summary>
     private static string LandXmlWith(string? units, string? coordinateSystem) =>
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?><LandXML xmlns=\"http://www.landxml.org/schema/LandXML-1.2\" version=\"1.2\">"
         + (units ?? string.Empty)
         + (coordinateSystem ?? string.Empty)
         + "<Surfaces><Surface name=\"Terrain\"><Definition surfType=\"TIN\"><Pnts><P id=\"1\">4512000 586500 20</P></Pnts></Definition></Surface></Surfaces></LandXML>";
 
-    /// <summary>
-    /// The same reading with its surface pointer edited: a frame or unit a 3.0 catalog cannot state for
-    /// <c>Elevation/Terrain.landxml</c>, whose extension fixes its family, so only the plan's own check stands.
-    /// </summary>
     private static AutoCadBlockRead WithSurface(AutoCadBlockRead read, Func<AutoCadPointer, AutoCadPointer> edit) =>
         WithPointers(read, aerial: p => p, surface: edit);
 
-    /// <summary>
-    /// The same reading with its aerial pointer edited: a frame a 3.0 catalog cannot state for
-    /// <c>Imagery/Imagery.tif</c>, whose extension fixes its family, so only the plan's own check stands.
-    /// </summary>
     private static AutoCadBlockRead WithAerial(AutoCadBlockRead read, Func<AutoCadPointer, AutoCadPointer> edit) =>
         WithPointers(read, aerial: edit, surface: p => p);
 
@@ -935,32 +880,27 @@ internal static class AutoCadThreePlanTests
     private static string Sha(Dictionary<string, string> files, string path) =>
         ThreePlanTests.Manifest(files)["catalog"]![path]!["sha256"]!.GetValue<string>();
 
-    /// <summary>The rectangle Imagery.tif covers in the order's CRS, which the corpus bundle does not state.</summary>
     private static void WithTifRectangle(JsonObject manifest) =>
         manifest["catalog"]!["Imagery/Imagery.tif"]!["raster"]!["rectangle"] = new JsonArray(586000.0, 4511000.0, 587024.0, 4513048.0);
 
-    /// <summary>The feet bundle's two frames in place of the full bundle's: the order in US survey feet, the local frame in metres.</summary>
     private static void WithFeetFrames(JsonObject manifest)
     {
         JsonObject feet = ThreePlanTests.Manifest(ThreePlanTests.Load(FeetBundle));
         manifest["frames"] = feet["frames"]!.DeepClone();
     }
 
-    /// <summary>The feet frames with the order's heights in US survey feet too, so its two units agree.</summary>
     private static void WithUsFeetHeights(JsonObject manifest)
     {
         WithFeetFrames(manifest);
         manifest["frames"]!["georeferenced"]!["vertical_unit"] = new JsonObject { ["name"] = "US survey foot", ["to_metres"] = 0.3048006096012192 };
     }
 
-    /// <summary>Takes <paramref name="path"/> out of the catalog and lists it as not held, for <paramref name="reason"/>.</summary>
     private static void NotHeld(JsonObject manifest, string path, string reason)
     {
         manifest["catalog"]!.AsObject().Remove(path);
         manifest["not_held"]!.AsArray().Add(new JsonObject { ["path"] = path, ["reason"] = reason });
     }
 
-    /// <summary>A 2.x corpus fixture's manifest, as text.</summary>
     private static string TwoManifest(string fixture)
     {
         string root = ConformanceCorpus.FindCorpusDirectory() ?? throw new InvalidOperationException("the corpus is not found");

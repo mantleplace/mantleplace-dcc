@@ -1,6 +1,3 @@
-// The spike's AutoCAD-only half: the MANTLEPLACEC3DPROBE command. It writes result.md into the run
-// folder Invoke-Civil3dProbe.ps1 made, one flushed line at a time so a host that dies mid-run still
-// leaves what it reached, and done.txt when it ends. It is inert unless that driver set the variables.
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;

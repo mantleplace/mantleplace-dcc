@@ -2,25 +2,8 @@ using System.Text.Json;
 
 namespace MantlePlace.Core;
 
-/// <summary>
-/// What the curator ticked the last time they pressed Import on this machine: the next import window
-/// opens on it.
-/// </summary>
-/// <remarks>
-/// <para>
-/// One entry per layer the last bundle carried, ticked or not, and a level for each row that offered
-/// levels. A layer the last bundle did not carry has no entry, and the checklist falls back to that
-/// layer's default for it (<see cref="ImportChecklist.Restore"/>).
-/// </para>
-/// <para>
-/// Pure: the bytes in and out are <see cref="Parse"/> and <see cref="ToBytes"/>, and the file they
-/// live in is the client's (<c>ImportChoiceStore</c>). A file that is empty, not JSON, not an object,
-/// or of another <see cref="Shape"/> is no remembered choice, never an error.
-/// </para>
-/// </remarks>
 public sealed class RememberedChoice
 {
-    /// <summary>The file's shape. A file with another number, or none, is an older or newer shape and is ignored.</summary>
     public const int Shape = 1;
 
     private readonly Dictionary<ImportLayer, bool> _ticked;
@@ -32,15 +15,6 @@ public sealed class RememberedChoice
         _levels = levels;
     }
 
-    /// <summary>
-    /// What was pressed: for every layer the checklist offered, whether it was imported, and the level
-    /// of each row that lists levels.
-    /// </summary>
-    /// <remarks>
-    /// Reads only what a checklist never changes after it is made (<see cref="ImportChecklist.Layers"/>,
-    /// <see cref="ImportChecklist.HasLevels"/>) and the choice itself, so it is safe to call from a
-    /// thread that is not the window's.
-    /// </remarks>
     public static RememberedChoice Of(ImportChecklist offered, ImportLayerChoice pressed)
     {
         ArgumentNullException.ThrowIfNull(offered);
@@ -51,13 +25,10 @@ public sealed class RememberedChoice
             offered.Layers.Where(offered.HasLevels).ToDictionary(layer => layer, pressed.LevelOf));
     }
 
-    /// <summary>Whether the last import ticked <paramref name="layer"/>, or <c>null</c> when it did not offer it.</summary>
     public bool? Ticked(ImportLayer layer) => _ticked.TryGetValue(layer, out bool ticked) ? ticked : null;
 
-    /// <summary>The level the last import chose for <paramref name="layer"/>, or <c>null</c> when it chose none.</summary>
     public FidelityLevel? Level(ImportLayer layer) => _levels.TryGetValue(layer, out FidelityLevel level) ? level : null;
 
-    /// <summary>Reads a remembered choice, or <c>null</c> for bytes that are not one.</summary>
     public static RememberedChoice? Parse(byte[]? bytes)
     {
         if (bytes is null || bytes.Length == 0)
@@ -115,7 +86,6 @@ public sealed class RememberedChoice
         }
     }
 
-    /// <summary>The file's bytes: <see cref="Parse"/> reads them back.</summary>
     public byte[] ToBytes()
     {
         using MemoryStream buffer = new();

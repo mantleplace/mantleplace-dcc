@@ -2,11 +2,6 @@ using MantlePlace.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 
-/// <summary>
-/// The public-record set read file by file: a record DXF the reader refuses (a <c>POINT</c> entity is
-/// the one the platform's contamination and historic-places files hold) is refused on its own, by name,
-/// and the other record layers are still read and placed.
-/// </summary>
 internal static class AutoCadRecordSetTests
 {
     internal static int Run()

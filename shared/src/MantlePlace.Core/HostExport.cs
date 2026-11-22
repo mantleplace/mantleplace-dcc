@@ -2,7 +2,6 @@ using System.Text.Json;
 
 namespace MantlePlace.Core;
 
-/// <summary>An export's status, in the order of its life (the platform export contract, section 4).</summary>
 public enum ExportStatus
 {
     Sent,
@@ -15,10 +14,8 @@ public enum ExportStatus
     Cancelled,
 }
 
-/// <summary>The wire spellings of <see cref="ExportStatus"/>, and which statuses are terminal.</summary>
 public static class ExportStatuses
 {
-    /// <summary>The status as the platform spells it (<c>waiting_for_bundle</c>).</summary>
     public static string ToWire(ExportStatus status) => status switch
     {
         ExportStatus.Sent => "sent",
@@ -32,10 +29,6 @@ public static class ExportStatuses
         _ => throw new ArgumentOutOfRangeException(nameof(status)),
     };
 
-    /// <summary>
-    /// Reads a wire status. <c>false</c> for a status this protocol does not define: a new status is
-    /// a new protocol number, so a plugin on this one does not know how to act on it (section 7).
-    /// </summary>
     public static bool TryParse(string? wire, out ExportStatus status)
     {
         foreach (ExportStatus candidate in Enum.GetValues<ExportStatus>())
@@ -51,26 +44,10 @@ public static class ExportStatuses
         return false;
     }
 
-    /// <summary>No transition leaves a terminal status.</summary>
     public static bool IsTerminal(ExportStatus status)
         => status is ExportStatus.Imported or ExportStatus.Failed or ExportStatus.Cancelled;
 }
 
-/// <summary>One export: a row that names a bundle and a target, and carries no file and no URL.</summary>
-/// <param name="Id">The export's id; how it is addressed.</param>
-/// <param name="OrderId">The order whose bundle it hands over.</param>
-/// <param name="Host">The host it targets (<c>unreal</c> or <c>revit</c>).</param>
-/// <param name="TargetConnectionId">The connection id it targets.</param>
-/// <param name="TargetDocument">The document the curator picked, or <c>null</c>.</param>
-/// <param name="TargetMachine">The machine the curator picked, or <c>null</c>.</param>
-/// <param name="TargetPluginVersion">The plugin version it was sent to, or <c>null</c>.</param>
-/// <param name="Status">Where it is in its life.</param>
-/// <param name="Progress">0 to 100 while importing, else <c>null</c>.</param>
-/// <param name="FailureReason">The code it failed with, or <c>null</c>.</param>
-/// <param name="FailureMessage">The words it failed with, or <c>null</c>.</param>
-/// <param name="CreatedAt">As the platform wrote it.</param>
-/// <param name="UpdatedAt">As the platform wrote it.</param>
-/// <param name="EndedAt">As the platform wrote it; <c>null</c> until a terminal status.</param>
 public readonly record struct HostExport(
     string Id,
     string OrderId,
@@ -87,38 +64,14 @@ public readonly record struct HostExport(
     string UpdatedAt,
     string? EndedAt)
 {
-    /// <summary>
-    /// Whether this plugin acts on the export: only one that targets its own connection id, on this
-    /// plugin's host (the contract: an export is acted on only when the target connection id equals
-    /// the plugin's own).
-    /// </summary>
     public bool IsFor(string connectionId)
         => connectionId.Length > 0
            && string.Equals(TargetConnectionId, connectionId, StringComparison.Ordinal)
            && string.Equals(Host, ConnectedHosts.HostId, StringComparison.Ordinal);
 }
 
-/// <summary>
-/// Reads an export from either of its two spellings into one <see cref="HostExport"/>.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The routes return camelCase with the target nested (<c>targetConnectionId</c>,
-/// <c>target.document</c>); a Realtime row change carries the table's snake_case columns, flat
-/// (<c>target_connection_id</c>, <c>target_document</c>). Both mean the same, so a plugin treats a
-/// row from the list and a row from a change the same way: one reader, field by field, camelCase
-/// first.
-/// </para>
-/// <para>
-/// Additive-only compatibility (section 7): a field this reader does not know is ignored. A status
-/// it does not know is NOT, because a new status needs a new protocol number, so such a row reads
-/// as not understood and is left alone.
-/// </para>
-/// </remarks>
 public static class HostExports
 {
-    /// <summary>Reads one export object (a route's DTO, or a change's record).</summary>
-    /// <returns><c>null</c> on success; otherwise why this plugin cannot act on the row.</returns>
     public static string? TryParse(string json, out HostExport export)
     {
         export = default;
@@ -139,11 +92,6 @@ public static class HostExports
         }
     }
 
-    /// <summary>
-    /// Reads the catch-up list body (an object with an <c>exports</c> array). A row this plugin
-    /// cannot understand is left out, not fatal to the rest; the body itself being unreadable is.
-    /// </summary>
-    /// <returns><c>null</c> on success.</returns>
     public static string? TryParseList(string body, out IReadOnlyList<HostExport> exports)
     {
         exports = [];
@@ -179,7 +127,6 @@ public static class HostExports
         }
     }
 
-    /// <summary>The exports that target <paramref name="connectionId"/>, in order.</summary>
     public static IReadOnlyList<HostExport> ForConnection(IEnumerable<HostExport> exports, string connectionId)
     {
         ArgumentNullException.ThrowIfNull(exports);
@@ -233,8 +180,6 @@ public static class HostExports
         return value.Length > 0 ? value : root.Str(snake);
     }
 
-    // The route nests the target's fields under `target`; the row change flattens them with a
-    // `target_` prefix.
     private static string? OptionalEither(JsonElement root, JsonElement? target, string nested, string flat)
     {
         string value = target is { } t ? t.Str(nested) : string.Empty;

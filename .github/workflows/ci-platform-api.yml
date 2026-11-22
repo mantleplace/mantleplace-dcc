@@ -1,16 +1,3 @@
-# Platform API client sync: the vendored generated client must be what the served spec generates.
-#
-# Every .NET host plugin calls the Platform API through MantlePlace.PlatformApi, an NSwag client generated
-# from https://mantle.place/api/v1/openapi.json and vendored under
-# shared/src/MantlePlace.PlatformApi/Generated/. This job fetches the served spec, runs the pinned
-# generator (shared/.config/dotnet-tools.json) and fails when either vendored file would change. The
-# fix is always the same: run `python shared/tools/platform-api/sync_platform_api.py` and commit.
-#
-# It reads a live URL, so it runs on main, weekly and on demand, never on a pull request: a platform
-# deploy moves the spec without this repo changing, and a pull request must not go red for that (the
-# same reason the manifest conformance gate keeps its live mode off pull requests). A red run here
-# means: sync and commit. The generator is a dotnet tool restored here; ci-revit-tests still restores
-# no package, because the assemblies the plugins ship reference none.
 name: ci-platform-api
 
 on:

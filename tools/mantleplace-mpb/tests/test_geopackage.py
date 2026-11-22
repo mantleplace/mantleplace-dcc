@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""A 2.0 GeoPackage row that lists no `tables` holds exactly one feature table (`format.md` §6.3)."""
 
 from __future__ import annotations
 

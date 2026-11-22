@@ -1,16 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    The AutoCAD plugin's Civil 3D part: the only assembly in the tree that references a Civil 3D
-    assembly. The shell (../MantlePlace.AutoCad.Addin) loads it only behind the presence test, which is
-    Civil 3D's land module being a loaded module of the process (Presence in MantlePlace.AutoCad.Core,
-    autocad/docs/api-record.md). Under AutoCAD alone it is never loaded, and a wrong verdict degrades
-    to a FileNotFoundException for AeccDbMgd that the shell catches.
-
-    Same two builds and the same API directories as the shell (../MantlePlace.AutoCad.Addin).
-    CI never builds it; see that project's comment for why.
-  -->
-
   <PropertyGroup>
     <TargetFrameworks>net8.0-windows;net10.0-windows</TargetFrameworks>
     <RootNamespace>MantlePlace.AutoCad.Civil3d</RootNamespace>

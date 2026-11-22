@@ -2,12 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The published contours reach the plan only through this host's own pointer
-/// (<c>hosts.revit.contours</c>, MPB 1.4.0), checked against the block's <c>file_frame</c>
-/// (<c>HPS-53</c>), and a bundle without that pointer keeps its "Also in this bundle" line
-/// (ADR 0013).
-/// </summary>
 internal static class PublishedContourPlanTests
 {
     private const string ContoursPath = "Surface/Contours.dxf";
@@ -262,7 +256,6 @@ internal static class PublishedContourPlanTests
               "vertical_datum": "EGM2008-orthometric", "sha256": "{{Sha}}" }
             """;
 
-    /// <param name="readiness"><c>null</c> for a bundle cut before <c>readiness.contours</c> existed.</param>
     private static string Manifest(string fileFrame, string? pointer, string? readiness = "{ \"present\": true }", bool withTerrain = false)
     {
         string readinessBlock = "\"readiness\": { \"toposurface_points\": "

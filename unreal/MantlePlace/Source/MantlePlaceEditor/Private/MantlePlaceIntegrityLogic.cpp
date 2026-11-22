@@ -8,9 +8,6 @@
 TArray<FMantlePlaceDeclaredArtifact> FMantlePlaceIntegrityLogic::CollectDeclaredArtifacts(
     const FMantlePlaceVaultManifest& Manifest)
 {
-	// The chain is assembled from the handlers, not written out here: each artifact declares its own
-	// payloads (and the digest the manifest published for each, from ITS block -- HPS-33), and a new
-	// artifact is in the chain by being registered. There is no list in this file to forget it from.
 	TArray<FMantlePlaceDeclaredArtifact> Artifacts;
 	for (const TUniquePtr<IMantlePlaceArtifactHandler>& Handler : MantlePlaceArtifacts::MakeAll())
 	{
@@ -21,7 +18,6 @@ TArray<FMantlePlaceDeclaredArtifact> FMantlePlaceIntegrityLogic::CollectDeclared
 
 namespace
 {
-/** The part a file belongs to, found regardless of case (a reader matches a path so, MPB 2.0). */
 const FString* FindPart(const FMantlePlaceArchiveView& View, const FString& Path)
 {
 	if (const FString* Exact = View.FileParts.Find(Path))
@@ -37,11 +33,10 @@ const FString* FindPart(const FMantlePlaceArchiveView& View, const FString& Path
 	}
 	return nullptr;
 }
-} // namespace
+}
 
 bool FMantlePlaceIntegrityLogic::LeavesOut(const FMantlePlaceArchiveView& View, const FString& Path)
 {
-	// Each of these is "cannot tell a selection from corruption", and corruption is the safe reading.
 	if (!View.bDeclared || View.Kind.Equals(TEXT("everything"), ESearchCase::CaseSensitive))
 	{
 		return false;
@@ -51,7 +46,6 @@ bool FMantlePlaceIntegrityLogic::LeavesOut(const FMantlePlaceArchiveView& View, 
 	{
 		return false;
 	}
-	// A part id is compared whole, never parsed beyond that (spec/changelog.md, 1.10.0).
 	return !View.Parts.ContainsByPredicate(
 	    [Part](const FString& Held) { return Held.Equals(*Part, ESearchCase::CaseSensitive); });
 }

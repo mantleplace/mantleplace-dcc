@@ -1,22 +1,7 @@
-# Builds the timing harness for one TAG from one SOURCE ROOT.
-#
-#   ./Build-TimingHarness.ps1 -Tag main-d4f3453 -SourceRoot (./Export-TimingSource.ps1 -Commit d4f3453)
-#
-# SourceRoot is a folder that contains revit\src\MantlePlace.Revit.Addin and the Core and Client, in
-# shared\src\MantlePlace.{Core,Client} (or revit\src\MantlePlace.Revit.{Core,Client} before the move): a `git archive`
-# export from Export-TimingSource.ps1 (preferred: it carries the commit in a file called COMMIT at its root), or a
-# git worktree ("-dirty" is appended to the commit when revit/ has changes). The plugin's three source trees and
-# the harness compile into ONE assembly named MantlePlace.Scratch.Timing.<tag>, into <work root>\builds\<tag>\out\.
-# Nothing is copied to, or read from, the real add-in's install slot.
-#
-# A tag names one source: building an existing tag again with a different SourceRoot or commit is
-# refused (two agents must never share a tag), unless -Force. Invoke-TimingRun.ps1 calls this when the tag has
-# not been built yet, so calling it by hand is only needed to build ahead of time.
 param(
     [Parameter(Mandatory)][string]$Tag,
     [Parameter(Mandatory)][string]$SourceRoot,
     [string]$SourceCommit = '',
-    # The plugin compiles against Revit 2025's API whatever year it runs in; the default is Revit's standard install folder.
     [string]$RevitApiDir = (Join-Path $env:ProgramFiles 'Autodesk\Revit 2025'),
     [string]$WorkRoot = '',
     [switch]$Force
@@ -29,7 +14,6 @@ if ($Tag -notmatch '^[A-Za-z0-9][A-Za-z0-9_-]{0,30}$') { throw "Tag '$Tag' must 
 $SourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path.TrimEnd('\')
 $tree = Join-Path $SourceRoot 'revit\src'
 if (-not (Test-Path (Join-Path $tree 'MantlePlace.Revit.Addin'))) { throw "$SourceRoot has no revit\src\MantlePlace.Revit.Addin" }
-# The Core and Client moved to shared\src under host-neutral names; a source from before the move has them in revit\src.
 $shared = Join-Path $SourceRoot 'shared\src'
 if (Test-Path (Join-Path $shared 'MantlePlace.Core')) {
     $coreDir = Join-Path $shared 'MantlePlace.Core'; $clientDir = Join-Path $shared 'MantlePlace.Client'; $platformApiDir = Join-Path $shared 'MantlePlace.PlatformApi'
@@ -40,12 +24,10 @@ foreach ($p in $coreDir, $clientDir) {
     if (-not (Test-Path $p)) { throw "$SourceRoot has no $p" }
 }
 if (-not (Test-Path $platformApiDir)) { $platformApiDir = '' }
-# The shared windows (sign-in, vault, About, the notices) moved to shared\src\MantlePlace.Wpf; a source from before has them in the add-in.
 $wpfDir = Join-Path $shared 'MantlePlace.Wpf'
 if (-not (Test-Path $wpfDir)) { $wpfDir = '' }
 if (-not (Test-Path (Join-Path $RevitApiDir 'RevitAPI.dll'))) { throw "no RevitAPI.dll under $RevitApiDir (the plugin compiles against Revit 2025's API)" }
 
-# The commit the sources are: a COMMIT file (git archive exports have no .git), else git, else the parameter.
 $commit = $SourceCommit
 $dirty = $false
 $commitFile = Join-Path $SourceRoot 'COMMIT'
@@ -73,13 +55,8 @@ $proj = Join-Path $buildDir 'proj'
 if (Test-Path $proj) { Remove-Item -Recurse -Force $proj }
 New-Item -ItemType Directory -Force $proj | Out-Null
 Copy-Item (Join-Path $root 'Harness\TimingHarness.csproj'), (Join-Path $root 'Harness\TimingHarness.cs'), (Join-Path $root 'Harness\Verify.cs') $proj
-# -Verify measures through PrepareForHandover, which a source older than it does not have: such a source builds
-# without Verify.cs, and a -Verify run of it says so rather than failing to build.
 $verify = if (Test-Path (Join-Path $tree 'MantlePlace.Revit.Addin\PrepareForHandover.cs')) { 'true' } else { 'false' }
 
-# The tag is compiled into the assembly as a constant. The harness gates on it: it does nothing at all in a
-# Revit whose MANTLEPLACE_TIMING_TAG differs (a same-year Revit that picked up this run's temporary manifest), so
-# it must be exactly the tag this build is for. Verified below, by reading it back out of the finished DLL.
 @"
 // Written by Build-TimingHarness.ps1 for tag '$Tag'. Not a source file: do not edit.
 namespace MantlePlace.Scratch.Timing;
@@ -100,8 +77,6 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet build failed (exit $LASTEXITCODE); see 
 $dll = Join-Path $outDir "$assemblyName.dll"
 if (-not (Test-Path $dll)) { throw "build reported success but $dll is missing" }
 
-# The constant the harness gates on is the tag this build is for. Loaded from bytes into a throwaway load context, so
-# nothing stays locked and nothing of it stays loaded.
 $compiledTag = ''
 if ($PSVersionTable.PSEdition -eq 'Core') {
     $ctx = [Runtime.Loader.AssemblyLoadContext]::new('timing-verify', $true)

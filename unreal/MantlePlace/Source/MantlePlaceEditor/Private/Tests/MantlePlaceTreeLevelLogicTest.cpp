@@ -12,12 +12,6 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
-// Which tree-points level an import reads, asserted without a bundle: the block's `levels` as
-// the handler parses them, what ResolveLevel makes of each shape, and the row cut. Two shapes of
-// bundle are covered side by side. A 2.0 bundle ships ONE ranked TreePoints.csv and states MED and
-// MIN as `cut: {rows}` of it. An older bundle ships a file per level and states them as pointers,
-// and keeps working.
-
 namespace
 {
 const TCHAR* const Block2 = TEXT(R"({
@@ -78,7 +72,6 @@ bool FMantlePlaceTreeLevelLogicTest::RunTest(const FString& Parameters)
 {
 	using Logic = FMantlePlaceTreePointsLogic;
 
-	// --- A 2.0 bundle: one ranked file, MED a row cut of it -----------------------------------
 	{
 		const FMantlePlaceFoliagePointsBlock Block = ParseBlock(Block2);
 		TestEqual(TEXT("MED parses as a row cut"), (int32)Block.LevelMed.Form, (int32)EMantlePlaceTreeLevelForm::RowCut);
@@ -103,7 +96,6 @@ bool FMantlePlaceTreeLevelLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("MIN same_as MED is applied as MED"), (int32)Min.Applied, (int32)EMantlePlaceTreeLevel::Med);
 	}
 
-	// --- An older bundle: a file per level, kept ----------------------------------------------
 	{
 		const FMantlePlaceFoliagePointsBlock Block = ParseBlock(BlockOlder);
 		TestEqual(TEXT("MED parses as a pointer"), (int32)Block.LevelMed.Form, (int32)EMantlePlaceTreeLevelForm::Pointer);
@@ -121,7 +113,6 @@ bool FMantlePlaceTreeLevelLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("MIN same_as MAX is applied as MAX"), (int32)Min.Applied, (int32)EMantlePlaceTreeLevel::Max);
 	}
 
-	// --- A bundle with no `levels`, or a level it does not publish, reads MAX and says so -----
 	{
 		const FMantlePlaceFoliagePointsBlock Block = ParseBlock(TEXT(R"({ "path": "Landcover/TreePoints.csv", "point_count": 7 })"));
 		const FMantlePlaceResolvedTreeLevel Med = Logic::ResolveLevel(Block, EMantlePlaceTreeLevel::Med);
@@ -131,7 +122,6 @@ bool FMantlePlaceTreeLevelLogicTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("no row is cut"), Med.RowLimit, 0);
 	}
 	{
-		// A chain, a cut of an unknown form and an unknown level name all fail closed to MAX.
 		const FMantlePlaceFoliagePointsBlock Chained = ParseBlock(TEXT(R"({ "path": "T.csv", "levels": {
 		    "MED": { "same_as": "MIN" }, "MIN": { "same_as": "MED" } } })"));
 		TestFalse(TEXT("a chained same_as is unavailable"),
@@ -146,7 +136,6 @@ bool FMantlePlaceTreeLevelLogicTest::RunTest(const FString& Parameters)
 			Logic::ResolveLevel(Raw, EMantlePlaceTreeLevel::Med).FallbackReason.IsEmpty());
 	}
 
-	// --- The row cut: the header and the first N data rows -------------------------------------
 	{
 		const FString Csv = TEXT("x,y,ground_z\n1,1,1\n2,2,2\n\n3,3,3\n4,4,4\n");
 		TestEqual(TEXT("two rows"), Logic::CutRows(Csv, 2), FString(TEXT("x,y,ground_z\n1,1,1\n2,2,2")));
@@ -160,4 +149,4 @@ bool FMantlePlaceTreeLevelLogicTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

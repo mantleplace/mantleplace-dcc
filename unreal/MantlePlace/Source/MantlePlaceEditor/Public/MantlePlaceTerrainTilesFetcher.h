@@ -9,7 +9,6 @@
 
 class UMantlePlaceVaultClient;
 
-/** The fetch settled: on success TilesZipPath is the Extra, kept beside the bundle; otherwise Message says why. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FMantlePlaceOnTerrainTilesFetchedBP, bool, bSuccess, const FString&, TilesZipPath, const FString&, Message);
 
 /**
@@ -49,27 +48,23 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Mantle Place|Cesium")
 	bool IsBusy() const { return Step != EStep::Idle; }
 
-	//~ Begin UObject interface
 	virtual void BeginDestroy() override;
-	//~ End UObject interface
 
 private:
 	enum class EStep : uint8
 	{
 		Idle,
-		Listing,     // the vault list is in flight
-		Minting,     // the Extra's download link is being minted
-		Downloading, // the link is being fetched
+		Listing,
+		Minting,
+		Downloading,
 	};
 
-	/** Construct and wire the vault client on the editor's one auth session (idempotent). */
 	void EnsureClient();
 
 	void HandleListedNative(bool bSuccess, const TArray<FMantlePlaceVaultItem>& Bundles, const FString& Message);
 	void HandlePresignedNative(bool bSuccess, const FMantlePlacePresignedDownload& Download, const FString& Message);
 	void HandleDownloaded(const TArray<uint8>& Bytes, int32 ResponseCode, bool bConnected);
 
-	/** Settle: forget the run and fire OnFetched. */
 	void Finish(bool bSuccess, const FString& Message);
 
 	UPROPERTY()

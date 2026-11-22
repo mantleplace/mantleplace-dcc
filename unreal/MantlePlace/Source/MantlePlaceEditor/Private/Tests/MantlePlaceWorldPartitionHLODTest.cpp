@@ -39,22 +39,6 @@
 #include "WorldPartition/WorldPartition.h"
 #include "WorldPartition/WorldPartitionRuntimeHash.h"
 
-// The HLOD round trip, without a bundle: a split landscape (Terrain), a building (Buildings) and a
-// road (Roads), each claimed by the import context's own Claim under its family in a partitioned
-// world, then the explicit build step run on it before and after a save.
-//
-// What it pins:
-//  - Terrain's proxies and the building are in their family's shared HLOD layer; the road is in none;
-//  - the HLOD layers are simplified-mesh layers, reused rather than duplicated by a second claim;
-//  - the building streams, so an HLOD can stand in for it; the road stays always loaded (v1);
-//  - the build refuses an unsaved level, building nothing, rather than silently leaving the import out;
-//  - after a save, the build makes HLOD actors for Terrain and for Buildings, each with geometry over
-//    the import, which is what renders in place of the unloaded cells at distance, and reports its cost;
-//  - a wipe takes the order's actors out of the HLOD layers and leaves the layers intact.
-//
-// The saved level lives under /MantlePlace/, so the plugin's asset domain covers it, with its files in
-// Intermediate, never in any Content folder (FMantlePlaceTestMount), and is deleted at the end.
-
 namespace MantlePlaceWorldPartitionHLODTest
 {
 constexpr int32 ComponentsPerAxis = 4;
@@ -76,7 +60,7 @@ ALandscape* BuildFlatLandscape(UWorld* World, UMaterialInterface* Material)
 	HeightDataPerLayers.Add(FGuid(), MoveTemp(Heights));
 	TMap<FGuid, TArray<FLandscapeImportLayerInfo>> MaterialLayerDataPerLayers;
 	MaterialLayerDataPerLayers.Add(FGuid(), TArray<FLandscapeImportLayerInfo>());
-	Landscape->Import(FGuid::NewGuid(), 0, 0, Size - 1, Size - 1, /*NumSubsections*/ 1, QuadsPerSection,
+	Landscape->Import(FGuid::NewGuid(), 0, 0, Size - 1, Size - 1, 1, QuadsPerSection,
 		HeightDataPerLayers, TEXT(""), MaterialLayerDataPerLayers, ELandscapeImportAlphamapType::Additive,
 		TArrayView<const FLandscapeLayer>());
 	return Landscape;
@@ -94,7 +78,6 @@ AStaticMeshActor* SpawnBox(UWorld* World, const FVector& Location)
 	return Actor;
 }
 
-/** Save every package under the mount points that is dirty, the world's first. False on any failure. */
 bool SaveMounted(UWorld* World, const FMantlePlaceTestMount& Mount, TArray<FString>& OutFailed)
 {
 	TArray<UPackage*> Packages;
@@ -126,9 +109,8 @@ bool SaveMounted(UWorld* World, const FMantlePlaceTestMount& Mount, TArray<FStri
 			OutFailed.Add(Package->GetName());
 		}
 	}
-	// The level reads its actors back through the asset registry: let it see what was just written.
 	IAssetRegistry& AssetRegistry = FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry").Get();
-	AssetRegistry.ScanFilesSynchronous(Saved, /*bForceRescan*/ true);
+	AssetRegistry.ScanFilesSynchronous(Saved, true);
 	return OutFailed.Num() == 0;
 }
 
@@ -168,20 +150,18 @@ bool FMantlePlaceWorldPartitionHLODTest::RunTest(const FString& Parameters)
 		return true;
 	}
 
-	// Under the plugin's root, its files in Intermediate, so the saved level never touches any Content.
 	FMantlePlaceTestMount Mount(TEXT("MantlePlaceHLODTest"));
 	Mount.Mount();
 
 	UPackage* WorldPackage = CreatePackage(*(Mount.Root + TEXT("HLODTestMap")));
 	UWorld::InitializationValues IVS;
 	IVS.CreateWorldPartition(true).EnableWorldPartitionStreaming(true);
-	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
-		FName(TEXT("HLODTestMap")), WorldPackage, /*bAddToRoot*/ true, ERHIFeatureLevel::Num, &IVS);
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, false,
+		FName(TEXT("HLODTestMap")), WorldPackage, true, ERHIFeatureLevel::Num, &IVS);
 	if (!TestNotNull(TEXT("a partitioned world in a package of its own"), World))
 	{
 		return false;
 	}
-	// As a map the editor creates: a map package, its world the asset saved in it.
 	WorldPackage->SetPackageFlags(PKG_ContainsMap);
 	World->SetFlags(RF_Public | RF_Standalone);
 
@@ -198,7 +178,6 @@ bool FMantlePlaceWorldPartitionHLODTest::RunTest(const FString& Parameters)
 	Order.Identity = TEXT("eeeeeeee-5555");
 	Order.ContentRoot = ContentRoot;
 
-	// --- Import: terrain, a building over it, and a road, each under its handler's family ----------
 	Order.Family = Family::Terrain;
 	ALandscape* Landscape = BuildFlatLandscape(World, UMaterial::GetDefaultMaterial(MD_Surface));
 	MantlePlaceLandscapeImporter::SplitForWorldPartition(Landscape, GridSize);
@@ -210,7 +189,6 @@ bool FMantlePlaceWorldPartitionHLODTest::RunTest(const FString& Parameters)
 	AStaticMeshActor* Road = SpawnBox(World, FVector(600.0, 600.0, 100.0));
 	Order.Claim(Road, TEXT("MP_HLODTestRoad"));
 
-	// --- Configured: the families' shared HLOD layers, and nothing else ------------------------------
 	UHLODLayer* TerrainLayer = MantlePlaceHLODs::FindLayer(ContentRoot, Family::Terrain);
 	UHLODLayer* BuildingsLayer = MantlePlaceHLODs::FindLayer(ContentRoot, Family::Buildings);
 	TestNotNull(TEXT("the import made the Terrain HLOD layer"), TerrainLayer);
@@ -247,13 +225,11 @@ bool FMantlePlaceWorldPartitionHLODTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the actors live in packages of their own, as World Partition saves them"), Building->IsPackageExternal());
 	TestTrue(TEXT("under the test's mount points, so they save to Intermediate"), Mount.Owns(Building->GetPackage()->GetName()));
 
-	// --- Build before a save: refused, nothing built --------------------------------------------------
 	const MantlePlaceHLODs::FBuildReport Refused = MantlePlaceHLODs::Build(World);
 	TestFalse(TEXT("unsaved: the build is refused"), Refused.bBuilt);
 	TestTrue(TEXT("unsaved: and says to save first"), Refused.Message.Contains(TEXT("File > Save All")));
 	TestEqual(TEXT("unsaved: no HLOD actor"), MantlePlaceHLODs::CountHLODActors(World), 0);
 
-	// --- Save, then build: HLOD actors for Terrain and for Buildings, with geometry -------------------
 	TArray<FString> Failed;
 	TestTrue(TEXT("the level and its actors save"), SaveMounted(World, Mount, Failed));
 	for (const FString& Package : Failed)
@@ -265,13 +241,12 @@ bool FMantlePlaceWorldPartitionHLODTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("saved: the build runs"), Built.bBuilt);
 	TestTrue(TEXT("saved: the log reports the cost"), Built.Message.StartsWith(TEXT("HLODs built: ")));
 
-	// What the import covers: every actor it put in an HLOD layer, the proxies and the building.
 	FBox ImportBounds(ForceInit);
 	for (TActorIterator<AActor> It(World); It; ++It)
 	{
 		if (!It->IsA<AWorldPartitionHLOD>() && It->GetHLODLayer() != nullptr)
 		{
-			ImportBounds += It->GetComponentsBoundingBox(/*bNonColliding*/ true);
+			ImportBounds += It->GetComponentsBoundingBox(true);
 		}
 	}
 	int32 TerrainHLODs = 0;
@@ -292,7 +267,6 @@ bool FMantlePlaceWorldPartitionHLODTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("saved: every HLOD actor has geometry to render at distance"), WithGeometry, Built.HLODActors);
 	TestEqual(TEXT("saved: every HLOD actor stands over the import"), OverImport, Built.HLODActors);
 
-	// --- Wipe: out of the HLOD layers, the layers intact ---------------------------------------------
 	MantlePlaceImportOrchestration::ReplacePriorActors(World, Order.Identity, Timeline);
 	int32 StillLayered = 0;
 	for (TActorIterator<AActor> It(World); It; ++It)
@@ -303,8 +277,7 @@ bool FMantlePlaceWorldPartitionHLODTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("wipe: the Terrain HLOD layer is intact"), MantlePlaceHLODs::FindLayer(ContentRoot, Family::Terrain) == TerrainLayer);
 	TestTrue(TEXT("wipe: the Buildings HLOD layer is intact"), MantlePlaceHLODs::FindLayer(ContentRoot, Family::Buildings) == BuildingsLayer);
 
-	// Nothing of the test outlives it: no dirty package offered for saving, no file, no mount.
-	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	World->DestroyWorld(false);
 	World->RemoveFromRoot();
 	for (TObjectIterator<UPackage> It; It; ++It)
 	{
@@ -319,4 +292,4 @@ bool FMantlePlaceWorldPartitionHLODTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

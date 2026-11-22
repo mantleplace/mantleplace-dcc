@@ -2,21 +2,15 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The terrain's re-import identity: whether a second import of one bundle builds a second ground,
-/// reuses the first, or refuses — all decided from the stamp the earlier import wrote.
-/// </summary>
 internal static class TerrainIdentityTests
 {
     private const string Stem = "eb00f56f-74f5-4134-9c8a-baf82215191a";
     private const string OtherStem = "f8d950ba-33f6-4c7c-a562-9c2124f35105";
 
-    /// <summary>A surface artifact's sha256, and the first twelve characters the stamp keeps.</summary>
     private const string Sha = "9f2c41ab77de5310ac4b0e6612f8a7d3b1c05e94aa2f6d8813bb47c0192e5f6a";
 
     private const string ShaToken = "9f2c41ab77de";
 
-    /// <summary>A rebuild of the same order: a different surface, under the same identity.</summary>
     private const string RebuiltSha = "0a1b2c3d4e5f60718293a4b5c6d7e8f9001122334455667788990aabbccddeeff";
 
     private static string StampFor(string stem, string token) => $"Mantle Place Terrain {stem}/{token}";
@@ -117,8 +111,6 @@ internal static class TerrainIdentityTests
 
         run.Case("an unknown build meeting a declared digest is stale, not the same ground", () =>
         {
-            // ⛔HPS-28: a null sha is UNKNOWN. Reusing here would be claiming a sameness nothing
-            // demonstrates, and the whole cost of being wrong is a stale ground kept silently.
             TerrainDecision decision = TerrainIdentity.Decide(
                 [new ExistingTerrain(90, StampFor(Stem, "unknown"))],
                 Stem,
@@ -164,8 +156,6 @@ internal static class TerrainIdentityTests
 
         run.Case("a stem is not claimed by a stem it is a prefix of", () =>
         {
-            // Cache-key stems are truncated hashes, so one being a prefix of another is a collision
-            // waiting rather than a hypothetical.
             TerrainDecision decision = TerrainIdentity.Decide(
                 [new ExistingTerrain(800, StampFor("abcdef", ShaToken))],
                 "abc",
@@ -176,8 +166,6 @@ internal static class TerrainIdentityTests
 
         run.Case("a project already carrying two stamped grounds uses the first and says so", () =>
         {
-            // The state the bug left behind: this is what a re-import finds in a project imported
-            // twice by a version with no terrain identity at all.
             TerrainDecision decision = TerrainIdentity.Decide(
                 [
                     new ExistingTerrain(1721188, StampFor(Stem, ShaToken)),

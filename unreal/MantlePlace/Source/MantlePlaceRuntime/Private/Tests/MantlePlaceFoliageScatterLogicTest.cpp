@@ -6,14 +6,10 @@
 
 #include "MantlePlaceFoliageScatterLogic.h"
 
-// The scatter's decisions, without an engine world: which texel a point reads, how a published
-// mapping decodes, and which points survive the water mask, the land cover and the canopy.
-
 namespace
 {
 using namespace MantlePlaceFoliageScatterLogic;
 
-// A 4x4 raster over a 400 m x 400 m AOI: each texel is 100 m square. Row 0 is the northern edge.
 const FVector2D Aoi(40000.0, 40000.0);
 
 FRaster MakeRaster(EMantlePlaceCoverageMapping Mapping, uint16 Fill)
@@ -26,7 +22,6 @@ FRaster MakeRaster(EMantlePlaceCoverageMapping Mapping, uint16 Fill)
 	return Raster;
 }
 
-// The local-frame centre of texel (column, row): North is +X, East is +Y, row 0 is north.
 FVector CentreOf(int32 Column, int32 Row)
 {
 	return FVector(20000.0 - (Row + 0.5) * 10000.0, -20000.0 + (Column + 0.5) * 10000.0, 0.0);
@@ -57,8 +52,6 @@ bool FMantlePlaceFoliageScatterTexelTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("north-west: column 0"), Column, 0);
 	TestEqual(TEXT("north-west: row 0"), Row, 0);
 
-	// North is +X and maps to the TOP row; East is +Y and maps to the right-hand column. A transposed
-	// lookup reads (3, 0) here as (0, 3), which is the silent error this pins.
 	TestTrue(TEXT("the north-east corner texel"), TexelAt(Raster, Aoi, CentreOf(3, 0), Column, Row));
 	TestEqual(TEXT("north-east: column 3"), Column, 3);
 	TestEqual(TEXT("north-east: row 0"), Row, 0);
@@ -84,11 +77,11 @@ bool FMantlePlaceFoliageScatterDecodeTest::RunTest(const FString& Parameters)
 	FRaster Canopy = MakeRaster(EMantlePlaceCoverageMapping::Scale, 0);
 	Canopy.MinValue = 0.0;
 	Canopy.MaxValue = 60.0;
-	Canopy.Samples[0] = 65535;  // (0, 0): full scale, 60 m
-	Canopy.Samples[1] = 32768;  // (1, 0): about half, 30 m
+	Canopy.Samples[0] = 65535;
+	Canopy.Samples[1] = 32768;
 	Canopy.bHasNodata = true;
 	Canopy.NodataValue = 7.0;
-	Canopy.Samples[2] = 7;      // (2, 0): the nodata sentinel
+	Canopy.Samples[2] = 7;
 
 	double Value = 0.0;
 	TestTrue(TEXT("full scale decodes"), DecodedScaleAt(Canopy, Aoi, CentreOf(0, 0), Value));
@@ -114,13 +107,13 @@ bool FMantlePlaceFoliageScatterJudgeTest::RunTest(const FString& Parameters)
 	Inputs.WaterMask = MakeRaster(EMantlePlaceCoverageMapping::Mask, 0);
 	Inputs.WaterMask.TrueValue = 255.0;
 	Inputs.WaterMask.FullScale = 255.0;
-	Inputs.WaterMask.Samples[5] = 255; // (1, 1) is water
+	Inputs.WaterMask.Samples[5] = 255;
 	Inputs.LandCover = MakeRaster(EMantlePlaceCoverageMapping::Legend, 10);
 	Inputs.LandCover.FullScale = 255.0;
-	Inputs.LandCover.Samples[6] = 50;  // (2, 1) is built-up
+	Inputs.LandCover.Samples[6] = 50;
 	Inputs.CanopyHeight = MakeRaster(EMantlePlaceCoverageMapping::Scale, 65535);
 	Inputs.CanopyHeight.MaxValue = 30.0;
-	Inputs.CanopyHeight.Samples[9] = 0; // (1, 2) has no canopy
+	Inputs.CanopyHeight.Samples[9] = 0;
 	const FParams Params;
 
 	TestEqual(TEXT("a tree on open forest is kept"), Judge(Tree(CentreOf(0, 0)), Inputs, Params, nullptr), EVerdict::Keep);
@@ -132,7 +125,6 @@ bool FMantlePlaceFoliageScatterJudgeTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("a shrub is not judged by the canopy"), Judge(Shrub, Inputs, Params, nullptr), EVerdict::Keep);
 	TestEqual(TEXT("a point outside the AOI is dropped"), Judge(Tree(FVector(30000.0, 0.0, 0.0)), Inputs, Params, nullptr), EVerdict::OutsideAoi);
 
-	// The partition cell: a point on a shared border belongs to exactly one of the two cells.
 	const FBox West(FVector(-20000.0, -20000.0, -1e6), FVector(20000.0, 0.0, 1e6));
 	const FBox East(FVector(-20000.0, 0.0, -1e6), FVector(20000.0, 20000.0, 1e6));
 	const FTreePoint OnBorder = Tree(FVector(15000.0, 0.0, 0.0));
@@ -141,13 +133,11 @@ bool FMantlePlaceFoliageScatterJudgeTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("a border point is in exactly one cell"), Claims, 1);
 	TestEqual(TEXT("a point in the other cell is outside this one"), Judge(Tree(CentreOf(0, 0)), Inputs, Params, &East), EVerdict::OutsideCell);
 
-	// Thinning: zero density drops every point, and the draw is deterministic.
 	FParams None = Params;
 	None.DensityScale = 0.0;
 	TestEqual(TEXT("zero density keeps nothing"), Judge(Tree(CentreOf(0, 0)), Inputs, None, nullptr), EVerdict::Thinned);
 	TestEqual(TEXT("the draw is deterministic"), Draw(CentreOf(3, 3), 7, 1), Draw(CentreOf(3, 3), 7, 1));
 
-	// Missing rasters filter nothing: the table's point stands.
 	FInputs Bare;
 	Bare.AoiSizeCm = Aoi;
 	TestEqual(TEXT("no rasters: the point stands"), Judge(Tree(CentreOf(1, 1)), Bare, Params, nullptr), EVerdict::Keep);
@@ -171,7 +161,6 @@ bool FMantlePlaceFoliageScatterInstanceTest::RunTest(const FString& Parameters)
 		TargetHeightCm(Tree(CentreOf(0, 0), 0.0f), Inputs), 100.0 * 40.0 * 32768.0 / 65535.0, 1e-3);
 	TestEqual(TEXT("neither: zero"), TargetHeightCm(Tree(CentreOf(0, 0), 0.0f), FInputs()), 0.0, 1e-9);
 
-	// The engine cone: 100 cm tall, 100 cm wide, pivot at its centre.
 	const FBox Cone(FVector(-50.0, -50.0, -50.0), FVector(50.0, 50.0, 50.0));
 	const FTreePoint Point = Tree(FVector(100.0, 200.0, 5000.0), 1500.0f, 300.0f);
 	const FTransform Transform = InstanceTransform(Point, 1500.0, 5000.0, Cone, 0);
@@ -190,4 +179,4 @@ bool FMantlePlaceFoliageScatterInstanceTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

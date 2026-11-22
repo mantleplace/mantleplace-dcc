@@ -4,30 +4,6 @@ namespace MantlePlace.Core.Tests;
 
 using CorpusCase = ConformanceCorpus.CorpusCase;
 
-/// <summary>
-/// One node inside a case's <c>expectations</c>, with every typed read recorded by path (HPS-46b).
-/// </summary>
-/// <remarks>
-/// <para>
-/// <b>The gap this closes.</b> <c>HPS-46</c> proves consumption at the top level of
-/// <c>expectations</c>: a declared key nothing read fails the suite. It stops there. Asserting that
-/// <c>items</c> was read says nothing about the thirty-four leaves inside its two rows, so a host
-/// reading one of them satisfies the rule in full and nothing can tell it apart from a host reading
-/// all of them — the same blind spot one level down.
-/// </para>
-/// <para>
-/// So the same idea is applied below the top level, the way <see cref="VectorDocument"/> applies it
-/// inside a <c>vector</c> file: every nested leaf is enumerated up front by
-/// <see cref="ConformanceCorpus.NestedExpectationPaths"/>, each typed read here strikes one off, and
-/// anything still standing fails with its path.
-/// </para>
-/// <para>
-/// Deliberately NOT the production <c>JsonReading</c> accessors, even though they are a few metres
-/// away and do the same thing: a conformance suite that reads its expected values through the parser
-/// under test's own helpers cannot catch a bug in those helpers, because the two sides would agree
-/// by construction.
-/// </para>
-/// </remarks>
 internal sealed class ExpectationNode
 {
     private readonly CorpusCase _case;
@@ -42,17 +18,6 @@ internal sealed class ExpectationNode
 
     internal JsonElement Element { get; }
 
-    /// <summary>
-    /// Reads a string, recording the path. <c>null</c> when the key is absent, is not a string, or
-    /// is an explicit JSON <c>null</c>.
-    /// </summary>
-    /// <remarks>
-    /// An explicit <c>null</c> counts as READ, because in this corpus it is a value: the legacy
-    /// row's nulls mean UNKNOWN, which is the whole point of ⛔<c>HPS-27</c>, and a tracker that
-    /// treated JSON null as nothing to track would make those the leaves a suite could skip for
-    /// free. An absent key and a wrong-typed one record nothing — those are the two the tracker has
-    /// to catch, and they must fail identically.
-    /// </remarks>
     internal string? Str(string key) => Read(key, JsonValueKind.String, out JsonElement child)
         ? child.GetString()
         : null;
@@ -65,11 +30,6 @@ internal sealed class ExpectationNode
         ? child.GetInt32()
         : null;
 
-    /// <summary>
-    /// Reads a manifest version in EITHER family, recording the path: a semver string as itself, an
-    /// integer-era number stringified. The vault lists bundles at rest, so a corpus expectation for
-    /// a listed version may be written in either era.
-    /// </summary>
     internal string? Version(string key)
     {
         if (Read(key, JsonValueKind.String, out JsonElement text))
@@ -104,11 +64,6 @@ internal sealed class ExpectationNode
         return child.ValueKind == JsonValueKind.True;
     }
 
-    /// <summary>
-    /// An object-valued key as a node, or <c>null</c> when it is absent or not an object. An EMPTY
-    /// object is recorded here rather than by a child read, because it has no children — "known to
-    /// hold nothing" is still an assertion the host has to make.
-    /// </summary>
     internal ExpectationNode? Object(string key)
     {
         if (!Element.TryGetProperty(key, out JsonElement child)
@@ -125,11 +80,6 @@ internal sealed class ExpectationNode
         return new ExpectationNode(_case, child, Child(key));
     }
 
-    /// <summary>
-    /// The elements of an array-valued key as nodes, or <c>null</c> when it is absent or not an
-    /// array. An EMPTY array records its own path, for the reason <see cref="Object"/> gives:
-    /// <c>formats: []</c> on the legacy row is the assertion that the row has none.
-    /// </summary>
     internal IReadOnlyList<ExpectationNode>? Items(string key)
     {
         if (!Element.TryGetProperty(key, out JsonElement child)
@@ -154,7 +104,6 @@ internal sealed class ExpectationNode
         return items;
     }
 
-    /// <summary>Reads this node as a scalar string — for an element of a string array.</summary>
     internal string? AsString()
     {
         if (Element.ValueKind != JsonValueKind.String)

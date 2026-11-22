@@ -2,16 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Open in Curator: which extent a project already knows, and the link that carries it.
-/// </summary>
-/// <remarks>
-/// The shim only reads two facts out of the model (the order id on Project Information, the site
-/// latitude and longitude) and opens what <see cref="CuratorLink"/> returns, and it is never built
-/// in CI (<c>HPS-02</c>). Every decision is therefore pinned here, for all three cases the ticket
-/// names: a project with a Mantle Place import, a project with only a site location, and a project
-/// with neither.
-/// </remarks>
 internal static class CuratorExtentTests
 {
     private const string Site = "https://mantle.place";
@@ -23,8 +13,6 @@ internal static class CuratorExtentTests
     internal static int Run()
     {
         TestRun run = new();
-
-        // --- The three cases ---
 
         run.Case("a project with a Mantle Place import opens on that order's extent", () =>
         {
@@ -57,7 +45,6 @@ internal static class CuratorExtentTests
                 run.Within((extent.West + extent.East) / 2, site.LongitudeDegrees, 1e-9, $"{choice.Label}: centred east-west");
                 run.Within((extent.South + extent.North) / 2, site.LatitudeDegrees, 1e-9, $"{choice.Label}: centred north-south");
 
-                // East-west metres per degree shrink with latitude; the box is still choice.SideMetres square.
                 double northSouthMetres = (extent.North - extent.South) * 111_132.0;
                 run.Within(northSouthMetres, choice.SideMetres, choice.SideMetres * 0.01, $"{choice.Label}: north-south side");
                 double eastWestMetres = (extent.East - extent.West) * 111_320.0 * Math.Cos(site.LatitudeDegrees * Math.PI / 180.0);
@@ -83,8 +70,6 @@ internal static class CuratorExtentTests
             run.Equal(resolved.SizeChoices.Count, 0, "no sizes");
             run.Equal(CuratorLink.Build(Site, resolved.Extent), "https://mantle.place/curator", "the plain link");
         });
-
-        // --- The edges of each case ---
 
         run.Case("an import whose order the vault no longer lists falls back to the site location and says so", () =>
         {
@@ -201,8 +186,6 @@ internal static class CuratorExtentTests
             run.Within(point.LongitudeDegrees, -90.0, 1e-12, "longitude");
         });
 
-        // --- The link ---
-
         run.Case("the link is the curator, the extent as W,S,E,N, and from=revit", () =>
         {
             run.Equal(
@@ -245,8 +228,6 @@ internal static class CuratorExtentTests
             run.Equal(CuratorLink.Build("not a url", null), "https://mantle.place/curator", "unusable base");
             run.Equal(CuratorLink.Build(null, null), "https://mantle.place/curator", "no base");
         });
-
-        // --- The vault record carries the extent ---
 
         run.Case("the vault listing reader keeps the row's extent", () =>
         {

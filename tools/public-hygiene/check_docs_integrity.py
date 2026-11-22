@@ -83,51 +83,23 @@ from urllib.parse import unquote
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# The directory whose documents are agent-facing, and the ADR index's home.
 DOCS_DIR = "docs/"
 ADR_DIR = "docs/adr"
 ROOT_GUIDE = "CLAUDE.md"
 
-# The frontmatter keys the docs graph navigates by.
 REQUIRED_KEYS = ("name", "description")
 
-# A fence opens and closes with three or more backticks or tildes, optionally indented.
 FENCE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
 
-# An inline code span. Stripped before links are read, for the same reason a fence is. The opening
-# run of backticks is what closes it, so ``a ` b`` is one span rather than two mis-cut ones.
 CODE_SPAN = re.compile(r"(`+)(?:(?!\1).)*?\1")
 
-# The two link forms.
-#
-# The inline form is matched on its TARGET half, "](...", rather than on the whole link. The link
-# text is not read, which is what makes an image inside a link ("[![alt](icon.png)](page.md)")
-# yield both targets: a pattern anchored on the opening bracket consumes the outer link whole and
-# never sees the inner one, because matches do not overlap.
-#
-# The target allows a balanced parenthesised pair, so a filename containing parentheses is read
-# whole rather than cut at the first ")" and then reported as missing -- a false finding, and a
-# false finding is how a gate gets switched off. An optional `"title"` after the target stops at
-# the whitespace and is left behind.
-#
-# ⛔ A footnote definition is NOT a link definition. "[^1]: some prose" would otherwise hand the
-# gate the first word of the footnote as a path; GitHub renders footnotes, so the first document
-# here to use one would fail CI with a finding that is nonsense.
 INLINE_LINK = re.compile(r"\]\(\s*((?:[^()\s]|\([^()]*\))*)")
 REFERENCE_LINK = re.compile(r"(?m)^[ \t]{0,3}\[(?!\^)[^\]]+\]:[ \t]*(\S+)")
 
-# A scheme ("https:", "mailto:") or a protocol-relative host. Either way it is an address, not a
-# path, and this job never resolves an address.
 ABSOLUTE_TARGET = re.compile(r"(?i)^(?:[a-z][a-z0-9+.-]*:|//)")
 
-# A frontmatter line: a flat key and a value. Anything else in the block is a parse failure, which
-# is the honest reading -- this parser is not YAML and must not pretend to have understood a
-# construct it cannot.
 FRONTMATTER_LINE = re.compile(r"^([A-Za-z][\w-]*):\s*(.*)$")
 
-# The ADR index bullet in root CLAUDE.md, and the numbers it names. Bold is what makes an entry an
-# entry: the same paragraph mentions "0002's bug in the other host" in passing, and a mention is
-# not a listing.
 ADR_INDEX_BULLET = re.compile(r"(?ms)^- [^\n]*\]\(docs/adr/\).*?(?=^- |\Z)")
 ADR_INDEX_ENTRY = re.compile(r"\*\*(\d{4})\*\*")
 ADR_FILENAME = re.compile(r"^(\d{4})-[\w-]+\.md$")

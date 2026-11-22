@@ -24,9 +24,6 @@ namespace MantlePlaceCoverageRasters
 		const FString& DestPackagePath,
 		FString& OutError)
 	{
-		// Resolve the mapping BEFORE importing. A raster whose value_mapping cannot be read has no
-		// meaning to attach, and a texture with no meaning is the anonymous ramp this whole path
-		// exists to avoid — so it is skipped rather than imported bare.
 		EMantlePlaceCoverageMapping Kind = EMantlePlaceCoverageMapping::Identity;
 		if (!FMantlePlaceCoverageRasterLogic::ResolveMappingKind(
 				Raster.Encoding, Raster.ValueMapping, Kind, OutError))
@@ -40,8 +37,6 @@ namespace MantlePlaceCoverageRasters
 		Task->Filename = DiskFile;
 		Task->DestinationPath = MantlePlaceImportNaming::SubfolderPath(
 			DestPackagePath, MantlePlaceImportNaming::ESubfolder::CoverageRasters);
-		// Named on the way in, never renamed afterwards -- a rename here would purge the import's
-		// undo transaction. See MantlePlaceImportNaming::ImportNameFor.
 		Task->DestinationName = MantlePlaceImportNaming::TextureName(DiskFile);
 		Task->bAutomated = true;
 		Task->bReplaceExisting = true;
@@ -66,9 +61,6 @@ namespace MantlePlaceCoverageRasters
 			return nullptr;
 		}
 
-		// Settings are keyed off what the engine ACTUALLY produced, not off the declared encoding
-		// alone, and a contradiction between the two is refused here. The texture is discarded on
-		// refusal so a wrong-precision asset can never be left behind for a consumer to find.
 		FMantlePlaceCoverageTextureSettings Settings;
 		if (!FMantlePlaceCoverageRasterLogic::ResolveTextureSettings(
 				Raster.Encoding, Texture->Source.GetFormat(), Settings, OutError))
@@ -77,18 +69,12 @@ namespace MantlePlaceCoverageRasters
 			return nullptr;
 		}
 
-		// Applied AFTER the import, never before it. UTextureFactory overwrites its own
-		// CompressionSettings from the texture as it starts ("start with the value that the loader
-		// suggests"), so a factory configured up front is silently ignored — and the non-power-of-2
-		// import rules would otherwise leave these as 8-bit BGRA8 with SRGB on.
 		Texture->CompressionSettings = Settings.Compression;
 		Texture->SRGB = Settings.bSRGB;
 		Texture->MipGenSettings = Settings.MipGen;
 		Texture->Filter = Settings.Filter;
 		Texture->VirtualTextureStreaming = Settings.bVirtualTextureStreaming;
 
-		// These rasters are north-up windows over one AOI, not tiling patterns; wrapping would
-		// repeat the AOI rather than end it, the same reason the drape clamps.
 		Texture->AddressX = TA_Clamp;
 		Texture->AddressY = TA_Clamp;
 		Texture->PostEditChange();
@@ -97,10 +83,6 @@ namespace MantlePlaceCoverageRasters
 		Data->Mapping = Kind;
 		Data->LayerName = Layer.Name;
 		Data->Encoding = Raster.Encoding;
-		// Stated, not defaulted: UTextureFactory copies the PNG through in source-map order, so
-		// unlike the heightmap and weight planes (which this plugin transposes onto the Landscape
-		// grid) these keep U=East / V=South. A consumer sampling one beside the Landscape has to
-		// swizzle, and this is the field that tells it so.
 		Data->Orientation = EMantlePlaceCoverageOrientation::NorthUpRowMajor;
 		Data->MinValue = Raster.ValueMapping.MinValue;
 		Data->MaxValue = Raster.ValueMapping.MaxValue;

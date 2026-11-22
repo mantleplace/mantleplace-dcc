@@ -14,13 +14,6 @@
 
 namespace
 {
-	/**
-	 * Depth-first sweep for tagged widgets. Cheap: runs on demand, not per
-	 * frame. Both tagging surfaces are honoured — the declarative `.Tag()`
-	 * argument sets the SWidget::Tag NAME (not metadata), while imperative
-	 * code may attach FTagMetaData — because a caller cannot tell from the
-	 * outside which one a widget author used.
-	 */
 	FName WidgetTag(const TSharedRef<SWidget>& Widget)
 	{
 		const FName Tag = Widget->GetTag();
@@ -49,12 +42,6 @@ namespace
 		}
 	}
 
-	/**
-	 * The widget's current arranged geometry, or unset when it is not
-	 * reachable in the live layout. FindPathToWidget arranges from the window
-	 * down, so a widget parked on an SWidgetSwitcher's dormant page — whose
-	 * cached paint geometry is stale but nonzero — correctly fails here.
-	 */
 	bool ReachableGeometry(const TSharedRef<SWidget>& Widget, FGeometry& OutGeometry)
 	{
 		FWidgetPath Path;
@@ -89,7 +76,7 @@ namespace
 			}
 		}
 	}
-} // namespace
+}
 
 bool UMantlePlaceAutomationLibrary::GetTaggedWidgetScreenRect(
 	FName Tag, FVector2D& OutCenter, FVector2D& OutSize)
@@ -115,7 +102,6 @@ bool UMantlePlaceAutomationLibrary::GetTaggedWidgetScreenRect(
 
 namespace
 {
-	/** First text block under (or at) a widget, depth-first. */
 	TSharedPtr<STextBlock> FindTextBlock(const TSharedRef<SWidget>& Widget)
 	{
 		if (Widget->GetType() == TEXT("STextBlock"))
@@ -135,7 +121,7 @@ namespace
 		}
 		return nullptr;
 	}
-} // namespace
+}
 
 bool UMantlePlaceAutomationLibrary::GetTaggedWidgetText(FName Tag, FString& OutText)
 {
@@ -198,7 +184,7 @@ namespace
 		}
 		return EMantlePlaceCuratorSource::None;
 	}
-} // namespace
+}
 
 FMantlePlaceCuratorResolution UMantlePlaceAutomationLibrary::ResolveCuratorExtent()
 {
@@ -207,7 +193,6 @@ FMantlePlaceCuratorResolution UMantlePlaceAutomationLibrary::ResolveCuratorExten
 
 FMantlePlaceCuratorResolution UMantlePlaceAutomationLibrary::ResolveCuratorExtentInWorld(UWorld* World)
 {
-	// The button's own two calls, and nothing of its own: Resolve decides, CuratorUrl builds the link.
 	const FMantlePlaceResolvedExtent Resolved = MantlePlaceLevelExtent::Resolve(World);
 
 	FMantlePlaceCuratorResolution Result;

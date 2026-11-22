@@ -153,8 +153,15 @@ Per-host specifics live beside the code:
 - Revit — [`revit/README.md`](revit/README.md) and [`revit/CLAUDE.md`](revit/CLAUDE.md)
 - Blender — [`blender/README.md`](blender/README.md) and [`blender/CLAUDE.md`](blender/CLAUDE.md)
 
-Match the surrounding code. The comment density here is higher than most codebases and that is
-deliberate: comments explain *why*, especially where a rule guards a failure that looks like success.
+Match the surrounding code.
+
+**Code carries no comments** ([ADR 0032](docs/adr/0032-code-carries-no-comments.md)). Delete a comment
+that repeats the code, file an issue for one that excuses a shortcut, and write a decision that is not
+obvious as an ADR. Shebangs, licence headers, tool directives, framework-read Python docstrings and the
+header comments Unreal shows as editor tooltips do not count. `ci-comments` runs
+`node tools/comment-ratchet/comment-ratchet.mjs check --base origin/main` and fails a pull request
+that adds comment lines. To lower the baseline, delete the comment, run
+`node tools/comment-ratchet/comment-ratchet.mjs write` and commit the baseline.
 
 **C++ formatting:** [`unreal/.clang-format`](unreal/.clang-format) is the authority for new Unreal
 code. It is deliberately conservative — no rewrapping, no include reordering, no comment churn — but

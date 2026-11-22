@@ -2,14 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// Which orders in a vault listing are news to the curator on this machine: the unannounced orders.
-/// </summary>
-/// <remarks>
-/// An order is news once, the first time it is Available and nobody has told the curator about it
-/// here. A first listing is not news at all — every order in it predates the record, and announcing
-/// them would bury the curator in notices about orders they bought months ago.
-/// </remarks>
 internal static class VaultNewsTests
 {
     private const string Email = "curator@example.com";
@@ -84,7 +76,6 @@ internal static class VaultNewsTests
         {
             AnnouncedOrders known = VaultNews.Arrivals(AnnouncedOrders.Empty, Listing(Available("order-1")), Email).Record;
 
-            // Built while signed out; the account is one this machine already knows.
             VaultNewsResult back = VaultNews.Arrivals(known, Listing(Available("order-1"), Available("order-2")), " Curator@Example.com ");
             run.Equal(back.Arrivals.Count, 1, "the order built in between is announced");
         });

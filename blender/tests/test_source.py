@@ -1,10 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""Opening a bundle from its zip or from an extracted folder, and taking one file out of it.
-
-Real files in a temporary directory, no Blender: the zip handling, the case rule, the escape guard
-and the digest check are all plain I/O.
-"""
 
 import hashlib
 import json
@@ -113,7 +108,6 @@ class FolderTests(SourceTestCase):
         with open_bundle(manifest_path) as bundle:
             local, verified = bundle.materialise("Site/Context.usdz", self.out, DIGEST)
         self.assertTrue(verified)
-        # An extracted bundle is read in place: nothing is copied.
         self.assertEqual(os.path.normcase(os.path.abspath(local)),
                          os.path.normcase(os.path.join(self.root, "extracted", "Site", "Context.usdz")))
 

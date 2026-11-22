@@ -5,23 +5,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-/// <summary>
-/// "Prepare for Handover": makes the open project safe to give to a client. It removes the ODbL
-/// content an import filed in its container, keeps a Produced Work terrain of the same order where
-/// there is one (a swap), and leaves the data credit in the project.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The work is <see cref="PrepareForHandover"/>'s, with no dialog in it; this asks first, because it
-/// deletes, and says what was done. It works from the containers alone, so it needs no bundle and
-/// works on a project a colleague saved.
-/// </para>
-/// <para>
-/// One transaction, so one undo step, and it saves nothing. Deleting an element deletes what hangs on
-/// it (a toposolid's subdivisions, a tree hosted on it), which is why the result counts what Revit
-/// removed as well as what was filed.
-/// </para>
-/// </remarks>
 [Transaction(TransactionMode.Manual)]
 [Regeneration(RegenerationOption.Manual)]
 public sealed class PrepareForHandoverCommand : IExternalCommand

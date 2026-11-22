@@ -21,7 +21,6 @@ namespace
 {
 	using EFont = FMantlePlaceEditorStyle::EFont;
 
-	/** A "{label}   {value}" definition row (mono label / body value), as on the web detail list. */
 	TSharedRef<SWidget> MakeDefRow(const FString& Label, const FString& Value)
 	{
 		return SNew(SHorizontalBox)
@@ -60,7 +59,6 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 		? BuildVaultDetailView(*Item, bBusy)
 		: FMantlePlaceVaultDetailView();
 
-	// Layers summary line.
 	FString LayersText;
 	if (View.bLayersKnown)
 	{
@@ -75,7 +73,6 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 		LayersText = TEXT("-");
 	}
 
-	// The merged "details" frame (identity + status + definition list).
 	const TSharedRef<SVerticalBox> DetailsBox = SNew(SVerticalBox);
 
 	DetailsBox->AddSlot().AutoHeight()
@@ -95,7 +92,6 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 			.ColorAndOpacity(FSlateColor(MantlePlacePalette::Faint()))
 		];
 	}
-	// Status word on its own line: plain tinted text, no pill / no dot.
 	DetailsBox->AddSlot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S3, 0.f, 0.f)
 	[
 		SNew(STextBlock)
@@ -111,8 +107,6 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 		.ColorAndOpacity(FSlateColor(MantlePlacePalette::Subtle()))
 	];
 
-	// Definition list - set off from the meta above by gap spacing, not a hairline (web dropped divide-y).
-	// Order mirrors the web detail: Extent, Delivered as, Total size, then tier/manifest/layers.
 	DetailsBox->AddSlot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S2, 0.f, FMantlePlaceEditorStyle::S6)[ MakeDefRow(TEXT("extent"), View.ExtentText) ];
 	DetailsBox->AddSlot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S6)[ MakeDefRow(TEXT("delivered as"), View.DeliveredAsText) ];
 	DetailsBox->AddSlot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S6)[ MakeDefRow(TEXT("total size"), View.SizeText) ];
@@ -124,7 +118,6 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 	}
 	DetailsBox->AddSlot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S6)[ MakeDefRow(TEXT("layers"), LayersText) ];
 
-	// Import action row.
 	DetailsBox->AddSlot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S2, 0.f, 0.f)
 	[
 		SNew(SHorizontalBox)
@@ -132,10 +125,6 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 		+ SHorizontalBox::Slot().AutoWidth()
 		[
 			SNew(SButton)
-			// Automation tag: the detail page's Import. Position-independent by
-			// design — this button moves with the definition list above it (the
-			// MANIFEST row is conditional), which is exactly why tooling must
-			// resolve it by tag rather than by remembered coordinates.
 			.Tag(TEXT("MantlePlace.Vault.Import"))
 			.ButtonStyle(&FMantlePlaceEditorStyle::Get().GetWidgetStyle<FButtonStyle>("MantlePlace.Button.Primary"))
 			.ContentPadding(FMantlePlaceEditorStyle::ButtonPaddingMd)
@@ -150,7 +139,6 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 		]
 	];
 
-	// The artifacts frame (per-format list), only when we know the artifacts.
 	const TSharedRef<SVerticalBox> ArtifactsBox = SNew(SVerticalBox);
 	ArtifactsBox->AddSlot().AutoHeight()
 	[
@@ -171,8 +159,6 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 	}
 	else
 	{
-		// Info-only per-format rows (the editor imports, it doesn't download raw artifacts): a dotted
-		// label + a mono "{size} · opens with {tools}" sub-line, mirroring the web artifacts box.
 		for (const FMantlePlaceVaultArtifactView& Artifact : View.Artifacts)
 		{
 			ArtifactsBox->AddSlot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S3, 0.f, 0.f)
@@ -197,8 +183,6 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 		}
 	}
 
-	// The Extras frame, only for an MPB 3.0 bundle that lists some. A locked Extra is the words and nothing to
-	// press: the platform refuses it, so no download is offered. A free bundle says what comes with paid builds.
 	const TSharedRef<SVerticalBox> ExtrasBox = SNew(SVerticalBox);
 	if (View.Extras.Num() > 0)
 	{
@@ -244,8 +228,6 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 		}
 	}
 
-	// Paint the same onyx panel backdrop the list page draws so both switcher states share one palette
-	// (the scroll body would otherwise fall back to the editor's default grey).
 	ChildSlot
 	[
 		SNew(SBorder)
@@ -254,11 +236,10 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 		[
 			SNew(SScrollBox)
 			+ SScrollBox::Slot()
-			.Padding(FMantlePlaceEditorStyle::S2) // frames sit one gutter from every edge
+			.Padding(FMantlePlaceEditorStyle::S2)
 			[
 				SNew(SVerticalBox)
 
-				// Details frame.
 				+ SVerticalBox::Slot().AutoHeight()
 				[
 					SNew(SBorder)
@@ -267,7 +248,6 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 					[ DetailsBox ]
 				]
 
-				// Artifacts frame (inter-box gap == edge gutter).
 				+ SVerticalBox::Slot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S2, 0.f, 0.f)
 				[
 					SNew(SBorder)
@@ -276,7 +256,6 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 					[ ArtifactsBox ]
 				]
 
-				// Extras frame (an MPB 3.0 bundle's own; collapsed when it lists none).
 				+ SVerticalBox::Slot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S2, 0.f, 0.f)
 				[
 					SNew(SBorder)

@@ -2,10 +2,6 @@ using MantlePlace.Core.Tests;
 
 namespace MantlePlace.AutoCad.Tests;
 
-/// <summary>
-/// The presence-gate decision: whether the Civil 3D part may load. The cases are the rows of the
-/// spike's table (<c>autocad/docs/api-record.md</c>), each as the observations the host gave.
-/// </summary>
 internal static class PresenceTests
 {
     internal static int Run()
@@ -50,8 +46,6 @@ internal static class PresenceTests
 
         run.Case("none of the signals that failed to decide in the spike can turn the part on by itself", () =>
         {
-            // AecBase.dbx is the AutoCAD verticals' shared base, PRODUCT reads AutoCAD in Civil 3D too,
-            // and AeccDbMgd is loaded lazily: each alone is what a wrong test would have trusted.
             PresenceVerdict baseOnly = Presence.Decide(new PresenceObservations(false, false, true, "AutoCAD", true));
             PresenceVerdict managedOnly = Presence.Decide(new PresenceObservations(true, false, false, "AutoCAD", true));
             PresenceVerdict product = Presence.Decide(new PresenceObservations(false, false, false, "Civil 3D", true));

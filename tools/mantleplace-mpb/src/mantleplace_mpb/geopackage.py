@@ -1,17 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The one-table rule for a 2.0 GeoPackage row (`format.md` §6.3).
-
-A GeoPackage row of `vector.layers[].formats[]` that lists no `tables` holds exactly one feature
-table, and a reader reads that one whatever it is named: the producer names it in PascalCase after
-the file stem (`RoadSplines`), not after the layer (`road_splines`). A file that holds several
-cannot be read that way, so it is an error, never a guess. A row that lists its tables is read by
-name and may hold as many as it lists.
-
-Only the table list is read, through the standard library's `sqlite3`: the file is copied out of
-the archive into a scratch file, opened read-only and removed. A file that is not a GeoPackage is
-noted and not failed: whether it is a readable file is not this rule's question.
-"""
 
 from __future__ import annotations
 
@@ -24,8 +12,6 @@ from .report import Report
 
 _CHECK = "geopackage"
 
-#: A feature table is one `gpkg_contents` names as `features` and `gpkg_geometry_columns` gives a
-#: geometry column, as the Revit and Unreal readers list them.
 _FEATURE_TABLES = (
     "SELECT DISTINCT c.table_name FROM gpkg_contents c "
     "JOIN gpkg_geometry_columns g ON g.table_name = c.table_name "
@@ -38,7 +24,6 @@ def check_geopackage(manifest: dict, bundle: Bundle, report: Report) -> None:
     twins = _projected_variants(manifest)
     seen: set[str] = set()
     for pointer, path in _untabled_rows(manifest):
-        # The twin of an untabled row is read the same way, so it is held to the same rule.
         for candidate in (path, twins.get(path)):
             if candidate is None:
                 continue
@@ -58,7 +43,6 @@ def _projected_variants(manifest: dict) -> dict[str, str]:
 
 
 def _untabled_rows(manifest: dict) -> list[tuple[str, str]]:
-    """(JSON Pointer, path) of each GeoPackage row that lists no tables."""
     vector = manifest.get("vector")
     layers = vector.get("layers") if isinstance(vector, dict) else None
     if not isinstance(layers, list):
@@ -97,7 +81,6 @@ def _check_file(bundle: Bundle, path: str, pointer: str, report: Report) -> None
 
 
 def _feature_tables(bundle: Bundle, path: str) -> list[str] | None:
-    """The feature tables of the GeoPackage at `path`, or None when it cannot be read as one."""
     handle, scratch = tempfile.mkstemp(prefix="mpb-gpkg-", suffix=".gpkg")
     try:
         with os.fdopen(handle, "wb") as out:

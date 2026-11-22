@@ -9,7 +9,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.Addin;
 
-/// <summary>Registers the Mantle Place ribbon and owns the process's one auth session.</summary>
 public sealed class MantlePlaceApplication : IExternalApplication
 {
     private const string TabName = "Mantle Place";
@@ -30,96 +29,36 @@ public sealed class MantlePlaceApplication : IExternalApplication
     private static ConnectedHostService? _connected;
     private static readonly ConnectedHostEdge ConnectedEdge = new();
 
-    /// <summary>The active document's title, as the presence payload last announced it; <c>null</c> for none.</summary>
     private static volatile string? _document;
 
-    /// <summary>Revit's UI dispatcher, held only so the handler below can be detached again.</summary>
     private static Dispatcher? _uiDispatcher;
 
-    /// <summary>
-    /// The Account split button and the three items whose appearance depends on the session.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ <b>Retained on purpose.</b> The two push buttons these replace were added and their
-    /// references dropped on the floor, which is why nothing could ever change their text or their
-    /// enabled state — the ribbon was structurally incapable of reflecting the session, and the
-    /// truth was left to a dialog at click time. A ribbon item is only ever as honest as the
-    /// reference somebody kept.
-    /// </remarks>
     private static SplitButton? _accountButton;
 
     private static PushButton? _accountFace;
     private static PushButton? _accountIdentity;
     private static PushButton? _signOutButton;
 
-    /// <summary>
-    /// The one session for this Revit process.
-    /// </summary>
-    /// <remarks>
-    /// Static accessors rather than parameters because Revit constructs each
-    /// <see cref="IExternalCommand"/> itself and gives us no way to inject anything. One of each per
-    /// process, not one per command: two sessions would each hold their own access token, and
-    /// signing out in one would leave the other authenticated and the ribbon lying about it.
-    /// </remarks>
     public static AuthSession Session => _session ?? throw NotStarted();
 
-    /// <summary>The routes this process signs in against and sends curators to.</summary>
     internal static MantlePlaceEndpoints Endpoints => _endpoints ?? throw NotStarted();
 
-    /// <summary>
-    /// The running Revit's version number (<c>2025</c>, <c>2026</c>, <c>2027</c>), read once at
-    /// startup so the vault window, which holds no <c>UIApplication</c>, can build the feedback link
-    /// (<c>HPS-56</c>). Null only before startup.
-    /// </summary>
     internal static string? HostVersion => _hostVersion;
 
     internal static VaultClient Vault => _vault ?? throw NotStarted();
 
     internal static BundleCache Cache => _cache ?? throw NotStarted();
 
-    /// <summary>
-    /// Every Prepare this session has running. Here rather than on the vault window because a
-    /// Prepare outlives the window (<see cref="PrepareWatcher"/>).
-    /// </summary>
     internal static PrepareWatcher Watcher => _watcher ?? throw NotStarted();
 
-    /// <summary>
-    /// This machine's record of announced orders, shared with every other Revit on it
-    /// (<see cref="AnnouncedOrderStore"/>). The vault browser records what it lists here.
-    /// </summary>
     internal static AnnouncedOrderStore Announced => _announced ?? throw NotStarted();
 
-    /// <summary>The only supported way onto Revit's document thread from a modeless window.</summary>
     internal static ExternalEvent ImportEvent => _importEvent ?? throw NotStarted();
 
     internal static BundleImportEventHandler ImportHandler => _importHandler ?? throw NotStarted();
 
-    /// <summary>
-    /// The connected host: this Revit on the curator's private channel, receiving exports from the web
-    /// vault (<see cref="ConnectedHostService"/>). <c>null</c> before startup and after shutdown, never
-    /// otherwise; it stays off, joining nothing, while the channel is not configured.
-    /// </summary>
     internal static ConnectedHostService? Connected => _connected;
 
-    /// <summary>
-    /// Resumes a stored session at startup (<c>HPS-13</c>), without making Revit wait for it.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>This is what makes the DPAPI refresh token worth writing.</b> It was being written on
-    /// every sign-in and never read back, so every Revit restart forced a full browser round-trip —
-    /// and <c>SignInCommand</c> promised otherwise, telling the curator they would only have to sign
-    /// in again if the machine had no secure store.
-    /// </para>
-    /// <para>
-    /// Fire-and-forget on purpose. <c>OnStartup</c> runs on Revit's thread before the UI exists;
-    /// blocking it on a network call delays the splash screen by however long the platform takes to
-    /// answer, and throwing from it costs the entire ribbon. <see cref="AuthSession.RestoreAsync"/>
-    /// is already silent when there is no stored token and keeps the token on a network failure, so
-    /// there is nothing here worth interrupting a curator for: the worst case is that the ribbon
-    /// comes up signed out, which is exactly where it came up before.
-    /// </para>
-    /// </remarks>
     private static void BeginSessionRestore(AuthSession session)
     {
         _ = Task.Run(async () =>
@@ -130,41 +69,12 @@ public sealed class MantlePlaceApplication : IExternalApplication
             }
             catch (Exception)
             {
-                // Deliberately total. Nothing is observing this task, an unobserved exception on the
-                // finalizer thread can take the process down, and there is no surface to report to
-                // this early. The session simply stays signed out.
             }
         });
     }
 
-    /// <summary>
-    /// Keeps a throw out of one of our own UI handlers from terminating Revit.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// An unhandled exception on the dispatcher is how a sign-in dialog took the whole application
-    /// down: the throw left a <c>Window.Closed</c> handler, reached Revit's message pump, and Revit
-    /// answered the only way it can — "an unrecoverable error has occurred", process terminated,
-    /// with the add-in that caused it named nowhere. A modeless window has no outer <c>try</c> the
-    /// way <c>IExternalCommand.Execute</c> does, so without this there is no layer between a handler
-    /// and the end of the session.
-    /// </para>
-    /// <para>
-    /// ⚠ <b>It marks a fault handled only when a frame on the stack is ours</b>
-    /// (<see cref="AddinFaults.IsOurs"/>). The dispatcher is Revit's, not this add-in's, and
-    /// swallowing Revit's own exceptions would leave the application running on state it had already
-    /// given up on — a worse outcome than the crash, and one nobody could diagnose. Anything that is
-    /// not ours passes through untouched, exactly as it did before this existed.
-    /// </para>
-    /// <para>
-    /// This is a net under a mistake. The contract is still that a handler does not throw; see
-    /// <c>SignInWindow.Guarded</c> (the shared windows, <c>shared/src/MantlePlace.Wpf</c>), which is where the fault is supposed to be caught.
-    /// </para>
-    /// </remarks>
     private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        // Frames, not just the throw site: a plugin usually mis-drives a framework type rather than
-        // throwing one of its own, so the innermost frame is typically System.something.
         string?[] declaringTypes = new StackTrace(e.Exception, fNeedFileInfo: false)
             .GetFrames()
             .Select(frame => frame.GetMethod()?.DeclaringType?.FullName)
@@ -179,11 +89,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
         SayFault(e.Exception);
     }
 
-    /// <summary>A project has closed; the import handler decides whether its window goes with it.</summary>
-    /// <remarks>
-    /// The presence payload says no document once the last one has gone. While another is still open,
-    /// the view Revit activates next says which (<see cref="OnViewActivated"/>).
-    /// </remarks>
     private static void OnDocumentClosed(object? sender, DocumentClosedEventArgs e)
     {
         _importHandler?.OnDocumentClosed();
@@ -203,7 +108,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
         }
     }
 
-    /// <summary>A view became active: the active document may be another one now. Revit's thread.</summary>
     private static void OnViewActivated(object? sender, ViewActivatedEventArgs e)
     {
         if (e?.Document is { IsLinked: false } document)
@@ -212,7 +116,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
         }
     }
 
-    /// <summary>Re-tracks presence when the active document changed; an unchanged one sends nothing.</summary>
     private static void AnnounceDocument(string? title)
     {
         string? document = string.IsNullOrWhiteSpace(title) ? null : title;
@@ -225,17 +128,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _connected?.Announce(Presence());
     }
 
-    /// <summary>The presence payload for this Revit, its plugin and its active document.</summary>
     private static ConnectedHost Presence()
         => ConnectedHosts.Announce(_hostVersion ?? string.Empty, PluginVersion.Current, _document, Environment.MachineName);
 
-    /// <summary>
-    /// Joins, re-authorises or leaves the curator's channel as the session moves (<see cref="ConnectedHostEdge"/>).
-    /// </summary>
-    /// <remarks>
-    /// On whichever thread the session moved on. Nothing here waits: a join opens its socket on the
-    /// pool, and a leave is not awaited.
-    /// </remarks>
     private static void MoveConnectedHost(AuthState state)
     {
         if (_connected is not { } connected || _session is not { } session)
@@ -271,31 +166,19 @@ public sealed class MantlePlaceApplication : IExternalApplication
         {
             await connected.LeaveAsync().ConfigureAwait(false);
         }
-#pragma warning disable CA1031 // Nothing observes this task, and a leave that faults leaves a socket the process drops anyway.
+#pragma warning disable CA1031
         catch (Exception)
 #pragma warning restore CA1031
         {
         }
     }
 
-    /// <summary>
-    /// Tells the curator a fault of this add-in's was caught and Revit is still running. On Revit's
-    /// thread only: it is a <see cref="TaskDialog"/>.
-    /// </summary>
-    /// <remarks>
-    /// The dispatcher net above says it for a fault on Revit's thread; the import window's thread,
-    /// whose dispatcher is this add-in's own, posts its faults here to be said the same way.
-    /// </remarks>
     internal static void SayFault(Exception fault)
     {
         ArgumentNullException.ThrowIfNull(fault);
 
-        // The import window floats over Revit and sits where Revit centres its dialogs; this one must
-        // not open under it (ImportWindowStacking).
         _importHandler?.LowerWindow();
 
-        // Said out loud rather than swallowed. A curator who sees this once has a bug to report; one
-        // who sees nothing has a plugin that quietly does not work.
         new TaskDialog("Mantle Place")
         {
             MainInstruction = "Something in Mantle Place went wrong.",
@@ -304,59 +187,18 @@ public sealed class MantlePlaceApplication : IExternalApplication
         }.Show();
     }
 
-    /// <summary>
-    /// Points F1 over <paramref name="item"/> at the plugin's help page.
-    /// </summary>
-    /// <remarks>
-    /// Every button on the tab gets this, split-button rows included: one that is missed falls
-    /// through to Revit's own help, which knows nothing about it. The address is
-    /// <see cref="HelpLinks.RibbonHelpUrl"/>, held once so a moved page is one edit.
-    /// </remarks>
     private static void GiveHelp(RibbonItem item) =>
         item.SetContextualHelp(new ContextualHelp(ContextualHelpType.Url, HelpLinks.RibbonHelpUrl));
 
-    /// <summary>
-    /// The Account panel: one split button whose face is the auth session.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// ⚠ <b><c>IsSynchronizedWithCurrentItem = false</c> is what makes the face a face.</b> A Revit
-    /// <c>SplitButton</c> defaults to true, which means it adopts whichever dropdown item was used
-    /// last — click "Open mantle.place" once and the button that reports your session is replaced by
-    /// a link to a website. With it false the face is pinned to the first item added, which is why
-    /// <c>MantlePlaceAccountFace</c> goes on first and why the order of the rest is not decorative.
-    /// </para>
-    /// <para>
-    /// ⚠ The face's tooltip is set on the <b>push button</b>, not on the split button:
-    /// <c>RibbonItem.ToolTip</c> on a <c>SplitButton</c> is documented as never being shown.
-    /// </para>
-    /// <para>
-    /// The panel name stays <c>Account</c> and the tab stays <c>Mantle Place</c> — a recorded journal
-    /// keys on both, and on the <c>Bundles</c> panel's command ids, which is why those are untouched
-    /// here (<c>revit/README.md</c> ▸ the ribbon events a playback journal needs).
-    /// <c>MantlePlaceSignOut</c> keeps its id for the same reason, one dropdown row lower.
-    /// </para>
-    /// </remarks>
     private static void BuildAccountPanel(UIControlledApplication application, string assemblyPath)
     {
         RibbonPanel account = application.CreateRibbonPanel(TabName, "Account");
 
-        // Taken from the same place the live updates are, rather than written out again here. The
-        // state a ribbon is built in is the state the session starts in, and two copies of one
-        // string is how a face ends up saying something the core stopped saying a year ago.
         AccountRibbonState initial = AccountRibbon.For(AuthStateMachine.Initial, null, false);
 
         _accountButton = (SplitButton)account.AddItem(
             new SplitButtonData("MantlePlaceAccount", initial.FaceText));
 
-        // First, and therefore the face. Its text, tooltip and enabled state are rewritten on every
-        // auth transition by ApplyAccountState; what is set here is only what the ribbon shows in
-        // the moment between the panel existing and the session being read.
-        // ⚠ The id is MantlePlaceSignIn, not MantlePlaceAccountFace, and the difference is a rule
-        // rather than a preference: command ids are fixed here because a recorded journal keys on
-        // them. This button does more than its id now says — signed in, it opens About — and the id
-        // stays anyway. An id is an address, not a description, and renaming it to read better
-        // would break the one thing it is for.
         _accountFace = _accountButton.AddPushButton(new PushButtonData(
             "MantlePlaceSignIn",
             initial.FaceText,
@@ -372,14 +214,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 + "opens About Mantle Place.",
         });
 
-        // The face is the one place on this ribbon the brand is spent, and it is spent on the mark
-        // rather than on anything drawn for the occasion. RibbonImagery keeps the reference and
-        // repaints it when Revit changes theme; the mark itself has no theme, and says why.
         RibbonImagery.GiveMark(_accountFace);
         GiveHelp(_accountFace);
 
-        // The address, shown only while there is one. Disabled for its whole life: it is a line of
-        // text that happens to live in a control that can only hold buttons.
         _accountIdentity = _accountButton.AddPushButton(new PushButtonData(
             "MantlePlaceAccountIdentity",
             AccountRibbon.SignedInFace,
@@ -419,7 +256,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
         RibbonImagery.GiveMark(openSite);
         GiveHelp(openSite);
 
-        // HPS-56: beside About, and enabled signed in or out, because the web form needs no account.
         PushButton feedback = _accountButton.AddPushButton(new PushButtonData(
             "MantlePlaceSendFeedback",
             AccountRibbon.SendFeedbackFace,
@@ -446,21 +282,11 @@ public sealed class MantlePlaceApplication : IExternalApplication
         RibbonImagery.GiveMark(about);
         GiveHelp(about);
 
-        // The split button itself too: F1 over the face is F1 over whichever row it adopted, but
-        // over the dropdown arrow it is F1 over the split button, and that must not fall through.
         GiveHelp(_accountButton);
 
         _accountButton.IsSynchronizedWithCurrentItem = false;
     }
 
-    /// <summary>
-    /// Copies the session onto the Account button. Revit's UI thread only.
-    /// </summary>
-    /// <remarks>
-    /// Reads the session rather than the transition it was told about, so the ribbon can never be one
-    /// event behind — and so the single call after the ribbon is built catches whatever the startup
-    /// restore did while the panel did not exist yet.
-    /// </remarks>
     private static void ApplyAccountState()
     {
         AuthSession? session = _session;
@@ -477,9 +303,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
             _accountFace.ToolTip = face.FaceToolTip;
             _accountFace.Enabled = face.FaceEnabled;
 
-            // Belt and braces: with IsSynchronizedWithCurrentItem false the split button draws its
-            // first item, but it carries its own text for the case where the dropdown is empty, and
-            // leaving that at whatever it was created with is a second thing able to lie.
             if (_accountButton is not null)
             {
                 _accountButton.ItemText = face.FaceText;
@@ -502,39 +325,11 @@ public sealed class MantlePlaceApplication : IExternalApplication
         }
         catch (Autodesk.Revit.Exceptions.ApplicationException)
         {
-            // Swallowed, and only here. This runs on every auth transition, so a ribbon that refuses
-            // an assignment would otherwise raise the fault dialog repeatedly — for a button, while
-            // the curator is signing in. The strings are pre-checked in AccountRibbon precisely so
-            // this catch stays unreachable; what is left is Revit refusing a ribbon it is tearing
-            // down, and a stale face on the way out costs nothing.
         }
     }
 
-    /// <summary>
-    /// Marshals an auth transition onto Revit's UI thread, then repaints the Account button.
-    /// </summary>
-    /// <remarks>
-    /// ⛔ <c>AuthSession.StateChanged</c> is raised on whichever thread finished the work, which is a
-    /// thread-pool thread for every transition a sign-in or a refresh produces. Touching a
-    /// <c>PushButton</c> from there is a main-thread violation, and Revit answers those by
-    /// terminating the process — so this hop is not a nicety.
-    /// </remarks>
-    /// <remarks>
-    /// ⚠ <b>What this does and does not see when the other host changes the shared credential.</b>
-    /// Both hosts keep one stored session per Windows user, so Unreal can sign in or out underneath
-    /// this process. A renewal is the moment that becomes visible: <c>AuthSession.RefreshAsync</c>
-    /// re-reads the freshest stored token before spending a round trip, so a credential the other
-    /// host rotated arrives here as an ordinary Refreshing → Authenticated transition and the face is
-    /// rebuilt from the session, never from anything cached at startup. <b>Nothing watches the store
-    /// itself.</b> Unreal signing out does not move this process's session, and this ribbon goes on
-    /// saying Signed In until the next renewal finds the credential gone — at which point Sign Out
-    /// here is still correct, because it clears memory as well as the store.
-    /// </remarks>
     private static void OnAuthStateChanged(object? sender, AuthState state)
     {
-        // A sign-in — the startup restore included — lists the vault now rather than at the next
-        // tick (HPS-55); a renewal does not (SignInEdge). Locked because AuthSession raises this
-        // outside its own lock, from whichever thread finished the work.
         bool signedIn;
         lock (SignIns)
         {
@@ -543,8 +338,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
         if (signedIn)
         {
-            // Armed first, so the listing woken next is the one it re-joins from: any Prepare a
-            // closed or crashed Revit was watching is picked back up without a request of its own.
             _rejoiner?.Arm();
             _news?.Wake();
         }
@@ -554,10 +347,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
         OnUiThread(ApplyAccountState);
     }
 
-    /// <summary>
-    /// Runs <paramref name="action"/> on Revit's UI thread: now when already on it, posted otherwise,
-    /// and not at all once the add-in has shut down.
-    /// </summary>
     internal static void OnUiThread(Action action)
     {
         Dispatcher? dispatcher = _uiDispatcher;
@@ -575,16 +364,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _ = dispatcher.BeginInvoke(action);
     }
 
-    /// <summary>
-    /// Marshals a Prepare's ending onto Revit's UI thread, then tells the curator if there is anything
-    /// to tell (<see cref="PrepareNotifier"/>).
-    /// </summary>
-    /// <remarks>
-    /// ⛔ <see cref="PrepareWatcher.Ended"/> is raised on a thread-pool thread, and the notifier touches
-    /// the Vault button — the hop is <see cref="OnAuthStateChanged"/>'s, for its reason. Whether the
-    /// vault is open and the session signed in are read after the hop, at the moment the notice would
-    /// appear.
-    /// </remarks>
     private static void OnPrepareEnded(object? sender, PrepareRun run)
     {
         OnUiThread(() =>
@@ -594,9 +373,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
                 return;
             }
 
-            // A notice about this order means it is not news to the background listing any more:
-            // one order, one notice. Recorded off Revit's thread, because the record waits on a lock
-            // another Revit may hold.
             if (PrepareNotifier.OnEnded(run, VaultBrowserCommand.IsOpen, session.State == AuthState.Authenticated))
             {
                 _ = Task.Run(() => announced.Announce(run.OrderId));
@@ -604,40 +380,11 @@ public sealed class MantlePlaceApplication : IExternalApplication
         });
     }
 
-    /// <summary>
-    /// Marshals orders the background listing found onto Revit's UI thread, then tells the curator
-    /// (<see cref="PrepareNotifier.OnArrived"/>).
-    /// </summary>
-    /// <remarks>
-    /// ⛔ <see cref="VaultNewsChecker.Arrived"/> is raised on a thread-pool thread — the hop is
-    /// <see cref="OnPrepareEnded"/>'s, for its reason. Whether the vault is open is read after the hop.
-    /// </remarks>
     private static void OnNewsArrived(object? sender, IReadOnlyList<VaultBundle> arrivals)
         => OnUiThread(() => PrepareNotifier.OnArrived(arrivals, VaultBrowserCommand.IsOpen));
 
-    /// <summary>
-    /// Hands each background listing to the re-joiner, which acts on it only after a sign-in
-    /// (<see cref="PrepareRejoiner.OnListed"/>). No hop: it touches the record and the watcher, never
-    /// a window, and stays on the listing's thread-pool thread.
-    /// </summary>
     private static void OnVaultListed(object? sender, VaultListing listing) => _rejoiner?.OnListed(listing);
 
-    /// <summary>
-    /// Repaints every ribbon image when the curator changes Revit's UI theme.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// ⚠ <b><c>ThemeChanged</c> is raised for the canvas theme too</b>, and the two are set
-    /// independently in Options: a curator on a dark canvas with a light UI is an ordinary
-    /// configuration. <c>ThemeChangedType</c> is the only thing that separates them, and repainting
-    /// on a canvas change would swap the ribbon to a set nothing on it is drawn for.
-    /// </para>
-    /// <para>
-    /// No dispatcher hop, unlike <see cref="OnAuthStateChanged"/>. A Revit API event is raised on
-    /// Revit's own thread by contract; an <c>AuthSession</c> transition is raised on whichever thread
-    /// finished the work, which is why that one needs the hop and this one does not.
-    /// </para>
-    /// </remarks>
     private static void OnThemeChanged(object? sender, ThemeChangedEventArgs e)
     {
         if (e is null || e.ThemeChangedType != ThemeType.UITheme)
@@ -652,14 +399,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
     {
         ArgumentNullException.ThrowIfNull(application);
 
-        // OnStartup runs on Revit's UI thread, which is the only moment this add-in is guaranteed to
-        // see the dispatcher it needs to guard.
         _uiDispatcher = Dispatcher.CurrentDispatcher;
         _uiDispatcher.UnhandledException += OnDispatcherUnhandledException;
 
-        // Developer-only, and invisible without the variable: authors both Planting families once
-        // Revit can open a document. No button, because no curator should ever reach it. What happened
-        // is in the logs it writes beside the families, so the result is not needed here.
         if (Environment.GetEnvironmentVariable(PlantingFamilyAuthoring.DirectoryVariable) is { Length: > 0 } familyDirectory)
         {
             application.ControlledApplication.ApplicationInitialized += (sender, initialized) =>
@@ -670,7 +412,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
         MantlePlaceEndpoints endpoints = MantlePlaceEndpoints.Load();
         _endpoints = endpoints;
-        // Before the first Platform API call (the restore below), so a 426 on it is heard.
         ClientUpdateDialog.Attach();
         _session = new AuthSession(endpoints, SecretStores.ForCurrentPlatform());
         _vault = new VaultClient(endpoints, _session, threeFiles: BundleImportPlanner.ThreeFiles);
@@ -681,31 +422,17 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _watcher = new PrepareWatcher(new VaultPrepareSteps(_vault, _cache), interrupted);
         _announced = new AnnouncedOrderStore(AnnouncedOrderStore.DefaultPath);
 
-        // IsOpen is read off Revit's thread here, and that is safe: it is one reference compared with
-        // null, and a check that sees the window a moment late costs one listing, not a wrong notice —
-        // the notice itself re-reads it after the hop.
         _news = new VaultNewsChecker(new SessionNewsSource(_session, _vault), _announced, () => VaultBrowserCommand.IsOpen);
 
-        // Armed by each sign-in, the restore below being the first, and re-joins from the listing
-        // above rather than making one of its own (HPS-55).
         _rejoiner = new PrepareRejoiner(interrupted, _watcher);
 
-        // Created during OnStartup because ExternalEvent.Create must run on Revit's own thread, and
-        // a modeless window has no other moment when that is guaranteed.
         _importHandler = new BundleImportEventHandler();
         _importEvent = ExternalEvent.Create(_importHandler);
 
-        // The handler re-raises its own event between slices of a staged import, so it holds it.
         _importHandler.Attach(_importEvent);
 
-        // One connected host for the whole Revit session, under this launch's connection id. It joins on
-        // the first sign-in (the restore below included) and stays off while the channel is not
-        // configured. Its route calls and fetches run on the pool; the import window it opens is this
-        // handler's, through the same ExternalEvent the vault window raises.
         ConnectedHostLog connectedLog = new(ConnectedHostLog.DefaultPath);
         string connectionId = ConnectionIdSource.ThisLaunch.Id;
-        // The fetch's own source: the window a send opens builds its level control from the row the fetch
-        // listed, and a different level chosen there is downloaded through it.
         VaultExportSource exportSource = new(_vault, _cache);
         _importHandler.AttachLevels(exportSource);
         ExportBundleFetcher fetcher = new(exportSource, new VaultPrepareSteps(_vault, _cache));
@@ -718,13 +445,8 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _connected.Attach(new RevitExportImportHost(_importHandler, _importEvent));
         application.ViewActivated += OnViewActivated;
 
-        // The import window is not owned by Revit's window, so nothing closes it with a project or
-        // with Revit unless it is told to (BundleImportEventHandler.OnDocumentClosed, Shutdown).
         application.ControlledApplication.DocumentClosed += OnDocumentClosed;
 
-        // CreateRibbonTab throws when the tab already exists — which happens whenever the .addin
-        // manifest is installed both machine-wide and per-user. An unhandled throw here disables the
-        // whole add-in with a load error, so a duplicate tab is treated as "already there".
         try
         {
             application.CreateRibbonTab(TabName);
@@ -756,8 +478,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
         RibbonImagery.GiveVignette(vault, Vignette.Vault);
         GiveHelp(vault);
 
-        // Read when a notice is shown, not now: Revit's main window is not guaranteed to exist while
-        // OnStartup runs.
         PrepareNotifier.Attach(vault, () => application.MainWindowHandle);
 
         PushButton importLocal = (PushButton)panel.AddItem(new PushButtonData(
@@ -809,11 +529,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
         RibbonImagery.Give(curator, RibbonGlyph.OpenInCurator);
         GiveHelp(curator);
 
-        // Everything after this call lands in the slide-out rather than on the panel face, and the
-        // panel grows the small unfold arrow at its foot that opens it. The two buttons above are
-        // how a curator gets content in; the two below are what they reach for when that went wrong,
-        // and a diagnostic sitting third on the face reads as a third way in. Revit's own panels use
-        // this affordance for exactly this distinction, so it costs no explaining.
         panel.AddSlideOut();
 
         PushButton probe = (PushButton)panel.AddItem(new PushButtonData(
@@ -848,19 +563,10 @@ public sealed class MantlePlaceApplication : IExternalApplication
         RibbonImagery.Give(logs, RibbonGlyph.OpenLogs);
         GiveHelp(logs);
 
-        // ⛔ Subscribed for the life of the add-in, and unsubscribed in OnShutdown. Revit has run a
-        // light and a dark UI theme since 2024, a curator switches between them from Options while
-        // Revit is open, and a set drawn for one is unreadable on the other — so an icon set chosen
-        // once at startup is a ribbon that goes blank halfway through an afternoon.
         application.ThemeChanged += OnThemeChanged;
 
-        // Subscribed after the panel exists, and followed by one unconditional read of the session.
-        // The startup restore below runs on a thread pool thread and can finish at any point,
-        // including before this line; reading the session here rather than trusting the event means
-        // a transition that landed while the ribbon was still being built is not missed.
         _session.StateChanged += OnAuthStateChanged;
 
-        // Renews ahead of each lapse: the connected host's channel makes no route call to renew on.
         _renewer = new SessionRenewer(_session);
         _watcher.Ended += OnPrepareEnded;
         _news.Arrived += OnNewsArrived;
@@ -868,8 +574,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
         BeginSessionRestore(_session);
         ApplyAccountState();
 
-        // Its first listing is now, and asks nothing while the restore above is still signing in;
-        // the restore's own sign-in wakes it (OnAuthStateChanged, SignInEdge).
         _news.Start();
 
         return Result.Succeeded;
@@ -877,30 +581,19 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
     public Result OnShutdown(UIControlledApplication application)
     {
-        // Before the buttons are dropped: a theme change raised after this point would repaint a
-        // ribbon Revit has already taken apart. Guarded rather than ThrowIfNull'd, unlike OnStartup:
-        // a throw here is a fault dialog on the way out of Revit, over a teardown that had already
-        // stopped mattering.
         if (application is not null)
         {
             application.ThemeChanged -= OnThemeChanged;
         }
 
-        // Stopped before the watcher is interrupted, so no re-join starts a Prepare behind it.
         _rejoiner?.Stop();
 
-        // Before the event goes: an unowned window outlives Revit's main window, so it is closed here,
-        // and an import still open is dropped with a line in its log.
         if (application is not null)
         {
             application.ControlledApplication.DocumentClosed -= OnDocumentClosed;
             application.ViewActivated -= OnViewActivated;
         }
 
-        // Leaves the channel before the import handler drops its window, so no export is opened behind
-        // it. Bounded: the client waits at most two seconds for the leave to be answered, and Revit's
-        // close waits no longer than that for the untrack to go out rather than leaning on the socket
-        // dropping with the process.
         if (_connected is { } connected)
         {
             _connected = null;
@@ -909,17 +602,12 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
         _importHandler?.Shutdown();
 
-        // Before the ribbon goes: a Prepare ending during teardown would badge a button Revit has
-        // already taken apart. Interrupted, never announced, and left in the record for the next
-        // Revit to re-join.
         if (_watcher is not null)
         {
             _watcher.Ended -= OnPrepareEnded;
             _watcher.InterruptAll();
         }
 
-        // Stopped before it is unsubscribed: a listing that lands after the stop claims nothing, so
-        // no order is recorded as announced with nobody left to announce it.
         if (_news is not null)
         {
             _news.Stop();
@@ -937,8 +625,6 @@ public sealed class MantlePlaceApplication : IExternalApplication
             _uiDispatcher = null;
         }
 
-        // Before the session is disposed: a transition raised after the ribbon is gone would post to
-        // a dispatcher that is shutting down.
         if (_session is not null)
         {
             _session.StateChanged -= OnAuthStateChanged;

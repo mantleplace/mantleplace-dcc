@@ -1,11 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""The host shim: the Blender operators, menus and preferences, and the calls into Blender's API.
-
-Everything decided here comes from the pure core; this file only moves bytes to disk, calls
-Blender's own USD import, and writes what the core returns onto the scene. A rule that cannot be
-asserted without Blender running is in the wrong file (HPS-02).
-"""
 
 from __future__ import annotations
 
@@ -24,7 +18,6 @@ from .core.bundle import BundleRefused, Plan, plan_import, scene_properties, wra
 from .core.feedback import feedback_url
 from .core.source import open_bundle, remove_tree
 
-#: The name of the root layer the import opens; Blender names the new collection after it.
 ROOT_LAYER = "Site.usda"
 
 
@@ -37,7 +30,6 @@ class ImportResult:
 
 
 def import_bundle(context: bpy.types.Context, path: str, include_features: bool = True) -> ImportResult:
-    """Import one bundle into the current scene. Raises `BundleRefused` with the curator's reason."""
     scratch = tempfile.mkdtemp(prefix="mantleplace-")
     try:
         with open_bundle(path) as bundle:
@@ -54,7 +46,6 @@ def import_bundle(context: bpy.types.Context, path: str, include_features: bool 
 
         before = set(bpy.data.objects)
         before_collections = set(bpy.data.collections)
-        # Textures are packed into the .blend, so the scratch folder can go once this returns.
         outcome = bpy.ops.wm.usd_import(
             filepath=root,
             import_textures_mode="IMPORT_PACK",
@@ -84,15 +75,6 @@ def _take(bundle, plan: Plan, archive_path: str, scratch: str, notes: list) -> s
 
 
 def _place(scene: bpy.types.Scene, plan: Plan, objects: list, collections: list) -> Placement:
-    """Put the imported objects where the scene's anchor says, and record where they came from.
-
-    The first bundle whose site origin is applied is the scene's anchor: the scene states its
-    origin and its geometry stays at its offsets. Blender stores object transforms as 32-bit
-    floats, which at a projected northing are coarser than half a metre, which is exactly why the
-    files are offsets (spec/format.md §6.8); moving the site to its full coordinates would lose what
-    the format kept. A later bundle is moved only by its small difference from the anchor, which
-    the core decides (`core.anchor`); the scene's own record is never overwritten.
-    """
     scene.unit_settings.system = "METRIC"
     scene.unit_settings.scale_length = 1.0
     georeference = plan.georeference
@@ -107,9 +89,9 @@ def _place(scene: bpy.types.Scene, plan: Plan, objects: list, collections: list)
     roots = [o for o in objects if o.parent not in created]
     if any(placement.offset):
         offset = Vector(placement.offset)
-        for obj in roots:  # children follow their parents
+        for obj in roots:
             obj.location += offset
-        bpy.context.view_layer.update()  # world matrices are stale until the depsgraph runs
+        bpy.context.view_layer.update()
 
     record = bundle_record(georeference, placement)
     nested = {child for collection in collections for child in collection.children}
@@ -119,14 +101,11 @@ def _place(scene: bpy.types.Scene, plan: Plan, objects: list, collections: list)
 
 
 def _scene_anchor(scene: bpy.types.Scene) -> object:
-    """The scene's anchor record as a plain dict, or None where no bundle has anchored it."""
     value = scene.get(ANCHOR_KEY)
     return value.to_dict() if hasattr(value, "to_dict") else value
 
 
 class MANTLEPLACE_OT_import_bundle(bpy.types.Operator, ImportHelper):
-    """Import a Mantle Place bundle's site, placed at its site origin"""
-
     bl_idname = "import_scene.mantleplace_bundle"
     bl_label = "Import Bundle"
     bl_options = {"REGISTER", "UNDO"}
@@ -164,8 +143,6 @@ class MANTLEPLACE_OT_import_bundle(bpy.types.Operator, ImportHelper):
 
 
 class MANTLEPLACE_OT_send_feedback(bpy.types.Operator):
-    """Tell Mantle Place about a problem, in your browser"""
-
     bl_idname = "mantleplace.send_feedback"
     bl_label = "Send Feedback"
 

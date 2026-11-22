@@ -9,14 +9,8 @@
 #include "MantlePlaceLiveGateLogic.h"
 #include "MantlePlaceManifestThreeLogic.h"
 
-// The drape smoke check of the live import test (`MantlePlace.Import.LiveFreeTier`), asserted headless on a
-// 3.0 bundle whose Imagery/Imagery.png states no rectangle. The importer skips that drape by design
-// (HPS-53), so the landscape stays on the engine default surface and the check must assert the skip is
-// reported, not a draped material. The live test needs an editor and a whole bundle; these do not.
-
 namespace
 {
-/** A 3.0 manifest of one order. `ImageryRaster` is the raster object of Imagery/Imagery.png. */
 FString ManifestWithImagery(const FString& ImageryRaster)
 {
 	return FString::Printf(TEXT(R"JSON({
@@ -68,10 +62,8 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(
 
 bool FMantlePlaceLiveDrapeCheckTest::RunTest(const FString& Parameters)
 {
-	// The import's own end-of-run line for a landscape that got no drape.
 	const FString GeometryOnly = TEXT("No imagery drape in this bundle (geometry only).");
 
-	// --- A 3.0 bundle whose imagery states no rectangle: the drape is skipped, the skip is named --------
 	{
 		FMantlePlaceVaultManifest M;
 		if (!TestTrue(TEXT("the manifest converts"), ConvertsTo(ManifestWithImagery(NoRectangle), M)))
@@ -86,16 +78,15 @@ bool FMantlePlaceLiveDrapeCheckTest::RunTest(const FString& Parameters)
 
 		const FString Reported = SkipLine + TEXT("\n") + GeometryOnly;
 		TestEqual(TEXT("the landscape on the default surface passes when the skip is reported"),
-			FMantlePlaceLiveGateLogic::JudgeDrape(M, Reported, /*bMaterialIsDrape*/ false), FString());
+			FMantlePlaceLiveGateLogic::JudgeDrape(M, Reported, false), FString());
 		TestEqual(TEXT("it still passes if the landscape did get a material"),
-			FMantlePlaceLiveGateLogic::JudgeDrape(M, Reported, /*bMaterialIsDrape*/ true), FString());
+			FMantlePlaceLiveGateLogic::JudgeDrape(M, Reported, true), FString());
 		TestTrue(TEXT("it fails when the import never said it skipped the drape"),
-			!FMantlePlaceLiveGateLogic::JudgeDrape(M, GeometryOnly, /*bMaterialIsDrape*/ false).IsEmpty());
+			!FMantlePlaceLiveGateLogic::JudgeDrape(M, GeometryOnly, false).IsEmpty());
 		TestTrue(TEXT("it fails on an empty import log"),
-			!FMantlePlaceLiveGateLogic::JudgeDrape(M, FString(), /*bMaterialIsDrape*/ false).IsEmpty());
+			!FMantlePlaceLiveGateLogic::JudgeDrape(M, FString(), false).IsEmpty());
 	}
 
-	// --- The same bundle with a stated rectangle: the drape is placed, so the material must carry it -----
 	{
 		FMantlePlaceVaultManifest M;
 		if (!TestTrue(TEXT("the manifest converts"), ConvertsTo(ManifestWithImagery(WithRectangle), M)))
@@ -108,12 +99,10 @@ bool FMantlePlaceLiveDrapeCheckTest::RunTest(const FString& Parameters)
 			FMantlePlaceLiveGateLogic::JudgeDrape(M, TEXT("Imagery draped onto its geographic footprint."), true), FString());
 		TestTrue(TEXT("a drape placed but left off the landscape material fails"),
 			!FMantlePlaceLiveGateLogic::JudgeDrape(M, TEXT("Imagery draped onto its geographic footprint."), false).IsEmpty());
-		// A skip line in the log does not excuse a drape the manifest placed.
 		TestTrue(TEXT("a reported skip does not excuse a placed drape"),
 			!FMantlePlaceLiveGateLogic::JudgeDrape(M, GeometryOnly, false).IsEmpty());
 	}
 
-	// --- A manifest that declares no drape and names no skip (a 2.x bundle without imagery) -------------
 	{
 		FMantlePlaceVaultManifest M;
 		TestFalse(TEXT("no drape is placed"), M.Drape.bPresent);
@@ -124,7 +113,6 @@ bool FMantlePlaceLiveDrapeCheckTest::RunTest(const FString& Parameters)
 			!FMantlePlaceLiveGateLogic::JudgeDrape(M, TEXT("Imported."), false).IsEmpty());
 	}
 
-	// --- A 3.0 bundle that lacks the imagery entry: the importer names that skip too ----------------------
 	{
 		FMantlePlaceVaultManifest M;
 		if (!TestTrue(TEXT("the manifest converts"),
@@ -139,4 +127,4 @@ bool FMantlePlaceLiveDrapeCheckTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

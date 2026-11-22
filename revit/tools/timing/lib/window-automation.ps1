@@ -1,7 +1,3 @@
-# Helpers for Invoke-TimingRun.ps1 beyond quiet-win32.ps1 (dot-source that first): the hung-window query, shared-read
-# file copies, the journal finder, and the UI Automation readers for the real import window.
-# Nothing here moves the mouse, sends a key or activates a window.
-
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 if (-not ('Q.XTiming' -as [type])) {
 Add-Type -Namespace Q -Name XTiming -MemberDefinition @'
@@ -11,7 +7,6 @@ Add-Type -Namespace Q -Name XTiming -MemberDefinition @'
 
 function Test-Hung([IntPtr]$h) { if ($h -eq [IntPtr]::Zero) { return $false }; [Q.XTiming]::IsHungAppWindow($h) }
 
-# Copies a file another process may still hold open for writing (Revit's journal, the plugin's log).
 function Copy-Shared([string]$Source, [string]$Destination) {
     $in = [IO.File]::Open($Source, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]'ReadWrite, Delete')
     try {
@@ -21,7 +16,6 @@ function Copy-Shared([string]$Source, [string]$Destination) {
     finally { $in.Dispose() }
 }
 
-# The first $Count lines of a file another process may hold open.
 function Read-HeadShared([string]$Path, [int]$Count = 12) {
     $in = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]'ReadWrite, Delete')
     try {
@@ -32,10 +26,6 @@ function Read-HeadShared([string]$Path, [int]$Count = 12) {
     finally { $in.Dispose() }
 }
 
-# Revit's journal for the process that started at $ProcessStart: journals are journal.NNNN.txt in the
-# year's folder, and the first lines say when recording started. Chosen by that time (the nearest to
-# the process start, within 90 s); among journals that started within 5 s of each other (two Revits of
-# one year launched together) the one that mentions $RunDir wins.
 function Find-Journal([string]$Year, [datetime]$ProcessStart, [string]$RunDir) {
     $dir = Join-Path $env:LOCALAPPDATA "Autodesk\Revit\Autodesk Revit $Year\Journals"
     if (-not (Test-Path $dir)) { return $null }
@@ -62,12 +52,9 @@ function Find-Journal([string]$Year, [datetime]$ProcessStart, [string]$RunDir) {
     [pscustomobject]@{ Path = $best.Path; Started = $best.Started; Delta = $best.Delta; Candidates = $cands.Count }
 }
 
-# ---- the import window through UI Automation ----------------------------------------------------------
-
 $script:StateWords = @('Waiting', 'Importing', 'Done', 'Failed', 'Cancelled', 'Not Run')
 $script:ButtonWords = @('Import', 'Cancel', 'Close')
 
-# One batched cross-process fetch of the window's whole raw tree: name, type, enabled, offscreen.
 function Get-Elements($win) {
     $cr = New-Object Windows.Automation.CacheRequest
     $cr.TreeFilter = [Windows.Automation.Automation]::RawViewCondition
@@ -89,8 +76,6 @@ function Get-Elements($win) {
     , $list
 }
 
-# What the running window says: the step rows (a name Text followed by its state Text, in the order the
-# window builds them), the status line under the bar, the bar, and the Close button.
 function Get-WindowReading($win) {
     $els = Get-Elements $win
     $texts = @($els | Where-Object { $_.Type -eq 'Text' })
@@ -128,7 +113,6 @@ function Get-WindowReading($win) {
     }
 }
 
-# The checklist's check boxes: Name, ToggleState, Enabled, and the element to toggle.
 function Get-CheckBoxes($win) {
     $c = New-Object Windows.Automation.PropertyCondition([Windows.Automation.AutomationElement]::ControlTypeProperty, [Windows.Automation.ControlType]::CheckBox)
     $out = @()
@@ -139,7 +123,6 @@ function Get-CheckBoxes($win) {
     , $out
 }
 
-# Every raw-tree element of a window, for discovery (written once per phase of the window).
 function Get-TreeDump($win) {
     $els = Get-Elements $win
     $els | ForEach-Object { "{0,-12} enabled={1} offscreen={2} name='{3}'" -f $_.Type, $_.Enabled, $_.Offscreen, $_.Name }

@@ -3,14 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The one per-machine record of Prepares being watched, which a Revit that closed or crashed leaves
-/// behind for the next one to re-join.
-/// </summary>
-/// <remarks>
-/// Two stores on one file stand in for two Revit processes; each is told its own identity and which
-/// owners are alive, so a crash is a process that says it is gone.
-/// </remarks>
 internal static class InterruptedPrepareStoreTests
 {
     private const string Email = "curator@example.com";
@@ -36,7 +28,6 @@ internal static class InterruptedPrepareStoreTests
             }
             catch (IOException)
             {
-                // A leftover temp folder is not a test failure.
             }
         }
 
@@ -50,7 +41,6 @@ internal static class InterruptedPrepareStoreTests
             string path = Path.Combine(sandbox, "crash.json");
             Store(path, Revit2025, alive: []).Started("order-1", Now.AddHours(-2));
 
-            // Revit 2025 crashed: nothing ended the Prepare, and its process is gone.
             IReadOnlyList<InterruptedPrepare> claimed = Store(path, Revit2027, alive: [Revit2027]).Claim(Now);
 
             run.Equal(claimed.Count, 1, "claimed");
@@ -94,7 +84,6 @@ internal static class InterruptedPrepareStoreTests
             string path = Path.Combine(sandbox, "race.json");
             Store(path, new PrepareOwner(1, 1), alive: []).Started("order-1", Now);
 
-            // Each sees the other alive, as two Revits open side by side do.
             InterruptedPrepareStore first = Store(path, Revit2025, alive: [Revit2025, Revit2027]);
             InterruptedPrepareStore second = Store(path, Revit2027, alive: [Revit2025, Revit2027]);
 

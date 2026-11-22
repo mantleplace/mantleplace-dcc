@@ -2,16 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The shared vector carrier's decoder and reader, on a synthetic carrier built in the test. The pure
-/// half of the carrier read: it runs on every runner, because the SQLite half that fetches the rows is
-/// Windows-only (<c>GeoPackageFileTests</c>).
-/// </summary>
-/// <remarks>
-/// The bar is parity: the carrier replaces a GeoJSON file, so the features it yields must be the ones
-/// <see cref="SiteVectorReader"/> yields for the same layer, every attribute the importer reads
-/// included (<c>revit/docs/vector-carrier.md</c>).
-/// </remarks>
 internal static class GeoPackageReaderTests
 {
     private const int Srs = 6605;
@@ -118,7 +108,7 @@ internal static class GeoPackageReaderTests
             run.Equal(GeoPackageGeometry.Decode([(byte)'X', (byte)'X', 0, 1, 0, 0, 0, 0, 1, 2, 3]).Count, 0, "no GP magic");
 
             byte[] absurd = GeoPackageFixture.Blob(Srs, GeoPackageFixture.LineStringZ(1, 2, 3));
-            absurd[8 + 32 + 5] = 0xFF; // the position count, far past the bytes there are
+            absurd[8 + 32 + 5] = 0xFF;
             absurd[8 + 32 + 6] = 0xFF;
             absurd[8 + 32 + 7] = 0xFF;
             run.Equal(GeoPackageGeometry.Decode(absurd).Count, 0, "a position count the blob cannot hold");
@@ -269,7 +259,6 @@ internal static class GeoPackageReaderTests
             WithHeader(geometry),
             attributes.ToDictionary(attribute => attribute.Name, attribute => attribute.Value, StringComparer.Ordinal));
 
-    /// <summary>A row's geometry is a blob; a bare WKB from the fixture is wrapped in the header.</summary>
     private static byte[] WithHeader(byte[] geometry)
         => geometry.Length >= 2 && geometry[0] == (byte)'G' && geometry[1] == (byte)'P'
             ? geometry

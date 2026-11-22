@@ -1,12 +1,5 @@
 // Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
-// `unreal.buildings_mesh`: extruded building massing (ALL / "Unreal" scope). It is content, not a
-// terrain representation, so it imports whenever present regardless of Mode — alongside the
-// Landscape and/or terrain mesh. It shares the terrain's Local Projected Frame (GetMeshLocation) so
-// it rests on the ground, and it takes no imagery drape. A failure here is non-fatal: the terrain is
-// the primary deliverable, so it is logged rather than failing the whole import. (A sha256 mismatch
-// is still fail-closed — it aborts in the integrity pre-check, before any actor.)
-
 #include "MantlePlaceArtifactHandler.h"
 
 #include "MantlePlaceImportManifest.h"
@@ -27,9 +20,6 @@ public:
 	EMantlePlaceLayerFamily LayerFamily() const override { return EMantlePlaceLayerFamily::Buildings; }
 	FText DisplayName() const override { return NSLOCTEXT("MantlePlaceImporter", "ArtifactBuildings", "Buildings"); }
 
-	// unreal.buildings_mesh is present iff the ETL emitted Mesh/Buildings.glb. It carries the path +
-	// up_axis but no hash; the integrity hash lives in the top-level `buildings.formats[]` entry
-	// (matched by path), and is optional: absent makes the integrity check skip, as with legacy bundles.
 	bool ParseFields(const FMantlePlaceParseInput& In, FMantlePlaceVaultManifest& M, FString& OutError) const override
 	{
 		using namespace MantlePlaceManifestJson;
@@ -91,7 +81,7 @@ public:
 		if (Ctx.Extract(Ctx.Manifest.Buildings.Path, Disk, Error))
 		{
 			Mesh = MantlePlaceMeshImporter::ImportMeshAsset(
-				Ctx.Manifest, Disk, Ctx.DestPackagePath, /*bEnableNanite*/ false, Error);
+				Ctx.Manifest, Disk, Ctx.DestPackagePath, false, Error);
 		}
 	}
 
@@ -101,7 +91,6 @@ public:
 		{
 			return;
 		}
-		// The asset was imported in Prepare, before the transaction; this only spawns for it.
 		FString Err = Error;
 		AStaticMeshActor* BuildingsActor = Mesh != nullptr
 			? MantlePlaceMeshImporter::ImportBuildings(Ctx.World, Ctx.Manifest, Mesh, Err)

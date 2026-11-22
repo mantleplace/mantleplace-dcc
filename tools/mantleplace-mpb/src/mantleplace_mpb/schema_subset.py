@@ -1,14 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Mantle Place LLC
-"""A JSON Schema 2020-12 evaluator for the keywords the published manifest series uses.
-
-Standard library only, so the validator installs anywhere without a compiled dependency. It is
-deliberately not a general implementation: it evaluates the vocabulary below with the
-specification's semantics, and it **refuses** a schema that uses anything else. A keyword it
-skipped would be a rule it silently did not check, so an unknown keyword, a remote `$ref` or
-another dialect raises `UnsupportedSchema` before any instance is evaluated, and the caller
-reports "could not check" rather than "pass".
-"""
 
 from __future__ import annotations
 
@@ -18,9 +9,6 @@ from urllib.parse import unquote
 
 DIALECT = "https://json-schema.org/draft/2020-12/schema"
 
-#: Keywords that only annotate. Evaluating them is a no-op by the 2020-12 specification
-#: (`format` included: it is an annotation unless a validator opts into the format-assertion
-#: vocabulary, and this one does not).
 _ANNOTATIONS = frozenset({
     "$schema", "$id", "$comment", "$defs", "title", "description", "examples", "default",
     "deprecated", "readOnly", "writeOnly", "format", "contentMediaType", "contentEncoding",
@@ -38,16 +26,14 @@ KNOWN_KEYWORDS = _ANNOTATIONS | _SCHEMA_MAPS | _SCHEMA_ONE | _SCHEMA_LIST | _ASS
 
 
 class UnsupportedSchema(Exception):
-    """The schema uses something this evaluator does not evaluate; nothing was checked."""
+    pass
 
 
 def escape(token: str) -> str:
-    """One JSON Pointer reference token (RFC 6901)."""
     return token.replace("~", "~0").replace("/", "~1")
 
 
 def errors(schema: dict, instance: object) -> list[tuple[str, str]]:
-    """Every way `instance` fails `schema`, as (JSON Pointer into the instance, message)."""
     if not isinstance(schema, dict):
         raise UnsupportedSchema("the root schema is not an object")
     dialect = schema.get("$schema")
@@ -60,14 +46,6 @@ def errors(schema: dict, instance: object) -> list[tuple[str, str]]:
 
 
 def _audit(root: dict, node: object, where: str, seen: set[str]) -> None:
-    """Refuse, up front, any keyword or reference the evaluator would not honour.
-
-    The audit follows evaluation: every subschema an applicator reaches, and every schema a `$ref`
-    reaches. `$defs` is not walked on its own, because it is a store a `$ref` reads by pointer and
-    may group schemas under a name that is not a keyword (the 3.0 schema's `$defs.files.<path>`);
-    each schema in it is audited when, and only when, a reference reaches it, which is every way
-    the evaluator can apply one.
-    """
     if isinstance(node, bool):
         return
     if not isinstance(node, dict):
@@ -161,7 +139,6 @@ def _has_type(value: object, wanted: str) -> bool:
 
 
 def json_equal(a: object, b: object) -> bool:
-    """JSON equality: 1 equals 1.0, and a boolean never equals a number."""
     if isinstance(a, bool) or isinstance(b, bool):
         return isinstance(a, bool) and isinstance(b, bool) and a == b
     if _is_number(a) and _is_number(b):

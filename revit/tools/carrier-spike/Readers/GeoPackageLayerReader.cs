@@ -3,19 +3,8 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Revit.CarrierSpike;
 
-/// <summary>
-/// Prototype: reads one table of a GeoPackage carrier into the features today's GeoJSON reader
-/// yields, through <see cref="WinSqlite"/> and <see cref="GeoPackageGeometry"/>.
-/// </summary>
-/// <remarks>
-/// The table's CRS is read from <c>gpkg_geometry_columns</c> → <c>gpkg_spatial_ref_sys</c> and must be
-/// the frame's own EPSG code: a table in any other CRS is refused with the reason, never reprojected
-/// (<c>HPS-53</c>). Every attribute is read as text exactly as SQLite holds it, except a REAL, which is
-/// written the way <see cref="double.ToString(string, IFormatProvider)"/> round-trips it.
-/// </remarks>
 public static class GeoPackageLayerReader
 {
-    /// <returns><c>null</c> on success, or the reason the table could not be read.</returns>
     public static string? TryRead(
         string path,
         string table,

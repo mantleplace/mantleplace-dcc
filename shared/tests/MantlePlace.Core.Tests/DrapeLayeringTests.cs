@@ -2,10 +2,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The layering arithmetic: the imagery sliver takes exactly the minimum, the remainder takes the rest,
-/// the total never moves, and anything degenerate is refused rather than built.
-/// </summary>
 internal static class DrapeLayeringTests
 {
     private const double Tight = 1e-12;
@@ -16,7 +12,6 @@ internal static class DrapeLayeringTests
 
         run.Case("a comfortable split preserves the total exactly", () =>
         {
-            // 300 mm structure, ~3 mm minimum, in internal feet — the shape of a plausible type.
             double total = 0.984252;
             double minimum = 0.0104166;
             DrapeLayerSplit split = DrapeLayering.Split(total, minimum);
@@ -28,9 +23,6 @@ internal static class DrapeLayeringTests
 
         run.Case("exactly at the 2×-minimum boundary is allowed", () =>
         {
-            // total = 3 × minimum leaves the lower layer at exactly twice the minimum, the last
-            // allowed shape — the refusal is strictly-below, not at. Dyadic values, so "exactly"
-            // survives binary floating point.
             DrapeLayerSplit split = DrapeLayering.Split(0.375, 0.125);
             run.True(split.Ok, "lower layer of exactly 2× the minimum is not degenerate");
             run.Within(split.LowerThickness, 0.25, Tight, "lower layer");
@@ -69,12 +61,6 @@ internal static class DrapeLayeringTests
             run.Within(split.LowerThickness, 0.0, Tight, "lower thickness on refusal");
         });
 
-        // ── The re-run guard ──────────────────────────────────────────────────────────────────
-        // ⛔ This used to be a comment in the shim plus a flag on the caller — "restructure only on
-        // the import that duplicated the type". It is the guarantee that a re-import cannot stack a
-        // second imagery layer, and it now answers to the structure instead of to the caller, so a
-        // single-layer drape type left by an older build gets repaired rather than reused forever.
-
         run.Case("a type whose top layer already wears the imagery is left alone", () =>
         {
             DrapeLayerDecision decision = DrapeLayering.Decide(true, 3.2808, 0.0104166);
@@ -87,8 +73,6 @@ internal static class DrapeLayeringTests
 
         run.Case("already-layered wins even when the top layer would still split", () =>
         {
-            // The ordering matters: ask "is it already there" BEFORE "could it be split". Splitting
-            // a sliver again is exactly the stacking this refuses.
             run.True(
                 DrapeLayering.Decide(true, 1.0, 0.01).Verdict == DrapeLayerVerdict.AlreadyLayered,
                 "the material on layer 0 decides, not the arithmetic");
@@ -96,8 +80,8 @@ internal static class DrapeLayeringTests
 
         run.Case("a type not yet layered is layered, with Split's own numbers", () =>
         {
-            const double Total = 3.2808;      // "Generic - 1000mm", in internal feet
-            const double Minimum = 0.0104166; // the ~3 mm host floor
+            const double Total = 3.2808;
+            const double Minimum = 0.0104166;
 
             DrapeLayerDecision decision = DrapeLayering.Decide(false, Total, Minimum);
             DrapeLayerSplit split = DrapeLayering.Split(Total, Minimum);
@@ -111,8 +95,6 @@ internal static class DrapeLayeringTests
 
         run.Case("the real type the plugin chooses leaves a sub-5 mm sliver", () =>
         {
-            // The number that decides the documented escalation to Document.Paint: whether the
-            // imagery layer is legible at site-view zoom. On "Generic - 1000mm" it is not close.
             DrapeLayerDecision decision = DrapeLayering.Decide(false, 3.2808, 0.0104166);
             double sliverMm = DrapeLayering.MillimetresFromInternalFeet(decision.ImageryThickness);
 
@@ -132,11 +114,6 @@ internal static class DrapeLayeringTests
             run.Within(DrapeLayering.Decide(false, 0.1, 0.1).ImageryThickness, 0.0, Tight,
                 "a refusal carries zeroed thicknesses here too");
         });
-
-        // ── The read-back ─────────────────────────────────────────────────────────────────────
-        // SetCompoundStructure was the last write in the drape step nothing read back. These two are
-        // what let the import log state the answer to "does the photograph reach a vertical face"
-        // instead of asserting it.
 
         run.Case("the imagery must be on layer 0 and nowhere else", () =>
         {
@@ -166,10 +143,6 @@ internal static class DrapeLayeringTests
 
         run.Case("the imagery type keeps the name projects already hold it by", () =>
         {
-            // Pinned, not derived: projects imported before this name had one owner hold types and
-            // materials spelled exactly this way, and the drape resolves them by name. A respelling
-            // would orphan every one of them — and a re-import would duplicate a fresh type and pay
-            // the retype this name exists to avoid.
             run.Equal(
                 DrapeLayering.ImageryName("f93bc782"),
                 "Mantle Place Site Imagery f93bc782",

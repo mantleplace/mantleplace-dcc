@@ -1,8 +1,3 @@
-// The spike's Civil 3D half: the zone read and compare, what AutoCAD's coordinate library says each
-// zone code is in EPSG and whether the zone is the drawing's geographic location, then a TIN surface
-// from each DEM the driver wrote, once through AddDEMFile(path) and once through its coordinate-system
-// overload, and one from each LandXML it wrote through CreateFromLandXML. Every call is recorded as
-// worked, did nothing or threw, in the host's own words.
 using Autodesk.AutoCAD.ApplicationServices.Core;
 using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.Civil.ApplicationServices;

@@ -16,7 +16,6 @@ bool TexelAt(const FRaster& Raster, const FVector2D& AoiSizeCm, const FVector& P
 	{
 		return false;
 	}
-	// North-up row-major: U runs west to east with +Y, V runs north to south against +X.
 	const double U = (PositionCm.Y + HalfEast) / AoiSizeCm.Y;
 	const double V = (HalfNorth - PositionCm.X) / AoiSizeCm.X;
 	OutColumn = FMath::Clamp(FMath::FloorToInt32(U * Raster.Width), 0, Raster.Width - 1);
@@ -59,12 +58,9 @@ bool InCell(const FVector& PositionCm, const FBox& CellBounds)
 
 double Draw(const FVector& PositionCm, int32 Seed, int32 Salt)
 {
-	// Keyed on the point's position (whole centimetres), not its row: a re-import that reorders the
-	// table must not reshuffle which trees a forest keeps.
 	uint32 Hash = HashCombine(GetTypeHash(FMath::RoundToInt64(PositionCm.X)), GetTypeHash(FMath::RoundToInt64(PositionCm.Y)));
 	Hash = HashCombine(Hash, GetTypeHash(Seed));
 	Hash = HashCombine(Hash, GetTypeHash(Salt));
-	// A final avalanche so neighbouring points do not draw neighbouring values.
 	Hash ^= Hash >> 16;
 	Hash *= 0x7feb352dU;
 	Hash ^= Hash >> 15;

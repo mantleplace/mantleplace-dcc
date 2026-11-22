@@ -8,7 +8,6 @@ const TCHAR* const FrameVersion = TEXT("v1");
 const TCHAR* const PlacedWord = TEXT("placed");
 const TCHAR* const CentredWord = TEXT("centred");
 
-/** A separator-free field: the separator and the escape character are escaped, nothing else changes. */
 FString Escape(const FString& Text)
 {
 	return Text.Replace(TEXT("%"), TEXT("%25")).Replace(TEXT("|"), TEXT("%7C"));
@@ -49,7 +48,7 @@ FString FMantlePlaceLevelFrameLogic::EncodeFrame(const FMantlePlaceFrameRecord& 
 bool FMantlePlaceLevelFrameLogic::DecodeFrame(const FString& Value, FMantlePlaceFrameRecord& OutRecord)
 {
 	TArray<FString> Parts;
-	Value.ParseIntoArray(Parts, TEXT("|"), /*bCullEmpty*/ false);
+	Value.ParseIntoArray(Parts, TEXT("|"), false);
 	if (Parts.Num() != 8 || Parts[0] != FrameVersion)
 	{
 		return false;
@@ -82,9 +81,6 @@ FMantlePlaceFramePlan FMantlePlaceLevelFrameLogic::Plan(
 	const FString& ThisIdentity, const FMantlePlaceFrameOrigin& ThisOrigin,
 	const TArray<FMantlePlaceLevelImportTag>& InLevel)
 {
-	// One record per OTHER import: an import's actors all carry the same frame tag, and the import being
-	// replaced is not a witness to where the anchor is. Sorted by identity so the choice below does not
-	// depend on the order the level happens to list its actors in.
 	TMap<FString, FMantlePlaceFrameRecord> PlacedByIdentity;
 	TSet<FString> OtherIdentities;
 	FMantlePlaceFrameRecord OwnWitness;
@@ -93,8 +89,6 @@ FMantlePlaceFramePlan FMantlePlaceLevelFrameLogic::Plan(
 	{
 		if (Found.Identity == ThisIdentity)
 		{
-			// Not a witness while another placed import exists, but the last word on the anchor when
-			// none does: see OwnWitness below.
 			FMantlePlaceFrameRecord Own;
 			if (!bHaveOwn && DecodeFrame(Found.FrameValue, Own) && Own.bPlaced)
 			{
@@ -114,11 +108,6 @@ FMantlePlaceFramePlan FMantlePlaceLevelFrameLogic::Plan(
 
 	const bool bOriginUsable = ThisOrigin.bStated && !ThisOrigin.Crs.IsEmpty();
 
-	// Nothing placed to measure against: this import is the anchor (or, with no origin to anchor on, is
-	// centred as it always was, and anchors nothing).
-	// The one exception: this bundle's own placed actors carry an offset and no other placed import is
-	// left (the anchor bundle was deleted). Its own tag still says where the anchor was, so it keeps its
-	// offset rather than becoming the anchor and jumping to the world origin.
 	const bool bUseOwnWitness = PlacedByIdentity.Num() == 0 && bHaveOwn
 		&& (OwnWitness.OffsetEastM != 0.0 || OwnWitness.OffsetNorthM != 0.0);
 	if (bUseOwnWitness)
@@ -164,8 +153,6 @@ FMantlePlaceFramePlan FMantlePlaceLevelFrameLogic::Plan(
 		return MakeCentred(ThisOrigin, EMantlePlaceFrameRefusal::OriginUnstated,
 			Intro + TEXT("its manifest states no georeference origin or no projected CRS.") + Outro);
 	}
-	// Case-sensitive on purpose: FString's == ignores case, and "epsg:32613" is not the string the
-	// manifest publishes. Equal text is the only match.
 	if (!ThisOrigin.Crs.Equals(Anchor.Crs, ESearchCase::CaseSensitive))
 	{
 		return MakeCentred(ThisOrigin, EMantlePlaceFrameRefusal::CrsDiffers,

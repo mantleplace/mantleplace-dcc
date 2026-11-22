@@ -47,10 +47,6 @@ FString UMantlePlaceVaultClient::GetBundleTierLabel(const FMantlePlaceVaultItem&
 
 bool UMantlePlaceVaultClient::EnsureReady(FString& OutError, FString& OutJwt) const
 {
-	// Defense-in-depth against the hostless-URL bug class (a scheme-relative or scheme-only
-	// value such as "//mantle.place" or "https:" that slips past an emptiness check and builds
-	// a host-less request URL). Accepts http://localhost:<port> and LAN-IP http (dev) as well
-	// as https:// (prod); rejects empty/relative/hostless values.
 	if (!FMantlePlaceAuthLogic::IsValidBaseUrl(VaultApiBaseUrl))
 	{
 		OutError = TEXT("Vault is not configured: set a valid VaultApiBaseUrl (http(s)://host[:port]).");
@@ -82,15 +78,11 @@ bool UMantlePlaceVaultClient::DeferUntilRenewed(TFunction<void()> Replay)
 		return false;
 	}
 
-	// Nothing to renew from. "Signed out" and "signed in with a stale access token" look the same
-	// at the vault call site, and only the second is worth waiting for.
 	if (!AuthSystem->CanRenewSession())
 	{
 		return false;
 	}
 
-	// Exactly one renewal between successful responses. A platform answering 401 to everything
-	// would otherwise renew and replay forever, a round trip at a time.
 	if (RenewalsSinceSuccess >= 1)
 	{
 		return false;
@@ -106,10 +98,6 @@ bool UMantlePlaceVaultClient::DeferUntilRenewed(TFunction<void()> Replay)
 			this, &UMantlePlaceVaultClient::HandleRefreshSettled);
 	}
 
-	// Single-flight. Two operations that both see an expired token must produce ONE renewal: a
-	// rotating platform honours the first refresh and rejects the second as already-used, and the
-	// rejection classifier would correctly read that as a dead credential and discard a session
-	// that was never actually dead.
 	if (!AuthSystem->IsRefreshInFlight())
 	{
 		if (AuthSystem->GetAuthState() == EMantlePlaceAuthState::Authenticated)
@@ -125,7 +113,7 @@ bool UMantlePlaceVaultClient::DeferUntilRenewed(TFunction<void()> Replay)
 	return true;
 }
 
-void UMantlePlaceVaultClient::HandleRefreshSettled(bool /*bSuccess*/)
+void UMantlePlaceVaultClient::HandleRefreshSettled(bool)
 {
 	TFunction<void()> Replay = MoveTemp(PendingReplayOperation);
 	PendingReplayOperation = nullptr;
@@ -135,10 +123,6 @@ void UMantlePlaceVaultClient::HandleRefreshSettled(bool /*bSuccess*/)
 		return;
 	}
 
-	// Replayed either way, success or failure. On failure the renewal has already cleared the
-	// tokens, so the replayed call falls straight through EnsureReady and reports the refusal on
-	// the operation's own channel - which is what the caller is waiting to hear. Reporting it from
-	// here instead would mean knowing which of the four completion signals to fire.
 	Replay();
 }
 
@@ -158,14 +142,13 @@ void UMantlePlaceVaultClient::ListVault()
 	{
 		if (DeferUntilRenewed(Replay))
 		{
-			return; // not a failure - waiting on a renewal
+			return;
 		}
 		UE_LOG(LogMantlePlaceVault, Warning, TEXT("ListVault refused: %s"), *Error);
 		NotifyVaultListed(false, Empty, Error);
 		return;
 	}
 
-	// Captured before the send: the completion handler will not know how to run this again.
 	LastOperation = MoveTemp(Replay);
 
 	CancelActiveRequest();
@@ -176,7 +159,6 @@ void UMantlePlaceVaultClient::ListVault()
 	ActiveRequest->SetHeader(TEXT("Accept"), TEXT("application/json"));
 	ActiveRequest->SetHeader(TEXT("Authorization"), FString::Printf(TEXT("Bearer %s"), *Jwt));
 
-	// Weak pointer, never raw `this`: completion lands across frames; the owner may be GC'd.
 	TWeakObjectPtr<UMantlePlaceVaultClient> WeakThis(this);
 	ActiveRequest->OnProcessRequestComplete().BindLambda(
 		[WeakThis](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bConnectedSuccessfully)
@@ -196,12 +178,12 @@ void UMantlePlaceVaultClient::ListVault()
 
 void UMantlePlaceVaultClient::GetPresignedUrl(const FString& OrderId, const FString& Format)
 {
-	MintDownload(OrderId, Format, /*bView*/ false);
+	MintDownload(OrderId, Format, false);
 }
 
 void UMantlePlaceVaultClient::GetPresignedViewUrl(const FString& OrderId)
 {
-	MintDownload(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), /*bView*/ true);
+	MintDownload(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), true);
 }
 
 void UMantlePlaceVaultClient::GetPresignedLevelUrl(const FString& OrderId, const FString& Level, const TArray<FString>& Files)
@@ -219,7 +201,7 @@ void UMantlePlaceVaultClient::GetPresignedLevelUrl(const FString& OrderId, const
 void UMantlePlaceVaultClient::RequestLevel(const FString& OrderId, const FString& Level, const TArray<FString>& Files)
 {
 	OnLevelRequestedNative.Broadcast(OrderId, Level, Files);
-	MintDownload(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), /*bView*/ false, Level, Files);
+	MintDownload(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), false, Level, Files);
 }
 
 void UMantlePlaceVaultClient::GetPresignedExtraUrl(const FString& OrderId, const FString& ExtraId)
@@ -229,7 +211,7 @@ void UMantlePlaceVaultClient::GetPresignedExtraUrl(const FString& OrderId, const
 		NotifyPresigned(false, FMantlePlacePresignedDownload(), TEXT("An Extra's id is required."));
 		return;
 	}
-	MintDownload(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), /*bView*/ false, FString(), TArray<FString>(), ExtraId);
+	MintDownload(OrderId, FMantlePlaceVaultLogic::WholeBundleFormat(), false, FString(), TArray<FString>(), ExtraId);
 }
 
 void UMantlePlaceVaultClient::MintDownload(const FString& OrderId, const FString& Format, bool bView,
@@ -249,14 +231,13 @@ void UMantlePlaceVaultClient::MintDownload(const FString& OrderId, const FString
 	{
 		if (DeferUntilRenewed(Replay))
 		{
-			return; // not a failure - waiting on a renewal
+			return;
 		}
 		UE_LOG(LogMantlePlaceVault, Warning, TEXT("GetPresignedUrl refused: %s"), *Error);
 		NotifyPresigned(false, Empty, Error);
 		return;
 	}
 
-	// Captured before the send: the completion handler will not know how to run this again.
 	LastOperation = MoveTemp(Replay);
 
 	if (OrderId.IsEmpty())
@@ -277,8 +258,6 @@ void UMantlePlaceVaultClient::MintDownload(const FString& OrderId, const FString
 	CancelActiveRequest();
 
 	const FString Url = FMantlePlaceVaultLogic::BuildDownloadUrl(VaultApiBaseUrl, OrderId);
-	// A 3.0 request names one level and the files this host reads. A 2.x view request names the host and
-	// asks the platform to cut the zip; the host never assembles one.
 	FString Body;
 	if (!ExtraId.IsEmpty())
 	{
@@ -334,12 +313,9 @@ void UMantlePlaceVaultClient::ProbePresignedUrl(const FString& Url)
 
 	CancelActiveRequest();
 
-	// The presigned R2 URL is storage, not the Platform API: no client header goes there.
 	ActiveRequest = FHttpModule::Get().CreateRequest(); // not a Platform API call
 	ActiveRequest->SetVerb(TEXT("GET"));
 	ActiveRequest->SetURL(Url);
-	// Ranged GET (1 byte): the R2 URL is SigV4-signed for GET, so a HEAD would fail the
-	// signature. No Authorization header - the presigned query string carries its own auth.
 	ActiveRequest->SetHeader(TEXT("Range"), TEXT("bytes=0-0"));
 
 	TWeakObjectPtr<UMantlePlaceVaultClient> WeakThis(this);
@@ -379,8 +355,6 @@ void UMantlePlaceVaultClient::HandleListResponse(
 
 	if (!EHttpResponseCodes::IsOk(ResponseCode))
 	{
-		// Too old for the platform: neither a sign-in failure (the session is fine) nor a network
-		// failure. Broadcast it so the surface can offer the update, and fail the call with the same words.
 		FString UpdateMessage;
 		if (TryHandleClientUpdate(ResponseCode, Content, UpdateMessage))
 		{
@@ -388,8 +362,6 @@ void UMantlePlaceVaultClient::HandleListResponse(
 			return;
 		}
 
-		// An expired access token looks exactly like this. Renew once and run the operation again;
-		// LastOperation is how it was sent, captured before it went out.
 		if (ResponseCode == EHttpResponseCodes::Denied && DeferUntilRenewed(MoveTemp(LastOperation)))
 		{
 			return;
@@ -448,8 +420,6 @@ void UMantlePlaceVaultClient::HandleDownloadAnswer(int32 ResponseCode, const FSt
 
 	if (!EHttpResponseCodes::IsOk(ResponseCode))
 	{
-		// Too old for the platform: neither a sign-in failure (the session is fine) nor a network
-		// failure. Broadcast it so the surface can offer the update, and fail the call with the same words.
 		FString UpdateMessage;
 		if (TryHandleClientUpdate(ResponseCode, Content, UpdateMessage))
 		{
@@ -457,17 +427,11 @@ void UMantlePlaceVaultClient::HandleDownloadAnswer(int32 ResponseCode, const FSt
 			return;
 		}
 
-		// An expired access token looks exactly like this. Renew once and run the operation again;
-		// LastOperation is how it was sent, captured before it went out.
 		if (ResponseCode == EHttpResponseCodes::Denied && DeferUntilRenewed(MoveTemp(LastOperation)))
 		{
 			return;
 		}
 
-		// A promised file this bundle does not hold (a layer the site lacks) is refused by name. An absent
-		// file is not an error: ask again for the same level naming only the files it holds. Each retry
-		// names strictly fewer files, so the tries end within the file count. The refused names go with the
-		// download, which holds them against its own manifest (a manifest that lists one fails the import).
 		TArray<FString> Remaining;
 		TArray<FString> Absent;
 		if (!PendingDownloadLevel.IsEmpty()
@@ -485,7 +449,6 @@ void UMantlePlaceVaultClient::HandleDownloadAnswer(int32 ResponseCode, const FSt
 			return;
 		}
 
-		// An Extra a free bundle does not hold is the locked row, not an error: the words, and no code.
 		if (FMantlePlaceVaultLogic::IsExtraLockedRefusal(ResponseCode, Content))
 		{
 			NotifyPresigned(false, Empty, MantlePlaceLockedExtrasWords());
@@ -500,7 +463,6 @@ void UMantlePlaceVaultClient::HandleDownloadAnswer(int32 ResponseCode, const FSt
 		}
 		else if (!Code.IsEmpty())
 		{
-			// Surface the machine code (e.g. refunded / revoked on a 410) alongside the message.
 			Error = FString::Printf(TEXT("%s (%s)"), *Error, *Code);
 		}
 		NotifyPresigned(false, Empty, Error);
@@ -541,7 +503,6 @@ void UMantlePlaceVaultClient::HandleProbeResponse(
 	}
 
 	const int32 ResponseCode = Response->GetResponseCode();
-	// A ranged GET resolves with 206 Partial Content (or 200 if the server ignores Range).
 	const bool bResolves = (ResponseCode == 200 || ResponseCode == 206);
 	OnPresignedUrlProbed(bResolves, ResponseCode,
 		bResolves ? TEXT("URL resolves.") : FString::Printf(TEXT("Probe returned HTTP %d."), ResponseCode));
@@ -561,14 +522,13 @@ void UMantlePlaceVaultClient::RequestMaterialize(const FString& OrderId, const F
 	{
 		if (DeferUntilRenewed(Replay))
 		{
-			return; // not a failure - waiting on a renewal
+			return;
 		}
 		UE_LOG(LogMantlePlaceVault, Warning, TEXT("RequestMaterialize refused: %s"), *Error);
 		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(), Error);
 		return;
 	}
 
-	// Captured before the send: the completion handler will not know how to run this again.
 	LastOperation = MoveTemp(Replay);
 
 	if (OrderId.IsEmpty())
@@ -601,14 +561,13 @@ void UMantlePlaceVaultClient::RequestMaterializeTokens(const FString& OrderId, c
 	{
 		if (DeferUntilRenewed(Replay))
 		{
-			return; // not a failure - waiting on a renewal
+			return;
 		}
 		UE_LOG(LogMantlePlaceVault, Warning, TEXT("RequestMaterializeTokens refused: %s"), *Error);
 		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(), Error);
 		return;
 	}
 
-	// Captured before the send: the completion handler will not know how to run this again.
 	LastOperation = MoveTemp(Replay);
 
 	if (OrderId.IsEmpty())
@@ -617,9 +576,6 @@ void UMantlePlaceVaultClient::RequestMaterializeTokens(const FString& OrderId, c
 		return;
 	}
 
-	// STOP: an empty list is not "everything", it is a re-cut of what the bundle already has. The
-	// platform accepts it (an empty materialize row means "repackage only"), so it would answer 201
-	// and this host would poll a run that builds none of what it is waiting for.
 	if (Tokens.Num() == 0)
 	{
 		NotifyMaterializeStarted(false, FMantlePlaceMaterializeStart(),
@@ -667,8 +623,6 @@ void UMantlePlaceVaultClient::GetMaterializeStatus(const FString& OrderId, const
 		if (UMantlePlaceVaultClient* Self = WeakSelf.Get()) { Self->GetMaterializeStatus(OrderId, Requested); }
 	};
 
-	// An empty set means the caller had nothing better; fall back to this host's own list rather
-	// than polling with no yardstick, which can never conclude.
 	PendingStatusTokens = Requested.Num() > 0 ? Requested : FMantlePlaceVaultLogic::TargetedImportTokens();
 
 	const FMantlePlaceMaterializeStatus Empty;
@@ -679,14 +633,13 @@ void UMantlePlaceVaultClient::GetMaterializeStatus(const FString& OrderId, const
 	{
 		if (DeferUntilRenewed(Replay))
 		{
-			return; // not a failure - waiting on a renewal
+			return;
 		}
 		UE_LOG(LogMantlePlaceVault, Warning, TEXT("GetMaterializeStatus refused: %s"), *Error);
 		NotifyMaterializeStatus(false, Empty, Error);
 		return;
 	}
 
-	// Captured before the send: the completion handler will not know how to run this again.
 	LastOperation = MoveTemp(Replay);
 
 	if (OrderId.IsEmpty())
@@ -736,9 +689,6 @@ void UMantlePlaceVaultClient::HandleMaterializeStartResponse(
 	const int32 ResponseCode = Response->GetResponseCode();
 	const FString Content = Response->GetContentAsString();
 
-	// 503 delivery_state_unknown is not a failure either: the platform could not read what the bundle
-	// has, which it reports on complete orders too. It is "try the download", so it is passed on as an
-	// outcome of its own rather than as an error the curator would be told to retry.
 	if (FMantlePlaceVaultLogic::IsDeliveryStateUnknown(ResponseCode, Content))
 	{
 		FMantlePlaceMaterializeStart Unknown;
@@ -748,13 +698,9 @@ void UMantlePlaceVaultClient::HandleMaterializeStartResponse(
 		return;
 	}
 
-	// 409 (single-flight: a materialize is already running) is not an OK code but is a success for us -
-	// the body carries the activeJobId, which we poll. Any other non-2xx is a genuine failure.
 	const bool bAcceptedCode = EHttpResponseCodes::IsOk(ResponseCode) || ResponseCode == EHttpResponseCodes::Conflict;
 	if (!bAcceptedCode)
 	{
-		// Too old for the platform: neither a sign-in failure (the session is fine) nor a network
-		// failure. Broadcast it so the surface can offer the update, and fail the call with the same words.
 		FString UpdateMessage;
 		if (TryHandleClientUpdate(ResponseCode, Content, UpdateMessage))
 		{
@@ -762,8 +708,6 @@ void UMantlePlaceVaultClient::HandleMaterializeStartResponse(
 			return;
 		}
 
-		// An expired access token looks exactly like this. Renew once and run the operation again;
-		// LastOperation is how it was sent, captured before it went out.
 		if (ResponseCode == EHttpResponseCodes::Denied && DeferUntilRenewed(MoveTemp(LastOperation)))
 		{
 			return;
@@ -829,8 +773,6 @@ void UMantlePlaceVaultClient::HandleMaterializeStatusResponse(
 
 	if (!EHttpResponseCodes::IsOk(ResponseCode))
 	{
-		// Too old for the platform: neither a sign-in failure (the session is fine) nor a network
-		// failure. Broadcast it so the surface can offer the update, and fail the call with the same words.
 		FString UpdateMessage;
 		if (TryHandleClientUpdate(ResponseCode, Content, UpdateMessage))
 		{
@@ -838,8 +780,6 @@ void UMantlePlaceVaultClient::HandleMaterializeStatusResponse(
 			return;
 		}
 
-		// An expired access token looks exactly like this. Renew once and run the operation again;
-		// LastOperation is how it was sent, captured before it went out.
 		if (ResponseCode == EHttpResponseCodes::Denied && DeferUntilRenewed(MoveTemp(LastOperation)))
 		{
 			return;
@@ -884,8 +824,6 @@ void UMantlePlaceVaultClient::NotifyVaultListed(bool bSuccess, const TArray<FMan
 {
 	if (bSuccess)
 	{
-		// The vault answered. Whatever renewal was spent getting here has done its job, and the
-		// next 401 is a new problem rather than a loop.
 		RenewalsSinceSuccess = 0;
 	}
 	OnVaultListedNative.Broadcast(bSuccess, Bundles, Message);
@@ -896,8 +834,6 @@ void UMantlePlaceVaultClient::NotifyPresigned(bool bSuccess, const FMantlePlaceP
 {
 	if (bSuccess)
 	{
-		// The vault answered. Whatever renewal was spent getting here has done its job, and the
-		// next 401 is a new problem rather than a loop.
 		RenewalsSinceSuccess = 0;
 	}
 	OnPresignedUrlReadyNative.Broadcast(bSuccess, Download, Message);
@@ -908,8 +844,6 @@ void UMantlePlaceVaultClient::NotifyMaterializeStarted(bool bSuccess, const FMan
 {
 	if (bSuccess)
 	{
-		// The vault answered. Whatever renewal was spent getting here has done its job, and the
-		// next 401 is a new problem rather than a loop.
 		RenewalsSinceSuccess = 0;
 	}
 	OnMaterializeStartedNative.Broadcast(bSuccess, Start, Message);
@@ -920,14 +854,10 @@ void UMantlePlaceVaultClient::NotifyMaterializeStatus(bool bOk, const FMantlePla
 {
 	if (bOk)
 	{
-		// The vault answered. Whatever renewal was spent getting here has done its job, and the
-		// next 401 is a new problem rather than a loop.
 		RenewalsSinceSuccess = 0;
 	}
 	OnMaterializeStatusNative.Broadcast(bOk, Status, Message);
 
-	// Route the Blueprint surface: a failed poll or a non-terminal state is "progress"; a terminal
-	// state (complete/failed) is "complete".
 	if (bOk && (Status.State == EMantlePlaceMaterializeState::Complete || Status.State == EMantlePlaceMaterializeState::Failed))
 	{
 		OnMaterializeComplete(Status.State == EMantlePlaceMaterializeState::Complete, Status, Message);

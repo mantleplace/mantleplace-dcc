@@ -32,25 +32,8 @@
 #include "WorldPartition/DataLayer/DataLayerInstance.h"
 #include "WorldPartition/DataLayer/WorldDataLayers.h"
 
-// The World Partition round trip, without a bundle: a landscape built the way the importer builds
-// one, in a partitioned throwaway world, split by the importer's own split, claimed by the import
-// context's own Claim, then wiped by the orchestration's own wipe and built again.
-//
-// What it pins, each one a thing a World Partition level gets wrong silently:
-//  - the split yields the proxy count the component grid and the grid size say it should;
-//  - every proxy carries the import tag, so the tag-matched wipe can see it;
-//  - the material assigned before Import() is the one every component renders after the split;
-//  - the wipe destroys the proxies before their parent, and leaves no tagged actor behind;
-//  - an importer-spawned non-landscape actor is kept always loaded (v1), the proxies are not;
-//  - a re-import after the wipe yields the same split again, and a second wipe leaves nothing.
-//
-// The landscape is flat on purpose: placement is the live test's to assert, against a real bundle
-// (MantlePlace.Import.LiveFreeTier). This one asserts the World Partition mechanics only.
-
 namespace MantlePlaceWorldPartitionImportTest
 {
-// 4x4 components of one 7-quad section each: 29 vertices a side, the smallest landscape that
-// still splits into more than one proxy on the engine's default grid of 2.
 constexpr int32 ComponentsPerAxis = 4;
 constexpr int32 QuadsPerSection = 7;
 constexpr int32 GridSize = 2;
@@ -63,7 +46,6 @@ ALandscape* BuildFlatLandscape(UWorld* World, UMaterialInterface* Material)
 	{
 		return nullptr;
 	}
-	// As the importer does: the material before Import(), so the components are built with it.
 	Landscape->LandscapeMaterial = Material;
 
 	TArray<uint16> Heights;
@@ -73,7 +55,7 @@ ALandscape* BuildFlatLandscape(UWorld* World, UMaterialInterface* Material)
 	TMap<FGuid, TArray<FLandscapeImportLayerInfo>> MaterialLayerDataPerLayers;
 	MaterialLayerDataPerLayers.Add(FGuid(), TArray<FLandscapeImportLayerInfo>());
 
-	Landscape->Import(FGuid::NewGuid(), 0, 0, Size - 1, Size - 1, /*NumSubsections*/ 1, QuadsPerSection,
+	Landscape->Import(FGuid::NewGuid(), 0, 0, Size - 1, Size - 1, 1, QuadsPerSection,
 		HeightDataPerLayers, TEXT(""), MaterialLayerDataPerLayers, ELandscapeImportAlphamapType::Additive,
 		TArrayView<const FLandscapeLayer>());
 	return Landscape;
@@ -114,8 +96,8 @@ bool FMantlePlaceWorldPartitionImportTest::RunTest(const FString& Parameters)
 
 	UWorld::InitializationValues IVS;
 	IVS.CreateWorldPartition(true).EnableWorldPartitionStreaming(true);
-	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
-		FName(TEXT("MantlePlaceWorldPartitionTestWorld")), /*InWorldPackage*/ nullptr, /*bAddToRoot*/ true,
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, false,
+		FName(TEXT("MantlePlaceWorldPartitionTestWorld")), nullptr, true,
 		ERHIFeatureLevel::Num, &IVS);
 	if (!TestNotNull(TEXT("a throwaway partitioned world"), World))
 	{
@@ -123,7 +105,7 @@ bool FMantlePlaceWorldPartitionImportTest::RunTest(const FString& Parameters)
 	}
 	if (!TestTrue(TEXT("fixture: the world is partitioned"), UWorld::IsPartitionedWorld(World)))
 	{
-		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		World->DestroyWorld(false);
 		return false;
 	}
 
@@ -138,10 +120,9 @@ bool FMantlePlaceWorldPartitionImportTest::RunTest(const FString& Parameters)
 	MantlePlaceImportTiming::FTimeline Timeline;
 	Timeline.Start();
 	const FMantlePlaceImportSelection Selection = FMantlePlaceImportSelection::Everything();
-	FMantlePlaceImportContext Context(World, Manifest, /*Reader*/ nullptr, Selection, Timeline, Result, Log);
+	FMantlePlaceImportContext Context(World, Manifest, nullptr, Selection, Timeline, Result, Log);
 	Context.Identity = Identity;
 
-	// The destroy order, as the editor announces it.
 	TArray<UClass*> Destroyed;
 	const FDelegateHandle DeletedHandle = GEngine->OnLevelActorDeleted().AddLambda(
 		[&Destroyed](AActor* Actor) { Destroyed.Add(Actor != nullptr ? Actor->GetClass() : nullptr); });
@@ -150,7 +131,6 @@ bool FMantlePlaceWorldPartitionImportTest::RunTest(const FString& Parameters)
 	{
 		const FString Pass = Round == 0 ? TEXT("import") : TEXT("re-import");
 
-		// --- Import ---------------------------------------------------------------------------
 		ALandscape* Landscape = BuildFlatLandscape(World, Material);
 		if (!TestNotNull(*FString::Printf(TEXT("%s: the landscape is built"), *Pass), Landscape))
 		{
@@ -193,7 +173,6 @@ bool FMantlePlaceWorldPartitionImportTest::RunTest(const FString& Parameters)
 		TestTrue(*FString::Printf(TEXT("%s: an importer-spawned mesh is kept always loaded (v1)"), *Pass),
 			Mesh != nullptr && !Mesh->GetIsSpatiallyLoaded());
 
-		// --- Wipe -----------------------------------------------------------------------------
 		TestTrue(*FString::Printf(TEXT("%s: nothing of the prior import is unloaded, so no refusal"), *Pass),
 			MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(World, Identity).IsEmpty());
 		Destroyed.Reset();
@@ -221,7 +200,7 @@ bool FMantlePlaceWorldPartitionImportTest::RunTest(const FString& Parameters)
 		MantlePlaceImportOrchestration::ReplacePriorActors(World, Identity, Timeline), 0);
 
 	GEngine->OnLevelActorDeleted().Remove(DeletedHandle);
-	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	World->DestroyWorld(false);
 	return true;
 }
 
@@ -239,7 +218,7 @@ bool FMantlePlaceNonPartitionedSplitTest::RunTest(const FString& Parameters)
 		AddInfo(TEXT("No editor: the non-partitioned check needs an editor world. Skipped."));
 		return true;
 	}
-	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, false,
 		FName(TEXT("MantlePlaceNonPartitionedTestWorld")));
 	if (!TestNotNull(TEXT("a throwaway non-partitioned world"), World))
 	{
@@ -275,21 +254,9 @@ bool FMantlePlaceNonPartitionedSplitTest::RunTest(const FString& Parameters)
 			MantlePlaceDataLayers::FindAsset(Context.ContentRoot, EMantlePlaceLayerFamily::Buildings));
 	}
 
-	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	World->DestroyWorld(false);
 	return true;
 }
-
-// The Data Layer round trip: two orders imported into one partitioned world, each actor claimed by
-// the import context's own Claim under its handler's family, then one order wiped by the
-// orchestration's own wipe and imported again.
-//
-// What it pins:
-//  - an import yields one populated Data Layer per family it spawned actors for, and no empty ones;
-//  - every importer-spawned actor, a landscape's streaming proxies included, is in its family's layer;
-//  - the layers are shared: two orders' buildings sit in the one Buildings layer;
-//  - hiding a layer, as the Data Layers outliner does, hides exactly its family;
-//  - a wipe takes its order's actors out of the shared layers, leaves the layer assets and instances
-//    intact, and leaves zero dangling members; a re-import reuses the same layers.
 
 namespace MantlePlaceWorldPartitionImportTest
 {
@@ -324,7 +291,6 @@ int32 CountInstances(UWorld* World)
 	return Count;
 }
 
-/** What the Data Layers outliner does on a visibility toggle, applied to this world's actors. */
 void SetLayerVisible(UWorld* World, UDataLayerInstance* Instance, bool bVisible)
 {
 	UDataLayerEditorSubsystem* Subsystem = UDataLayerEditorSubsystem::Get();
@@ -356,15 +322,14 @@ bool FMantlePlaceWorldPartitionDataLayersTest::RunTest(const FString& Parameters
 
 	UWorld::InitializationValues IVS;
 	IVS.CreateWorldPartition(true).EnableWorldPartitionStreaming(true);
-	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
-		FName(TEXT("MantlePlaceDataLayersTestWorld")), /*InWorldPackage*/ nullptr, /*bAddToRoot*/ true,
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, false,
+		FName(TEXT("MantlePlaceDataLayersTestWorld")), nullptr, true,
 		ERHIFeatureLevel::Num, &IVS);
 	if (!TestNotNull(TEXT("a throwaway partitioned world"), World))
 	{
 		return false;
 	}
 
-	// Under /Temp, so the shared layer assets this makes are never offered for saving.
 	const FString ContentRoot = TEXT("/Temp/MantlePlaceDataLayerTest");
 	UMaterialInterface* Material = UMaterial::GetDefaultMaterial(MD_Surface);
 	const int32 ExpectedProxies = MantlePlaceWorldPartitionLogic::ProxyCount(ComponentsPerAxis, ComponentsPerAxis, GridSize);
@@ -382,8 +347,6 @@ bool FMantlePlaceWorldPartitionDataLayersTest::RunTest(const FString& Parameters
 	OrderB.Identity = TEXT("bbbbbbbb-2222");
 	OrderB.ContentRoot = ContentRoot;
 
-	// Order A: a split landscape (Terrain) and a mesh (Buildings), each claimed under its family as
-	// the orchestration sets it before the handler runs. Returns every actor the order spawned.
 	TArray<TWeakObjectPtr<AActor>> TerrainA;
 	TWeakObjectPtr<AActor> BuildingsA;
 	const auto ImportOrderA = [&]()
@@ -412,7 +375,6 @@ bool FMantlePlaceWorldPartitionDataLayersTest::RunTest(const FString& Parameters
 	AStaticMeshActor* BuildingsB = World->SpawnActor<AStaticMeshActor>();
 	OrderB.Claim(BuildingsB, TEXT("MP_DataLayerTestBuildingsB"));
 
-	// --- One populated layer per family, shared, and no empty ones ---------------------------------
 	UDataLayerInstance* Terrain = MantlePlaceDataLayers::Find(World, ContentRoot, Family::Terrain);
 	UDataLayerInstance* Buildings = MantlePlaceDataLayers::Find(World, ContentRoot, Family::Buildings);
 	UDataLayerAsset* TerrainAsset = MantlePlaceDataLayers::FindAsset(ContentRoot, Family::Terrain);
@@ -440,7 +402,6 @@ bool FMantlePlaceWorldPartitionDataLayersTest::RunTest(const FString& Parameters
 	TestEqual(TEXT("Terrain holds exactly order A's terrain"), CountMembers(World, Terrain), 1 + ExpectedProxies);
 	TestEqual(TEXT("Buildings holds both orders' buildings"), CountMembers(World, Buildings), 2);
 
-	// --- Toggling a layer hides and shows exactly its family -------------------------------------
 	SetLayerVisible(World, Terrain, false);
 	int32 TerrainHidden = 0;
 	for (const TWeakObjectPtr<AActor>& Actor : TerrainA)
@@ -458,7 +419,6 @@ bool FMantlePlaceWorldPartitionDataLayersTest::RunTest(const FString& Parameters
 	}
 	TestEqual(TEXT("showing Terrain again shows every terrain actor"), TerrainHidden, 0);
 
-	// --- Wipe order A: out of the shared layers, layers intact, zero dangling members --------------
 	MantlePlaceImportOrchestration::ReplacePriorActors(World, OrderA.Identity, Timeline);
 	int32 Surviving = BuildingsA.IsValid() ? 1 : 0;
 	for (const TWeakObjectPtr<AActor>& Actor : TerrainA)
@@ -475,7 +435,6 @@ bool FMantlePlaceWorldPartitionDataLayersTest::RunTest(const FString& Parameters
 	TestTrue(TEXT("wipe: the Terrain instance is intact"), MantlePlaceDataLayers::Find(World, ContentRoot, Family::Terrain) == Terrain);
 	TestEqual(TEXT("wipe: no instance removed"), CountInstances(World), 2);
 
-	// --- Re-import order A: the same layers, reused -----------------------------------------------
 	ImportOrderA();
 	TestTrue(TEXT("re-import: reuses the Terrain instance"), MantlePlaceDataLayers::Find(World, ContentRoot, Family::Terrain) == Terrain);
 	TestTrue(TEXT("re-import: reuses the Buildings asset"), MantlePlaceDataLayers::FindAsset(ContentRoot, Family::Buildings) == BuildingsAsset);
@@ -483,14 +442,12 @@ bool FMantlePlaceWorldPartitionDataLayersTest::RunTest(const FString& Parameters
 	TestEqual(TEXT("re-import: Terrain populated again"), CountMembers(World, Terrain), 1 + ExpectedProxies);
 	TestEqual(TEXT("re-import: Buildings holds both orders again"), CountMembers(World, Buildings), 2);
 
-	// --- Wipe both: every layer empty, every layer intact ----------------------------------------
 	MantlePlaceImportOrchestration::ReplacePriorActors(World, OrderA.Identity, Timeline);
 	MantlePlaceImportOrchestration::ReplacePriorActors(World, OrderB.Identity, Timeline);
 	TestEqual(TEXT("both wiped: Terrain has no members"), CountMembers(World, Terrain), 0);
 	TestEqual(TEXT("both wiped: Buildings has no members"), CountMembers(World, Buildings), 0);
 	TestEqual(TEXT("both wiped: the layers stay"), CountInstances(World), 2);
 
-	// Let the in-memory test assets go with the world rather than linger in the editor session.
 	for (UDataLayerAsset* Asset : { TerrainAsset, BuildingsAsset })
 	{
 		if (Asset != nullptr)
@@ -499,16 +456,9 @@ bool FMantlePlaceWorldPartitionDataLayersTest::RunTest(const FString& Parameters
 			Asset->ClearFlags(RF_Public | RF_Standalone);
 		}
 	}
-	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	World->DestroyWorld(false);
 	return true;
 }
-
-// The stale descriptor: a saved level keeps a World Partition descriptor for every actor a wipe
-// destroyed until the next save deletes its package, and that descriptor reads as unloaded. A
-// second re-import before the save must not count it as a prior actor in an unloaded region.
-//
-// The save is stood in for by the one engine event that gives an actor its descriptor, the
-// container's pre-save hook, so nothing is written to disk.
 
 namespace MantlePlaceWorldPartitionImportTest
 {
@@ -548,8 +498,8 @@ bool FMantlePlaceWorldPartitionStaleDescriptorTest::RunTest(const FString& Param
 
 	UWorld::InitializationValues IVS;
 	IVS.CreateWorldPartition(true).EnableWorldPartitionStreaming(true);
-	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, /*bInformEngineOfWorld*/ false,
-		FName(TEXT("MantlePlaceStaleDescriptorTestWorld")), /*InWorldPackage*/ nullptr, /*bAddToRoot*/ true,
+	UWorld* World = UWorld::CreateWorld(EWorldType::Editor, false,
+		FName(TEXT("MantlePlaceStaleDescriptorTestWorld")), nullptr, true,
 		ERHIFeatureLevel::Num, &IVS);
 	if (!TestNotNull(TEXT("a throwaway partitioned world"), World))
 	{
@@ -561,7 +511,7 @@ bool FMantlePlaceWorldPartitionStaleDescriptorTest::RunTest(const FString& Param
 	UActorDescContainer* Container = ContainerInstance != nullptr ? ContainerInstance->GetContainer() : nullptr;
 	if (!TestNotNull(TEXT("fixture: the world has an actor descriptor container"), Container))
 	{
-		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		World->DestroyWorld(false);
 		return false;
 	}
 
@@ -572,42 +522,39 @@ bool FMantlePlaceWorldPartitionStaleDescriptorTest::RunTest(const FString& Param
 	MantlePlaceImportTiming::FTimeline Timeline;
 	Timeline.Start();
 	const FMantlePlaceImportSelection Selection = FMantlePlaceImportSelection::Everything();
-	FMantlePlaceImportContext Context(World, Manifest, /*Reader*/ nullptr, Selection, Timeline, Result, Log);
+	FMantlePlaceImportContext Context(World, Manifest, nullptr, Selection, Timeline, Result, Log);
 	Context.Identity = Identity;
 
-	// --- The prior import, as a save leaves it: a claimed actor with a descriptor -----------------
 	AStaticMeshActor* Mesh = World->SpawnActor<AStaticMeshActor>();
 	Context.Claim(Mesh, TEXT("MP_StaleDescriptorTestMesh"));
 	if (!TestTrue(TEXT("fixture: the actor has its own package, as every actor in a partitioned level does"),
 		Mesh != nullptr && Mesh->IsPackageExternal()))
 	{
-		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		World->DestroyWorld(false);
 		return false;
 	}
 	FObjectSaveContextData SaveData;
 	Container->OnObjectPreSave(Mesh, FObjectPreSaveContext(SaveData));
 	if (!TestEqual(TEXT("fixture: the stand-in save gives the actor a loaded descriptor"),
-		CountTaggedDescriptors(World, Identity, /*bLoaded*/ true), 1))
+		CountTaggedDescriptors(World, Identity, true), 1))
 	{
-		World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+		World->DestroyWorld(false);
 		return false;
 	}
 	TestTrue(TEXT("a loaded prior actor is no refusal"),
 		MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(World, Identity).IsEmpty());
 
-	// --- The first re-import's wipe: the actor goes, its descriptor stays until a save -------------
 	TestEqual(TEXT("the wipe destroys the prior actor"),
 		MantlePlaceImportOrchestration::ReplacePriorActors(World, Identity, Timeline), 1);
 	TestEqual(TEXT("fixture: its descriptor outlives it and reads as unloaded"),
-		CountTaggedDescriptors(World, Identity, /*bLoaded*/ false), 1);
+		CountTaggedDescriptors(World, Identity, false), 1);
 
-	// --- The second re-import, before any save --------------------------------------------------
 	const FString Refusal = MantlePlaceImportOrchestration::ExplainUnloadedPriorActors(World, Identity);
 	TestTrue(*FString::Printf(TEXT("a destroyed actor's stale descriptor is no refusal (got: %s)"), *Refusal),
 		Refusal.IsEmpty());
 
-	World->DestroyWorld(/*bInformEngineOfDestruction*/ false);
+	World->DestroyWorld(false);
 	return true;
 }
 
-#endif // WITH_DEV_AUTOMATION_TESTS
+#endif

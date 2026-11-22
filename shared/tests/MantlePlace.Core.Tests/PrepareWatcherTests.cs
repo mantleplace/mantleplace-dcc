@@ -3,20 +3,6 @@ using MantlePlace.Core;
 
 namespace MantlePlace.Core.Tests;
 
-/// <summary>
-/// The session-wide Prepare: start → poll → re-list → download, owned by nothing that closes.
-/// </summary>
-/// <remarks>
-/// <para>
-/// It used to live in the vault window. Closing the window did not stop it — it ran on with no owner,
-/// reporting to a status line nobody could see — and reopening the window knew nothing of it, so a
-/// second Prepare started a second poll of the same order. The watcher is what outlives the window,
-/// and the one thing that can say an order is already being watched.
-/// </para>
-/// <para>
-/// Driven through <see cref="IPrepareSteps"/> fakes, so no request leaves the machine (<c>HPS-42</c>).
-/// </para>
-/// </remarks>
 internal static class PrepareWatcherTests
 {
     private static readonly VaultBundle Bundle = new() { OrderId = "order-1", AoiLabel = "Harbour Point" };
@@ -262,7 +248,6 @@ internal static class PrepareWatcherTests
         }
     }
 
-    /// <summary>Scripted steps. Every step succeeds unless told otherwise.</summary>
     private sealed class FakeSteps : IPrepareSteps
     {
         private int _starts;
@@ -279,12 +264,10 @@ internal static class PrepareWatcherTests
         internal Func<VaultBundle, PreparedDownload> Download { get; init; }
             = bundle => new PreparedDownload(bundle, Ready: true, "Downloaded and verified.");
 
-        /// <summary>When set, the poll waits on it — a job still building.</summary>
         internal TaskCompletionSource? Hold { get; init; }
 
         internal Exception? Throw { get; init; }
 
-        /// <summary>When set, a cancelled poll returns a failure rather than throwing.</summary>
         internal bool FailOnCancel { get; init; }
 
         internal int Starts => _starts;
@@ -329,7 +312,6 @@ internal static class PrepareWatcherTests
         }
     }
 
-    /// <summary>Writes down what the watcher tells the ledger.</summary>
     private sealed class FakeLedger : IPrepareLedger
     {
         private readonly List<string> _lines = [];

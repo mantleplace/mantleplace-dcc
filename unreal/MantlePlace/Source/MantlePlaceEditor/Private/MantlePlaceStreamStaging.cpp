@@ -21,7 +21,6 @@ namespace MantlePlaceStreamStaging
 		const TCHAR* const KeyEntryCount = TEXT("entry_count");
 		const TCHAR* const KeyScheme = TEXT("scheme_version");
 
-		/** The root every staged bundle and its record live under. */
 		FString StagingRoot()
 		{
 			return FPaths::ProjectSavedDir() / TEXT("MantlePlace") / TEXT("StreamStaging");
@@ -34,54 +33,38 @@ namespace MantlePlaceStreamStaging
 		const FRecord& Incoming,
 		bool bTerrainRootPresent)
 	{
-		// A record without the content it describes is bookkeeping about a directory somebody
-		// cleaned out. The rewritten layer.json is the one file the stream cannot serve without.
 		if (!bRecordFound || !bTerrainRootPresent)
 		{
 			return EVerdict::Stage;
 		}
 
-		// A layout this build does not know. Re-stage rather than serve a directory whose shape it
-		// cannot predict — the same reasoning as the provenance record, minus the refusal, because
-		// nothing here is a user's content to protect.
 		if (Found.SchemeVersion != CurrentSchemeVersion)
 		{
 			return EVerdict::Stage;
 		}
 
-		// An extraction that wrote nothing is not a staged bundle, whatever else the record says.
 		if (Found.EntryCount <= 0)
 		{
 			return EVerdict::Stage;
 		}
 
-		// Case-sensitive throughout, for the reason the provenance record gives: an order id and a
-		// hex digest are both case-significant as delivered, and an equivalence nobody stated is not
-		// ours to invent.
 		if (!Found.Identity.Equals(Incoming.Identity, ESearchCase::CaseSensitive))
 		{
 			return EVerdict::Stage;
 		}
 
-		// The one that catches a re-materialized order. The identity is stable across rebuilds by
-		// design, so without this a rebuilt bundle would be served from the previous build's tiles.
 		if (!Found.ManifestSha256.Equals(Incoming.ManifestSha256, ESearchCase::CaseSensitive)
 			|| Found.ManifestSha256.IsEmpty())
 		{
 			return EVerdict::Stage;
 		}
 
-		// The bundle layout renames its terrain folder across versions, and the manifest pointer is
-		// what every served URL is built from. Either changing means the directory on disk is not
-		// the one this stream would produce.
 		if (!Found.TerrainPrefix.Equals(Incoming.TerrainPrefix, ESearchCase::CaseSensitive)
 			|| !Found.CesiumTerrainPath.Equals(Incoming.CesiumTerrainPath, ESearchCase::CaseSensitive))
 		{
 			return EVerdict::Stage;
 		}
 
-		// The drape is extracted by its pointer, so a bundle whose drape moved, appeared or went away
-		// has a different set of files on disk than this stream would produce.
 		if (!Found.DrapePath.Equals(Incoming.DrapePath, ESearchCase::CaseSensitive))
 		{
 			return EVerdict::Stage;
@@ -94,14 +77,8 @@ namespace MantlePlaceStreamStaging
 	{
 		if (EntryName.IsEmpty() || EntryName.EndsWith(TEXT("/")))
 		{
-			return false; // a directory entry
+			return false;
 		}
-		// Both matches ignore case, spelled out rather than left to a default: a manifest path finds its
-		// archive entry regardless of case (MPB 2.0, format.md 10.3 rule 6), as the engine's zip reader
-		// already does for a path read by name. A bundle written with one case and pointed at with another
-		// would otherwise be selected by neither, and stream a terrain with no tiles.
-		//
-		// An empty prefix would match every entry; the caller refuses one, and so does this.
 		if (!Record.TerrainPrefix.IsEmpty() && EntryName.StartsWith(Record.TerrainPrefix, ESearchCase::IgnoreCase))
 		{
 			return true;
@@ -138,8 +115,6 @@ namespace MantlePlaceStreamStaging
 		FRecord Parsed;
 		if (!Root->TryGetStringField(KeyIdentity, Parsed.Identity) || Parsed.Identity.IsEmpty())
 		{
-			// A record that does not say which bundle it describes cannot answer the only question
-			// it exists to answer, so it is not a record. Treated as absent, which re-stages.
 			return false;
 		}
 		Root->TryGetStringField(KeyManifestSha256, Parsed.ManifestSha256);
@@ -163,15 +138,11 @@ namespace MantlePlaceStreamStaging
 
 	FString StagingDir(const FString& Identity)
 	{
-		// The FULL identity, unlike the content folder's truncation: nothing reads this path, so
-		// there is no readability to trade for, and the availability rewrite declares every tile it
-		// finds beneath here — a collision would serve another bundle's tiles as this one's.
 		return StagingRoot() / Identity;
 	}
 
 	FString RecordPath(const FString& Identity)
 	{
-		// A sibling of the directory, not a file inside it: the directory is served over HTTP.
 		return StagingRoot() / (Identity + TEXT(".json"));
 	}
 

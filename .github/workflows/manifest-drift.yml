@@ -1,8 +1,3 @@
-# Manifest drift tracker: when the published bundle-manifest schema moves past verified-against.json,
-# keep ONE open tracking issue naming the new version, so the drift surfaces once instead of turning
-# every run red. The conformance gate's scheduled live run still reports the detail; this files it.
-#
-# Equal pins: nothing happens. Ahead: the open issue carrying the marker is edited, else one is opened.
 name: manifest-drift
 
 on:

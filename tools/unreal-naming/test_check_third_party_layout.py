@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""Tests for the third-party layout gate.
-
-Each test builds a throwaway tree rather than asserting against the real one, so the suite says what
-the gate MEANS. The passing cases matter as much as the failing ones: a gate that fires on the
-plugin's own source gets silenced wholesale, and then it guards nothing.
-"""
 
 from __future__ import annotations
 
@@ -65,7 +59,6 @@ class PassingLayouts(LayoutTestCase):
         self.assertEqual(code, 0, out)
 
     def test_source_that_merely_mentions_a_licence_word_passes(self) -> None:
-        # "limit" and "admit" contain the letters, and a code comment is not a licence text.
         self.write("Source/MantlePlaceRuntime/Private/Limits.cpp", "// admit the limit; BSD sockets\n")
         code, out = self.run_gate()
         self.assertEqual(code, 0, out)
