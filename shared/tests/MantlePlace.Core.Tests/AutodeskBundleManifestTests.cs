@@ -97,7 +97,7 @@ internal static class AutodeskBundleManifestTests
                 "the same range as revit/CLAUDE.md");
         });
 
-        run.Case("the bundle icon is the monogram, and that file is in this tree", () =>
+        run.Case("the bundle icon is the mark, and that file is in this tree", () =>
         {
             XElement root = Parse("1.0.0", [2025]).Root!;
             string icon = Attr(root, "Icon") ?? string.Empty;
@@ -110,7 +110,7 @@ internal static class AutodeskBundleManifestTests
             string? resources = RepoTree.Find(
                 "revit/src/MantlePlace.Revit.Addin/Resources",
                 dir => File.Exists(Path.Combine(dir, AutodeskBundleManifest.IconSourceFileName)));
-            run.True(resources is not null, "the monogram render the script copies exists in Resources");
+            run.True(resources is not null, "the mark render the script copies exists in Resources");
         });
 
         run.Case("a version is never blank and a range is never empty", () =>

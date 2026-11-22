@@ -187,7 +187,7 @@ internal static class AutoCadBundleManifestTests
             run.True(upgradeA.Length > 0 && upgradeA == upgradeB, "the upgrade code is the same across versions");
         });
 
-        run.Case("the bundle icon is the monogram, named the same as Revit's", () =>
+        run.Case("the bundle icon is the mark, named the same as Revit's", () =>
         {
             string icon = Attr(Parse("1.0.0", [2025]).Root!, "Icon") ?? string.Empty;
 

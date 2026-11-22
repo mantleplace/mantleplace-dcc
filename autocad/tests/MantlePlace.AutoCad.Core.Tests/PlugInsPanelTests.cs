@@ -159,8 +159,8 @@ internal static class PlugInsPanelTests
             }
         });
 
-        run.Case("the only image is the monogram, at the two sizes a ribbon button uses", () =>
-            run.Equal(string.Join(",", PlugInsPanel.ImageSources), "MantlePlaceMark_16.png,MantlePlaceMark_32.png", "the monogram's 16 and 32 renders"));
+        run.Case("the only image is the mark, at the two sizes a ribbon button uses", () =>
+            run.Equal(string.Join(",", PlugInsPanel.ImageSources), "MantlePlaceMark_16.png,MantlePlaceMark_32.png", "the mark's 16 and 32 renders"));
 
         return run.Report("Mantle Place panel");
     }

@@ -1,157 +1,114 @@
 import unittest
+from pathlib import Path
 
 import mark_geometry as g
 
-
-class MatteRule(unittest.TestCase):
-    def test_white_is_fully_opaque(self):
-        self.assertEqual(g.matte_value(255), 255)
-
-    def test_the_tile_is_fully_transparent(self):
-        self.assertEqual(g.matte_value(16), 0)
-
-    def test_the_extrude_is_fully_transparent(self):
-        self.assertEqual(g.matte_value(0), 0)
-
-    def test_the_floor_itself_is_transparent(self):
-        self.assertEqual(g.matte_value(g.MATTE_FLOOR), 0)
-
-    def test_antialiased_edges_land_between(self):
-        midpoint = (g.MATTE_FLOOR + 255) // 2
-        self.assertTrue(0 < g.matte_value(midpoint) < 255)
-
-    def test_the_rule_never_leaves_byte_range(self):
-        for channel in range(256):
-            self.assertTrue(0 <= g.matte_value(channel) <= 255)
-
-    def test_the_rule_rises_monotonically(self):
-        values = [g.matte_value(c) for c in range(256)]
-        self.assertEqual(values, sorted(values))
-
-    def test_the_lookup_table_agrees_with_the_rule(self):
-        table = g.matte_lut()
-        self.assertEqual(len(table), 256)
-        self.assertEqual(list(table), [g.matte_value(c) for c in range(256)])
+SOURCE = Path(__file__).resolve().parent / g.SOURCE_NAME
 
 
-class BoundingBox(unittest.TestCase):
-    @staticmethod
-    def buffer(width, height, opaque):
-        cells = bytearray(width * height)
-        for x, y in opaque:
-            cells[y * width + x] = 255
-        return bytes(cells)
-
-    def test_a_single_pixel_is_its_own_box(self):
-        buf = self.buffer(4, 4, [(2, 1)])
-        self.assertEqual(g.bounding_box(buf, 4), (2, 1, 3, 2))
-
-    def test_the_box_spans_every_opaque_pixel(self):
-        buf = self.buffer(5, 5, [(1, 1), (3, 2), (2, 4)])
-        self.assertEqual(g.bounding_box(buf, 5), (1, 1, 4, 5))
-
-    def test_a_full_buffer_boxes_the_whole_image(self):
-        buf = b"\xff" * 9
-        self.assertEqual(g.bounding_box(buf, 3), (0, 0, 3, 3))
-
-    def test_an_empty_buffer_has_no_box(self):
-        self.assertIsNone(g.bounding_box(bytes(9), 3))
-
-    def test_pixels_below_the_threshold_are_not_in_the_box(self):
-        buf = bytes([0, 40, 0, 0, 255, 0, 0, 0, 0])
-        self.assertEqual(g.bounding_box(buf, 3, threshold=128), (1, 1, 2, 2))
-
-    def test_the_threshold_is_inclusive(self):
-        buf = bytes([0, 0, 0, 0, 128, 0, 0, 0, 0])
-        self.assertEqual(g.bounding_box(buf, 3, threshold=128), (1, 1, 2, 2))
+def area(polygon):
+    total = 0.0
+    for (x1, y1), (x2, y2) in zip(polygon, polygon[1:] + polygon[:1]):
+        total += x1 * y2 - x2 * y1
+    return abs(total) / 2
 
 
-class Placement(unittest.TestCase):
-    def test_a_square_box_fills_the_margin_exactly(self):
-        p = g.place(100, 100, size=50, margin=0.10)
-        self.assertEqual((p.width, p.height), (40, 40))
-        self.assertEqual((p.left, p.top), (5, 5))
+class Numbers(unittest.TestCase):
+    def test_signs_and_bare_decimals_split_numbers(self):
+        self.assertEqual(g.numbers("1.64.96-3.1,2.14-4.4"), [1.64, 0.96, -3.1, 2.14, -4.4])
 
-    def test_a_wide_box_is_limited_by_width(self):
-        p = g.place(200, 100, size=50, margin=0.10)
-        self.assertEqual((p.width, p.height), (40, 20))
-        self.assertEqual(p.left, 5)
-        self.assertEqual(p.top, 15)
-
-    def test_a_tall_box_is_limited_by_height(self):
-        p = g.place(100, 200, size=50, margin=0.10)
-        self.assertEqual((p.width, p.height), (20, 40))
-        self.assertEqual(p.left, 15)
-        self.assertEqual(p.top, 5)
-
-    def test_the_artwork_never_leaves_the_tile(self):
-        for size in g.HOST_SIZES:
-            p = g.place(2753, 2396, size=size, margin=g.MARGIN)
-            self.assertGreaterEqual(p.left, 0)
-            self.assertGreaterEqual(p.top, 0)
-            self.assertLessEqual(p.left + p.width, size)
-            self.assertLessEqual(p.top + p.height, size)
-
-    def test_aspect_ratio_survives_the_smallest_size(self):
-        p = g.place(2753, 2396, size=16, margin=g.MARGIN)
-        self.assertAlmostEqual(p.width / p.height, 2753 / 2396, delta=0.12)
-
-    def test_no_dimension_collapses_to_nothing(self):
-        p = g.place(4000, 1, size=16, margin=g.MARGIN)
-        self.assertGreaterEqual(p.width, 1)
-        self.assertGreaterEqual(p.height, 1)
-
-    def test_a_margin_of_zero_is_full_bleed(self):
-        p = g.place(10, 10, size=64, margin=0.0)
-        self.assertEqual((p.width, p.height, p.left, p.top), (64, 64, 0, 0))
+    def test_exponents_are_one_number(self):
+        self.assertEqual(g.numbers("1e2 -2.5E-1"), [100.0, -0.25])
 
 
-class SnapCurve(unittest.TestCase):
-    def test_the_pivot_is_unmoved(self):
-        self.assertEqual(g.snap_value(128), 128)
+class PathFlattening(unittest.TestCase):
+    def test_a_closed_square_is_one_polygon_of_its_corners(self):
+        polygons = g.path_polygons("M0,0h10v10h-10Z")
+        self.assertEqual(len(polygons), 1)
+        self.assertEqual(polygons[0][:4], [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)])
 
-    def test_opaque_stays_opaque(self):
-        self.assertEqual(g.snap_value(255), 255)
+    def test_relative_lines_accumulate_from_the_current_point(self):
+        polygons = g.path_polygons("M5,5l10,0l0,10z")
+        self.assertEqual(polygons[0], [(5.0, 5.0), (15.0, 5.0), (15.0, 15.0)])
 
-    def test_transparent_stays_transparent(self):
-        self.assertEqual(g.snap_value(0), 0)
+    def test_each_moveto_starts_its_own_subpath(self):
+        polygons = g.path_polygons("M0,0h10v10h-10ZM2,2h6v6h-6Z")
+        self.assertEqual(len(polygons), 2)
+        self.assertEqual(polygons[1][0], (2.0, 2.0))
 
-    def test_edges_are_pushed_away_from_the_pivot(self):
-        self.assertLess(g.snap_value(100), 100)
-        self.assertGreater(g.snap_value(160), 160)
+    def test_a_relative_moveto_after_close_starts_from_the_subpath_start(self):
+        polygons = g.path_polygons("M10,10h5v5zm1,1h1v1z")
+        self.assertEqual(polygons[1][0], (11.0, 11.0))
 
-    def test_the_curve_never_leaves_byte_range(self):
-        for alpha in range(256):
-            self.assertTrue(0 <= g.snap_value(alpha) <= 255)
+    def test_a_cubic_ends_on_its_end_point(self):
+        polygons = g.path_polygons("M0,0c0,10,10,10,10,0", segments=8)
+        self.assertEqual(polygons[0][-1], (10.0, 0.0))
+        self.assertEqual(len(polygons[0]), 9)
 
-    def test_the_curve_rises_monotonically(self):
-        values = [g.snap_value(a) for a in range(256)]
-        self.assertEqual(values, sorted(values))
+    def test_a_cubic_passes_through_its_midpoint(self):
+        polygons = g.path_polygons("M0,0c0,10,10,10,10,0", segments=2)
+        self.assertEqual(polygons[0][1], (5.0, 7.5))
 
-    def test_the_lookup_table_agrees_with_the_curve(self):
-        table = g.snap_lut()
-        self.assertEqual(len(table), 256)
-        self.assertEqual(list(table), [g.snap_value(a) for a in range(256)])
+    def test_a_smooth_cubic_reflects_the_previous_control_point(self):
+        smooth = g.path_polygons("M0,0c0,10,10,10,10,0s10,-10,10,0", segments=2)[0]
+        explicit = g.path_polygons("M0,0c0,10,10,10,10,0c0,-10,10,-10,10,0", segments=2)[0]
+        self.assertEqual(smooth, explicit)
+
+    def test_implicit_repeats_reuse_the_command(self):
+        self.assertEqual(g.path_polygons("M0,0l1,0 0,1")[0], [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)])
+
+    def test_an_unknown_command_is_refused(self):
+        with self.assertRaises(ValueError):
+            g.path_polygons("M0,0a5,5,0,0,1,10,0")
 
 
-class SizePolicy(unittest.TestCase):
-    def test_the_small_sizes_are_snapped(self):
-        self.assertTrue(g.uses_snapping(16))
-        self.assertTrue(g.uses_snapping(24))
+class TheCommittedSource(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.mark = g.read_mark(SOURCE.read_text(encoding="utf-8"))
 
-    def test_the_large_sizes_keep_their_antialiasing(self):
-        self.assertFalse(g.uses_snapping(32))
-        self.assertFalse(g.uses_snapping(48))
-        self.assertFalse(g.uses_snapping(64))
+    def test_it_is_a_square_view(self):
+        self.assertEqual(self.mark.view[0], self.mark.view[1])
 
-    def test_every_host_size_has_a_treatment(self):
-        for size in g.HOST_SIZES:
-            self.assertIsInstance(g.uses_snapping(size), bool)
+    def test_it_is_clipped_to_a_disc_that_fills_the_view(self):
+        cx, cy, r = self.mark.clip
+        self.assertEqual((cx * 2, cy * 2, r * 2), (self.mark.view[0],) * 3)
 
+    def test_the_disc_is_the_brand_orange(self):
+        self.assertEqual(self.mark.layers[0].fill, g.MANTLE_ORANGE)
+        self.assertEqual(self.mark.layers[0].kind, "circle")
+
+    def test_the_extrude_is_drawn_and_drawn_beneath_the_monogram(self):
+        fills = [layer.fill for layer in self.mark.layers]
+        self.assertIn(g.BLACK, fills)
+        self.assertLess(fills.index(g.BLACK), fills.index(g.WHITE))
+
+    def test_every_layer_has_area(self):
+        for layer in self.mark.layers:
+            if layer.kind == "path":
+                self.assertGreater(sum(area(p) for p in layer.polygons), 1.0)
+
+    def test_the_monogram_and_its_extrude_stay_inside_the_disc(self):
+        cx, cy, r = self.mark.clip
+        for layer in self.mark.layers[1:]:
+            points = [pt for p in layer.polygons for pt in p] if layer.kind == "path" else [(layer.circle[0], layer.circle[1])]
+            for x, y in points:
+                self.assertLessEqual((x - cx) ** 2 + (y - cy) ** 2, r * r)
+
+
+class Targets(unittest.TestCase):
     def test_the_revit_set_covers_the_documented_display_scales(self):
-        for scale in (1.0, 1.5, 2.0):
-            for base in (16, 32):
-                self.assertIn(round(base * scale), g.HOST_SIZES)
+        revit = [t.size for t in g.targets() if t.path.startswith(g.REVIT_RESOURCES)]
+        self.assertEqual(tuple(revit), (16, 24, 32, 48, 64))
+
+    def test_unreal_gets_its_tab_icon_and_plugin_icon(self):
+        unreal = {t.path.rsplit("/", 1)[-1]: t.size for t in g.targets() if t.path.startswith(g.UNREAL_RESOURCES)}
+        self.assertEqual(unreal, {"MantlePlaceTabIcon.png": 64, "Icon128.png": 128})
+
+    def test_every_target_already_exists_in_the_tree(self):
+        root = Path(__file__).resolve().parent.parent.parent
+        for target in g.targets():
+            self.assertTrue((root / target.path).is_file(), target.path)
 
 
 if __name__ == "__main__":

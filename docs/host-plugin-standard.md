@@ -94,6 +94,7 @@ host met the contract for real:
 | **v1.21** | `HPS-57` — every host with a ribbon or a top-level menu gives Mantle Place a tab (or top-level menu) of its own, named `Mantle Place`. Revit had a Mantle Place tab and AutoCAD put a panel on the host's Add-ins tab, so a curator moving between hosts looked in two places for the same actions |
 | **v1.22** | `HPS-58` … `HPS-63` — the common core, the nine actions every host plugin supports, in order, each citing the rule that already governs it or stating the one that does not; `HPS-51` gains the words for six of them. Two hosts had grown the same product by different routes: a curator who used both found a level chooser in one and none in the other, an import window with steps in one and a single press in the other, and nothing said which differences were gaps and which were choices, so a third host had no list to build against |
 | **v1.23** | The standard brought up to MPB 3.0. `HPS-32` becomes "found by its promised name in the catalog", and the rules that send a reader to a pointer or a host block (`HPS-34`'s per-host table, `HPS-36`, `HPS-37`, `HPS-45`, `HPS-47`, `HPS-52`, the pointer half of `HPS-53`, `HPS-54`) are marked 2.x only, each with what a 3.0 reader does. 3.0 has no per-host block, so a rule that told a reader to follow a per-host pointer had nothing to apply to, and a new host reading it would have looked for a block the manifest no longer carries |
+| **v1.24** | `HPS-64` — every place a host shows a mark, it shows the one round mark with its extrude, rendered from one source. The plugins shipped a square tile with the extrude stripped while the web showed the round mark, so a curator saw two marks between the Revit Sign In dialog and the browser tab it opened |
 
 Every one of those is a rule that existed only after something shipped wrong, which is why the text
 keeps the failure attached to the rule rather than stating the rule alone.
@@ -1284,6 +1285,23 @@ already conforms. AutoCAD's panel moved to a tab of its own with this rule.
 _Enforcer:_ `agent-review`, plus a pure-core test where a host has moved the tab decision out of its
 shim (AutoCAD's `PlugInsPanel.Place`).
 
+**`HPS-64` — Every place a host shows a mark, it shows the one Mantle Place mark, rendered from the
+one source.** The mark is the round orange disc with the white `mp` monogram and its black extrude,
+transparent outside the disc: the artwork `mantle.place` serves as its logo and favicon. A host shows
+it on its ribbon or toolbar buttons at every size the host asks for, in its window title bars and
+window corners, in its dialog and panel headers, and as its bundle, add-in or plugin-browser icon,
+in each of those the host has. The files come from `tools/brand-assets/render_mark.py`, which renders
+`tools/brand-assets/mark.svg` at each size a host ships; a host never draws, crops,
+recolours or edits its own copy, and a new size or a new host is a new target in that tool. A host
+with nowhere to show a mark states so in its own `CLAUDE.md`.
+
+The failure attached to this rule: the plugins shipped a square tile with the extrude stripped while
+the web showed the round mark, so the Revit Sign In dialog carried one mark and the browser tab it
+opened carried another, and the plugin's read as cropped and missing its shadow
+([ADR 0033](adr/0033-every-host-shows-the-round-mark-with-its-extrude.md)).
+
+_Enforcer:_ `agent-review`, plus `ci-brand-assets`' test of the source and the target list.
+
 ---
 
 ## 11. Frames and placement (`HPS-52` … `HPS-54`)
@@ -1590,6 +1608,7 @@ records that eviction is deliberately explicit-only.
 | The bounds on a vault listing nobody asked for (`HPS-55`)                                                                                                                                                  | `agent-review`; a pure-core test where a host has one  |
 | Every host carries Send Feedback, its link and the post-import prompt (`HPS-56`) | `agent-review`, plus a pure-core test of the link builder and of the prompt's once-per-bundle rule |
 | A host with a ribbon or a top-level menu gives Mantle Place a tab of its own (`HPS-57`) | `agent-review`; a pure-core test where a host has one |
+| Every place a host shows a mark, the one round mark from the one source (`HPS-64`) | `agent-review`; `ci-brand-assets` tests the source and the target list |
 | The common core, its level choice, import window, local import, credits and notices, and re-import (`HPS-58` … `HPS-63`) | `agent-review`; a pure-core test where a host has moved the decision out of its shim; the matrix in `host-support.md` is edited in the same change |
 
 Rules with two enforcers (`HPS-02`, `HPS-04`, `HPS-23`, `HPS-24`, `HPS-26`, `HPS-33`) appear in both rows —

@@ -48,20 +48,21 @@ _Avoid_: user (for the person)
 ### Brand and marks
 
 **Mark**:
-The square, full-bleed orange tile carrying the white `mp` monogram. This is *the* Mantle Place
-mark, in every host and at every size. Unqualified "the logo" has meant this and the roundel to
-different people, which is how two hosts came to ship two different marks.
-_Avoid_: logo, icon, brand mark, tile
+The round orange disc carrying the white `mp` monogram and its black extrude: the artwork
+`mantle.place` serves as its logo. This is *the* Mantle Place mark, in every host, in every place a
+host shows one, and at every size. Unqualified "the logo" has meant this, the square tile and the
+roundel to different people, which is how the plugins came to ship a mark the web did not.
+_Avoid_: logo, icon, brand mark, roundel
 
 **Monogram**:
-The white lowercase `mp` letterform inside the mark. Nameable on its own, because a host may render
-it without the tile and extrude around it.
+The white lowercase `mp` letterform inside the mark. Nameable on its own as the part of the mark
+that is a letterform; no host renders it apart from the disc and the extrude.
 _Avoid_: letterform, initials, glyph
 
-**Roundel**:
-The superseded round treatment of the monogram. Not a synonym for the mark; saying one when you mean
-the other is the confusion this entry exists to end.
-_Avoid_: circular logo, round mark, the old logo
+**Square tile**:
+The retired square, full-bleed orange treatment of the monogram, without the extrude, that the
+plugins shipped before the round mark replaced it. Not a synonym for the mark.
+_Avoid_: the mark, the logo, roundel
 
 **Lockup**:
 The mark set beside the wordmark. A composition of the two, never either one alone.

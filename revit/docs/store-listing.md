@@ -9,8 +9,8 @@ the form on 2026-11-19. It describes only what 1.2.0 does: what it changed is
 
 Two rules from the store's earlier reviews hold for every field and every image: the title does not name the
 host product, because the storefront allows that only for an app listed for more than one product, and no
-listing image or plugin window shows the host product's logo. The icon is the Mantle Place monogram, the
-company logo ([ADR 0009](../../docs/adr/0009-host-assets-render-the-monogram.md)).
+listing image or plugin window shows the host product's logo. The icon is the Mantle Place mark, the
+company logo ([ADR 0033](../../docs/adr/0033-every-host-shows-the-round-mark-with-its-extrude.md)).
 
 Fields that are not text are set on the form itself: **Autodesk Product Compatibility** is Revit 2025, 2026
 and 2027; **Price** is Free; **Learn More Url** is `https://mantle.place/revit`. The **Commands** table is left
