@@ -59,7 +59,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
 
     internal static ConnectedHostService? Connected => _connected;
 
-    private static void BeginSessionRestore(AuthSession session)
+    private static string SessionRestoreLogPath => MachineRecordFile.InLocalAppData("revit-session-restore.log");
+
+    private static void BeginSessionRestore(AuthSession session, Action<string> log)
     {
         _ = Task.Run(async () =>
         {
@@ -67,8 +69,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
             {
                 await session.RestoreAsync().ConfigureAwait(false);
             }
-            catch (Exception)
+            catch (Exception fault)
             {
+                log($"Session restore failed; the plugin stays signed out. {fault}");
             }
         });
     }
@@ -571,7 +574,7 @@ public sealed class MantlePlaceApplication : IExternalApplication
         _watcher.Ended += OnPrepareEnded;
         _news.Arrived += OnNewsArrived;
         _news.Listed += OnVaultListed;
-        BeginSessionRestore(_session);
+        BeginSessionRestore(_session, new ConnectedHostLog(SessionRestoreLogPath).Append);
         ApplyAccountState();
 
         _news.Start();

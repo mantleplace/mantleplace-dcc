@@ -288,14 +288,6 @@ internal sealed partial class RevitBundleImporter
                     instance.Symbol?.Family?.Name)))];
     }
 
-    private List<string?> ExistingDirectShapeComments()
-    {
-        using FilteredElementCollector collector = new(_document);
-        return [.. collector
-            .OfClass(typeof(DirectShape))
-            .Select(element => element.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString())];
-    }
-
     private List<GeometryObject>? BuildTreeGeometry(SiteTreePoint tree)
     {
         double height = MetresToInternal(tree.HeightM);

@@ -10,6 +10,8 @@ $ErrorActionPreference = 'Stop'
 
 Add-Type -AssemblyName PresentationCore, WindowsBase
 
+. (Join-Path $PSScriptRoot 'IconRendering.ps1')
+
 $revitRoot = Split-Path -Parent $PSScriptRoot
 $resources = Join-Path $revitRoot 'src/MantlePlace.Revit.Addin/Resources'
 
@@ -61,46 +63,6 @@ $sizes = @(16, 32)
 $sourceGrid = 24.0
 $sourceStroke = 2.0
 
-function Get-GlyphStroke {
-    param([string]$Path)
-
-    [xml]$svg = Get-Content -Raw -LiteralPath $Path
-    $drawn = @(
-        $svg.svg.path |
-            Where-Object { $_.GetAttribute('stroke') -ne 'none' } |
-            ForEach-Object { $_.GetAttribute('d') })
-
-    if ($drawn.Count -eq 0) {
-        throw "No drawable path in '$Path'. A Tabler outline icon has at least one path without stroke=`"none`"."
-    }
-
-    return $drawn
-}
-
-function ConvertTo-MediaColour {
-    param([int]$Rgb)
-
-    return [System.Windows.Media.Color]::FromRgb(
-        [byte](($Rgb -shr 16) -band 0xFF),
-        [byte](($Rgb -shr 8) -band 0xFF),
-        [byte]($Rgb -band 0xFF))
-}
-
-function New-GlyphPen {
-    param([System.Windows.Media.Color]$Colour, [double]$Thickness)
-
-    $brush = [System.Windows.Media.SolidColorBrush]::new($Colour)
-    $brush.Freeze()
-
-    $pen = [System.Windows.Media.Pen]::new($brush, $Thickness)
-    $pen.StartLineCap = [System.Windows.Media.PenLineCap]::Round
-    $pen.EndLineCap = [System.Windows.Media.PenLineCap]::Round
-    $pen.LineJoin = [System.Windows.Media.PenLineJoin]::Round
-    $pen.Freeze()
-
-    return $pen
-}
-
 function Save-GlyphPng {
     param(
         [string[]]$PathData,
@@ -112,8 +74,8 @@ function Save-GlyphPng {
     )
 
     $scale = $Size / $sourceGrid
-    $foregroundPen = New-GlyphPen -Colour $Foreground -Thickness ($sourceStroke * $scale)
-    $accentPen = New-GlyphPen -Colour $Accent -Thickness ($sourceStroke * $scale)
+    $foregroundPen = New-IconPen -Colour $Foreground -Thickness ($sourceStroke * $scale)
+    $accentPen = New-IconPen -Colour $Accent -Thickness ($sourceStroke * $scale)
 
     $visual = [System.Windows.Media.DrawingVisual]::new()
     $context = $visual.RenderOpen()
@@ -160,7 +122,7 @@ foreach ($glyph in $glyphs) {
         throw "Missing glyph source '$sourcePath'. The sources are committed beside their licence; do not rely on a download."
     }
 
-    $pathData = Get-GlyphStroke -Path $sourcePath
+    $pathData = Get-IconStroke -Path $sourcePath
 
     foreach ($index in $glyph.Accent) {
         if ($index -lt 0 -or $index -ge $pathData.Count) {

@@ -301,7 +301,8 @@ function Restore-IfcCache {
                 $back = Get-Item -LiteralPath $companion -Force
                 if ($back.Length -ne $ifcLink.originalBytes -or (Get-FileSha256 $companion) -ne $ifcLink.originalSha256) { throw "$companion does not match the original's size or sha256 after the restore" }
                 Remove-Item -LiteralPath $kept -Force
-                try { [IO.Directory]::Delete((Split-Path $kept)) } catch { }
+                $keptDir = Split-Path $kept
+                if (-not (Get-ChildItem -LiteralPath $keptDir -Force | Select-Object -First 1)) { Remove-Item -LiteralPath $keptDir -Force }
                 $ifcLink.restored = $true
                 $ifcLink.restoreStatus = "restored: the original is back at $companion, byte-identical ($($ifcLink.originalBytes) bytes, sha256 $($ifcLink.originalSha256))"
             }

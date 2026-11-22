@@ -31,7 +31,7 @@ internal sealed partial class RevitBundleImporter
 
         string stem = _archive.Layout.Key.Stem;
         BuildingDecision decision = BuildingIdentity.Decide(
-            ExistingBuildingComments(),
+            ExistingDirectShapeComments(),
             stem,
             step.ExpectedSha256,
             contents.BuildingGlobalIds);
@@ -271,13 +271,5 @@ internal sealed partial class RevitBundleImporter
                     break;
             }
         }
-    }
-
-    private List<string?> ExistingBuildingComments()
-    {
-        using FilteredElementCollector collector = new(_document);
-        return [.. collector
-            .OfClass(typeof(DirectShape))
-            .Select(element => element.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString())];
     }
 }

@@ -84,7 +84,7 @@ internal static class MantlePlaceApplication
 
         _renewer = new SessionRenewer(_session);
         _news.Arrived += OnNewsArrived;
-        BeginSessionRestore(_session);
+        BeginSessionRestore(_session, new ConnectedHostLog(SessionRestoreLogPath).Append);
 
         _news.Start();
     }
@@ -178,7 +178,9 @@ internal static class MantlePlaceApplication
             + "drawing is untouched. If this keeps happening, please report it.");
     }
 
-    private static void BeginSessionRestore(AuthSession session)
+    private static string SessionRestoreLogPath => MachineRecordFile.InLocalAppData("autocad-session-restore.log");
+
+    private static void BeginSessionRestore(AuthSession session, Action<string> log)
     {
         _ = Task.Run(async () =>
         {
@@ -187,9 +189,10 @@ internal static class MantlePlaceApplication
                 await session.RestoreAsync().ConfigureAwait(false);
             }
 #pragma warning disable CA1031
-            catch (Exception)
+            catch (Exception fault)
 #pragma warning restore CA1031
             {
+                log($"Session restore failed; the plugin stays signed out. {fault}");
             }
         });
     }

@@ -54,7 +54,7 @@ public sealed class Harness : IExternalApplication
                 ExternalEvent importEvent = ExternalEvent.Create(_handler);
                 _handler.Attach(importEvent);
                 _openEvent = ExternalEvent.Create(new Handler("open", OpenForWindow));
-                application.ControlledApplication.ApplicationInitialized += (_, _) => new Thread(Watch) { IsBackground = true, Name = "timing watcher" }.Start();
+                application.ControlledApplication.ApplicationInitialized += (_, _) => WatchOnFirstIdle(application);
                 break;
             default:
                 Say($"unknown phase '{_phase}'");
@@ -435,9 +435,20 @@ public sealed class Harness : IExternalApplication
 
     private static string? Head(string? text) => text is null ? null : text.Length <= 600 ? text : text[..600] + "…";
 
+    private static void WatchOnFirstIdle(UIControlledApplication application)
+    {
+        void OnIdling(object? sender, Autodesk.Revit.UI.Events.IdlingEventArgs e)
+        {
+            application.Idling -= OnIdling;
+            Say("Revit is idle after startup: watching");
+            new Thread(Watch) { IsBackground = true, Name = "timing watcher" }.Start();
+        }
+
+        application.Idling += OnIdling;
+    }
+
     private static void Watch()
     {
-        Thread.Sleep(3000);
         Say("raise open: " + _openEvent!.Raise());
 
         bool seenImporting = false;

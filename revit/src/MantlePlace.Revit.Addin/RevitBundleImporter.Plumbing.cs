@@ -227,4 +227,12 @@ internal sealed partial class RevitBundleImporter
 
         return (mine ?? grounds.FirstOrDefault())?.Id ?? ElementId.InvalidElementId;
     }
+
+    private List<string?> ExistingDirectShapeComments()
+    {
+        using FilteredElementCollector collector = new(_document);
+        return [.. collector
+            .OfClass(typeof(DirectShape))
+            .Select(element => element.get_Parameter(BuiltInParameter.ALL_MODEL_INSTANCE_COMMENTS)?.AsString())];
+    }
 }

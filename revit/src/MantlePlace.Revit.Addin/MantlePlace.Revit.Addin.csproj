@@ -16,7 +16,6 @@
     <UseWPF>true</UseWPF>
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <NoWarn>$(NoWarn);CA1416</NoWarn>
-    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,10 +28,12 @@
     <Reference Include="RevitAPI">
       <HintPath>$(RevitApiDir)\RevitAPI.dll</HintPath>
       <Private>false</Private>
+      <ExternallyResolved>true</ExternallyResolved>
     </Reference>
     <Reference Include="RevitAPIUI">
       <HintPath>$(RevitApiDir)\RevitAPIUI.dll</HintPath>
       <Private>false</Private>
+      <ExternallyResolved>true</ExternallyResolved>
     </Reference>
   </ItemGroup>
 

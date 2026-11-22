@@ -4,12 +4,14 @@
 import hashlib
 import json
 import os
+import shutil
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 
 from mantleplace_blender.core.bundle import BundleRefused
-from mantleplace_blender.core.source import open_bundle
+from mantleplace_blender.core.source import open_bundle, remove_tree
 
 PAYLOAD = b"#usda 1.0\n"
 DIGEST = hashlib.sha256(PAYLOAD).hexdigest()
@@ -137,6 +139,51 @@ class FolderTests(SourceTestCase):
         with self.assertRaises(BundleRefused) as caught:
             open_bundle(stray)
         self.assertIn("manifest.json", str(caught.exception))
+
+
+class RemoveTreeTests(SourceTestCase):
+    def make_scratch(self):
+        scratch = os.path.join(self.root, "scratch")
+        os.makedirs(scratch)
+        with open(os.path.join(scratch, "Context.usdz"), "wb") as handle:
+            handle.write(PAYLOAD)
+        return scratch
+
+    def test_a_scratch_folder_is_removed_and_nothing_is_reported(self):
+        scratch = self.make_scratch()
+        self.assertEqual(remove_tree(scratch, sleep=lambda _: None), [])
+        self.assertFalse(os.path.exists(scratch))
+
+    def test_a_held_file_is_retried_until_it_is_released(self):
+        scratch = self.make_scratch()
+        real = shutil.rmtree
+        calls = []
+
+        def held_twice(path):
+            calls.append(path)
+            if len(calls) < 3:
+                raise PermissionError("held")
+            real(path)
+
+        with mock.patch("mantleplace_blender.core.source.shutil.rmtree", held_twice):
+            self.assertEqual(remove_tree(scratch, attempts=3, sleep=lambda _: None), [])
+        self.assertEqual(len(calls), 3)
+        self.assertFalse(os.path.exists(scratch))
+
+    def test_a_file_still_held_after_every_attempt_is_reported(self):
+        scratch = self.make_scratch()
+        pauses = []
+
+        def always_held(path):
+            raise PermissionError("held")
+
+        with mock.patch("mantleplace_blender.core.source.shutil.rmtree", always_held):
+            leftover = remove_tree(scratch, attempts=3, sleep=pauses.append)
+        self.assertEqual(leftover, [os.path.join(scratch, "Context.usdz")])
+        self.assertEqual(len(pauses), 2)
+
+    def test_a_folder_already_gone_is_not_reported(self):
+        self.assertEqual(remove_tree(os.path.join(self.root, "absent"), sleep=lambda _: None), [])
 
 
 if __name__ == "__main__":

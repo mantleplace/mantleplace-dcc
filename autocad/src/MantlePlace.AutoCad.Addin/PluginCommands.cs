@@ -96,12 +96,15 @@ public sealed class PluginCommands
 
     private static void WriteRecord(string zipPath, string outcome)
     {
+        string recordPath = LocalBundleSource.LogPathFor(zipPath);
         try
         {
-            File.WriteAllText(LocalBundleSource.LogPathFor(zipPath), outcome + Environment.NewLine);
+            File.WriteAllText(recordPath, outcome + Environment.NewLine);
         }
         catch (System.Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
+            MantlePlaceApplication.OnUiThread(() => MantlePlaceApplication.Say(
+                $"Mantle Place could not write the import record {recordPath}: {ex.Message}"));
         }
     }
 
