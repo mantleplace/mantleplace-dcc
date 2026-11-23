@@ -60,7 +60,9 @@ internal static class RevitThreeView
         LocalSiteFrame local = frames.Local;
         ProjectedOrigin projected = local.Origin.Projected;
 
-        int? epsg = GeoProjection.TryParseEpsg(georeferenced.HorizontalCrs.Code);
+        int? epsg = GeoProjection.TryParseEpsg(georeferenced.HorizontalCrs.Code) is { } delivery
+            ? projected.Crs.Epsg ?? delivery
+            : null;
         GeoOrigin origin = new()
         {
             Lon = local.Origin.Longitude,
@@ -130,6 +132,7 @@ internal static class RevitThreeView
             AttributionSources = three.AttributionSources,
             Contents = contents,
             SurveyPoint = origin,
+            SiteOriginEpsg = projected.Crs.Epsg,
             Georeference = new RevitGeoreference
             {
                 CrsProjected = georeferenced.HorizontalCrs.Code ?? string.Empty,

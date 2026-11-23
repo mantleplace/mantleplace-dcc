@@ -387,6 +387,73 @@ internal static class ThreePlanTests
             run.True(plan.Steps.All(step => step.Levels is null && step.Level is null), "no step carries a level");
         });
 
+        run.Case("files in US survey feet are placed against an origin their own CRS states in metres, by the published factors", () =>
+        {
+            const double usFoot = 1200.0 / 3937.0;
+            JsonObject frames = Manifest(Load(FeetBundle))["frames"]!.DeepClone().AsObject();
+            JsonObject projected = frames["local"]!["origin"]!["projected"]!.AsObject();
+            projected["x"] = 988000.5 * usFoot;
+            projected["y"] = 214000.25 * usFoot;
+            projected["unit"] = new JsonObject { ["name"] = "metre", ["to_metres"] = 1.0 };
+            BundleImportPlan plan = Plan(Read(Load(FullBundle, manifest => manifest["frames"] = frames)));
+
+            GeoOrigin? origin = Step(plan, ImportStepKind.SetSharedCoordinates)?.SurveyPoint?.Origin;
+            run.Within(origin?.Easting ?? 0, 988000.5 * usFoot, 1e-9, "the survey point is the origin's x, verbatim");
+            run.Equal(origin?.LinearUnit ?? LinearUnit.Unspecified, LinearUnit.Metre, "in the unit the origin states");
+
+            run.True(Step(plan, ImportStepKind.ToposurfaceFromSurfaceTin) is not null, "the terrain is built");
+            run.True(Step(plan, ImportStepKind.PublishedContours) is not null, "the contours are drawn");
+
+            ImportStep? roads = Step(plan, ImportStepKind.RoadPolygons);
+            run.True(roads?.Layer == new LayerFrame(LayerCoordinates.AbsoluteProjected, LinearUnit.UsSurveyFoot), "the road surfaces are read in feet");
+            run.True(Step(plan, ImportStepKind.RoadCentrelines) is not null, "and the centrelines");
+
+            run.True(roads?.Frame is not null, "the road surfaces carry the site frame");
+            run.True(
+                roads!.Frame!.TryPlace(new LayerFrame(LayerCoordinates.AbsoluteProjected, LinearUnit.UsSurveyFoot), 988100.5, 213900.25, out double east, out double north),
+                "a point in feet is placed");
+            run.Within(east, 100.0 * usFoot, 1e-6, "a hundred feet east of the origin is that many feet east of it");
+            run.Within(north, -100.0 * usFoot, 1e-6, "and south the same");
+        });
+
+        run.Case("files in one CRS and a site origin stated only in another are refused by name, never reprojected", () =>
+        {
+            JsonObject frames = Manifest(Load(FeetBundle))["frames"]!.DeepClone().AsObject();
+            JsonObject projected = frames["local"]!["origin"]!["projected"]!.AsObject();
+            projected["crs"] = new JsonObject { ["code"] = "EPSG:32618" };
+            projected["x"] = 586000.0;
+            projected["y"] = 4511000.0;
+            projected["unit"] = new JsonObject { ["name"] = "metre", ["to_metres"] = 1.0 };
+            BundleImportPlan plan = Plan(Read(Load(FullBundle, manifest => manifest["frames"] = frames)));
+
+            SkippedImport? point = Skip(plan, ImportStepKind.SetSharedCoordinates);
+            run.Equal(point?.ReasonCode ?? SkipReasonCode.LeftOutByChoice, SkipReasonCode.NoSurveyPoint, "no survey point is set under the wrong CRS's name");
+            run.True(point?.Reason.Contains("EPSG:2263", StringComparison.Ordinal) ?? false, "the reason names the files' CRS");
+            run.True(point?.Reason.Contains("EPSG:32618", StringComparison.Ordinal) ?? false, "and the origin's");
+
+            ImportStepKind[] absolute =
+            [
+                ImportStepKind.ToposurfaceFromSurfaceTin,
+                ImportStepKind.PublishedContours,
+                ImportStepKind.RoadPolygons,
+                ImportStepKind.RoadCentrelines,
+                ImportStepKind.Water,
+                ImportStepKind.ContextBuildings,
+            ];
+            foreach (ImportStepKind kind in absolute)
+            {
+                run.True(Step(plan, kind) is null, $"{kind} is not planned");
+                SkippedImport? skip = Skip(plan, kind);
+                run.True(
+                    (skip?.Reason.Contains("EPSG:2263", StringComparison.Ordinal) ?? false)
+                        && (skip?.Reason.Contains("EPSG:32618", StringComparison.Ordinal) ?? false),
+                    $"{kind} is skipped naming both CRSs: {skip?.Reason}");
+            }
+
+            run.True(Step(plan, ImportStepKind.ToposurfaceFromSurfaceDxf) is null, "nor is the terrain's DXF linked in their place");
+            run.True(Step(plan, ImportStepKind.SetSiteLocation) is not null, "the site location is still set");
+        });
+
         run.Case("a CRS stated by no EPSG code places nothing absolute, and still sets the site location", () =>
         {
             BundleImportPlan plan = Plan(Read(Load(FullBundle, manifest =>

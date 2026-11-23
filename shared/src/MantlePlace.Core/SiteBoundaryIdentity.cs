@@ -75,6 +75,15 @@ public static class SiteBoundaryIdentity
         return created;
     }
 
+    public static string Batch(IReadOnlyList<string> stamps)
+    {
+        ArgumentNullException.ThrowIfNull(stamps);
+        return string.Join(MemberBreak, stamps);
+    }
+
+    public static IReadOnlyList<string> Members(string? comments)
+        => string.IsNullOrEmpty(comments) ? [] : comments.Split(MemberBreak);
+
     public static bool IsStampFor(string? comments, string cacheKeyStem) => Parse(comments, cacheKeyStem) is not null;
 
     public static GroundStamp? Parse(string? comments, string cacheKeyStem)
@@ -85,6 +94,8 @@ public static class SiteBoundaryIdentity
         {
             return null;
         }
+
+        comments = comments.Split(MemberBreak)[0];
 
         foreach (GroundLayer layer in Layers)
         {
@@ -102,6 +113,8 @@ public static class SiteBoundaryIdentity
         => Parse(comments, cacheKeyStem)
             ?? Parse(stampCutWith, cacheKeyStem)
             ?? new GroundStamp(GroundLayer.LandUse, elementId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    private const char MemberBreak = '\n';
 
     private static readonly GroundLayer[] Layers = Enum.GetValues<GroundLayer>();
 
@@ -143,7 +156,10 @@ public static class SiteBoundaryIdentity
     }
 
     private static string TokenOf(string? featureName, int oneBasedIndex)
-        => IsBlank(featureName) ? IndexText(oneBasedIndex) : featureName!.Trim();
+        => IsBlank(featureName) ? IndexText(oneBasedIndex) : OneLine(featureName!).Trim();
+
+    private static string OneLine(string featureName)
+        => featureName.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\r', ' ').Replace(MemberBreak, ' ');
 
     private static bool IsBlank(string? featureName) => string.IsNullOrWhiteSpace(featureName);
 

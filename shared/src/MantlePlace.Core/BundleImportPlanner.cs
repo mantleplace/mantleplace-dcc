@@ -363,19 +363,6 @@ public static class BundleImportPlanner
             return false;
         }
 
-        if (three && !frame.IsInOriginUnit(candidate!.Units))
-        {
-            skipped = new SkippedImport
-            {
-                Kind = kind,
-                ReasonCode = SkipReasonCode.CoordinateSystemNotSupported,
-                Reason = $"The surface TIN is in \"{manifest.SurfaceDxf!.Units}\", but this bundle states its site "
-                    + $"origin in \"{LinearUnits.ToManifestToken(frame.Origin.LinearUnit)}\", and this plugin "
-                    + "converts neither, " + instead,
-            };
-            return false;
-        }
-
         string? declared = manifest.SurfaceDxf?.HorizontalFrame;
         if (!string.Equals(declared, BundleManifestReader.ProjectedFrame, StringComparison.Ordinal))
         {
@@ -453,6 +440,17 @@ public static class BundleImportPlanner
         List<ImportStep> steps,
         List<SkippedImport> skipped)
     {
+        if (manifest.SiteOriginElsewhere("Left the shared coordinates untouched") is { } elsewhere)
+        {
+            skipped.Add(new SkippedImport
+            {
+                Kind = ImportStepKind.SetSharedCoordinates,
+                ReasonCode = SkipReasonCode.NoSurveyPoint,
+                Reason = elsewhere,
+            });
+            return;
+        }
+
         if (manifest.SurveyPoint is { IsUsable: true } origin)
         {
             steps.Add(new ImportStep
@@ -782,7 +780,11 @@ public static class BundleImportPlanner
         ImportStep? geoJsonFallback = null;
         if (artifact.Family is { } family)
         {
-            refusal = family == FileFamily.HostReady ? null : ThreeUnitRefusal(artifact, frame, label, out units);
+            refusal = family == FileFamily.HostReady
+                ? null
+                : manifest.SiteOriginElsewhere($"Left out the {label}") is { } elsewhere
+                    ? (SkipReasonCode.CoordinateSystemNotSupported, elsewhere)
+                    : ThreeUnitRefusal(artifact, label, out units);
             if (family == FileFamily.HostReady)
             {
                 units = LinearUnit.Metre;
@@ -1332,6 +1334,12 @@ public static class BundleImportPlanner
             return false;
         }
 
+        if (artifact.Family == FileFamily.Georeferenced && manifest.SiteOriginElsewhere($"Left out the {label}") is { } elsewhere)
+        {
+            skipped = new SkippedImport { Kind = kind, ReasonCode = SkipReasonCode.CoordinateSystemNotSupported, Reason = elsewhere };
+            return false;
+        }
+
         if (!TryResolveUnits(artifact, manifest, out LinearUnit units))
         {
             unitUnreadable = true;
@@ -1378,7 +1386,6 @@ public static class BundleImportPlanner
 
     private static (SkipReasonCode Code, string Reason)? ThreeUnitRefusal(
         BundleArtifact artifact,
-        SiteFrame frame,
         string label,
         out LinearUnit units)
     {
@@ -1389,12 +1396,7 @@ public static class BundleImportPlanner
                 + "could place them at the wrong scale, so they were left out.");
         }
 
-        return frame.IsInOriginUnit(units)
-            ? null
-            : (SkipReasonCode.CoordinateSystemNotSupported,
-                $"The {label} are absolute coordinates in \"{artifact.Units}\", but this bundle states its site "
-                + $"origin in \"{LinearUnits.ToManifestToken(frame.Origin.LinearUnit)}\". Importing them anyway "
-                + "would put them in the wrong place, and this plugin converts neither, so they were left out.");
+        return null;
     }
 
     private static (SkipReasonCode Code, string Reason) CrsRefusal(BundleArtifact artifact, SiteFrame frame, string label)

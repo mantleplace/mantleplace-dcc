@@ -12,7 +12,8 @@ public static class SurfaceTinFrame
         ArgumentNullException.ThrowIfNull(frame);
         reason = null;
 
-        if (artifactUnit is not LinearUnit.Unspecified
+        if (!frame.ConvertsStatedUnits
+            && artifactUnit is not LinearUnit.Unspecified
             && frame.Origin.LinearUnit is not LinearUnit.Unspecified
             && artifactUnit != frame.Origin.LinearUnit)
         {
@@ -26,7 +27,7 @@ public static class SurfaceTinFrame
 
         foreach (SurfacePoint vertex in tin.Vertices)
         {
-            if (!frame.TryToLocalMetres(vertex.X, vertex.Y, out double east, out double north))
+            if (!frame.TryToLocalMetres(vertex.X, vertex.Y, artifactUnit, out double east, out double north))
             {
                 reason = "This bundle publishes no origin this plugin can measure the surface DXF "
                     + "against, so the terrain would have landed at the project origin rather than "

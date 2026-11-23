@@ -221,6 +221,24 @@ renderer-neutral.
   subdivision per ring, because their stamps are positions in the layer and grouping the rings now
   would move every stamp after the first polygon with a hole.
 
+- **The water bodies and the road surfaces are cut in batches, many polygons to a subdivision.**
+  The same measurement found two disjoint outer loops come back as one subdivision covering both.
+  A 3.0 road layer runs to a thousand polygons and more, and cutting each as its own subdivision
+  gave each its own drape material and, from 2026, its own toposolid type, all inside the layer's
+  one transaction: Revit grew by about 43 MB a road, a thousand-road import took 36 to 52 minutes in
+  that step, and on a machine already short of memory Revit closed in `Material.Create` partway
+  through. `GroundCutBatches` now groups the polygons whose extents are at least a metre clear of
+  every other in the group, at most 50 to a group and at most 1,000 vertices, holes counted, and each
+  group is one `CreateSubDivision` call with every member's outer and inner loops, one material and
+  one type. The vertex budget is measured, not chosen. On a 2027 import of a 1,023-road layer
+  grouped by count alone, Revit held 6.5 GB at the 800th road, against 28 to 44 GB before. The cut
+  itself took 0.1 to 6 s a group. The type change after it, which is where Revit rebuilds the
+  subdivision, took 3 s for a group of 336 vertices and 3,146 s for a group of 8,771. A polygon over
+  the budget is cut on its own. The subdivision's Comments
+  holds each member's stamp on a line of its own (`SiteBoundaryIdentity.Batch`); a re-import reads
+  every line (`Members`), and the first names the subdivision. A group Revit refuses at the call is
+  cut again one polygon at a time, and the log counts how many were.
+
 - **Revit can refuse a subdivision at commit, after `CreateSubDivision` returned for it**, and no
   `try` around the cut sees that. A platform-built 1.4.0 bundle's land use did exactly this in 2027:
   forty cuts returned, then the commit posted *"An error occurred during the sub-divide action. The
