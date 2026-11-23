@@ -24,6 +24,7 @@ internal static class PlatformConformanceTests
         "accountFields",
         "creditBalanceCents",
         "freeSlotOpen",
+        "proofPriceCents",
         "minimumVersion",
         "sentVersion",
     ];
@@ -174,6 +175,11 @@ internal static class PlatformConformanceTests
         if (ConformanceCorpus.WantsBool(corpusCase, "freeSlotOpen", out bool slot))
         {
             run.Equal(quote["freeSlotOpen"]!.GetValue<bool>(), slot, "freeSlotOpen");
+        }
+
+        if (ConformanceCorpus.WantsInt(corpusCase, "proofPriceCents", out int proofPrice))
+        {
+            run.Equal((int)(quote["proof"]?["priceCents"]?.GetValue<double>() ?? -1), proofPrice, "the free proof's priceCents");
         }
     }
 

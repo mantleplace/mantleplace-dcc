@@ -360,7 +360,7 @@
       "get": {
         "operationId": "getQuote",
         "summary": "What an extent costs, before any order exists",
-        "description": "The area, price, pricing-config version, coverage verdict and licence terms of an extent. It runs the price, coverage preflight and licence line checkout uses, so the two cannot disagree. Public: no bearer needed. With a valid bearer the answer also carries the account Credit balance and whether a free-tier slot is open; an invalid bearer is ignored and the public Quote comes back. Nothing is stored: a Quote has no id and no expiry.",
+        "description": "The area, price, pricing-config version, coverage verdict and licence terms of an extent. An extent above the free area also carries a free proof: the free area centred on the extent and clipped to its outline, to order beside the whole site at its price. It runs the price, coverage preflight and licence line checkout uses, so the two cannot disagree. Public: no bearer needed. With a valid bearer the answer also carries the account Credit balance and whether a free-tier slot is open; an invalid bearer is ignored and the public Quote comes back. Nothing is stored: a Quote has no id and no expiry.",
         "tags": [
           "Platform"
         ],
@@ -441,6 +441,59 @@
                       "type": "boolean",
                       "description": "The extent is small enough for the free tier, so priceCents is 0."
                     },
+                    "proof": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "extent": {
+                              "type": "object",
+                              "properties": {
+                                "west": {
+                                  "type": "number"
+                                },
+                                "south": {
+                                  "type": "number"
+                                },
+                                "east": {
+                                  "type": "number"
+                                },
+                                "north": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "west",
+                                "south",
+                                "east",
+                                "north"
+                              ],
+                              "additionalProperties": false,
+                              "description": "The proof extent: the free area centred on the quoted extent, clipped to its outline. Inside the quoted extent, so it can be ordered as it is."
+                            },
+                            "areaKm2": {
+                              "type": "number",
+                              "description": "Geodesic area of the proof in square kilometres."
+                            },
+                            "priceCents": {
+                              "type": "number",
+                              "const": 0,
+                              "description": "Always 0: the proof is a free-tier build."
+                            }
+                          },
+                          "required": [
+                            "extent",
+                            "areaKm2",
+                            "priceCents"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ],
+                      "description": "The free proof offered beside the whole site, for an extent above the free area; null for an extent inside the free tier, which is one free quote. The extent, areaKm2, priceCents and freeEligible fields above are the whole-site choice. The same drawing always yields the same proof."
+                    },
                     "coverage": {
                       "type": "string",
                       "enum": [
@@ -499,6 +552,7 @@
                     "currency",
                     "pricingConfigVersion",
                     "freeEligible",
+                    "proof",
                     "coverage",
                     "licence"
                   ],
@@ -614,6 +668,36 @@
                       "free"
                     ],
                     "description": "credit pays the whole price from the account Credit balance; free takes a free-tier slot (an extent inside the free tier only). No card payment is taken here."
+                  },
+                  "proofOf": {
+                    "description": "The drawn site this order is the free proof of. The extent above must be exactly the proof the Quote returned for this site (its proof.extent), else the order is refused with proof_mismatch. A proof takes one of the free builds in the window like any free build.",
+                    "type": "object",
+                    "properties": {
+                      "west": {
+                        "type": "number"
+                      },
+                      "south": {
+                        "type": "number"
+                      },
+                      "east": {
+                        "type": "number"
+                      },
+                      "north": {
+                        "type": "number"
+                      }
+                    },
+                    "required": [
+                      "west",
+                      "south",
+                      "east",
+                      "north"
+                    ]
+                  },
+                  "proofOrderId": {
+                    "description": "Orders the whole site from a free proof the account already placed: the orderId of that proof, whose proofOf site is this extent. Any other id, or one that is not this account proof of this extent, is refused with invalid_proof_link. The link is stored on the order. Not with proofOf.",
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
                   }
                 },
                 "required": [
@@ -765,6 +849,59 @@
                           "type": "boolean",
                           "description": "The extent is small enough for the free tier, so priceCents is 0."
                         },
+                        "proof": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "extent": {
+                                  "type": "object",
+                                  "properties": {
+                                    "west": {
+                                      "type": "number"
+                                    },
+                                    "south": {
+                                      "type": "number"
+                                    },
+                                    "east": {
+                                      "type": "number"
+                                    },
+                                    "north": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "west",
+                                    "south",
+                                    "east",
+                                    "north"
+                                  ],
+                                  "additionalProperties": false,
+                                  "description": "The proof extent: the free area centred on the quoted extent, clipped to its outline. Inside the quoted extent, so it can be ordered as it is."
+                                },
+                                "areaKm2": {
+                                  "type": "number",
+                                  "description": "Geodesic area of the proof in square kilometres."
+                                },
+                                "priceCents": {
+                                  "type": "number",
+                                  "const": 0,
+                                  "description": "Always 0: the proof is a free-tier build."
+                                }
+                              },
+                              "required": [
+                                "extent",
+                                "areaKm2",
+                                "priceCents"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The free proof offered beside the whole site, for an extent above the free area; null for an extent inside the free tier, which is one free quote. The extent, areaKm2, priceCents and freeEligible fields above are the whole-site choice. The same drawing always yields the same proof."
+                        },
                         "coverage": {
                           "type": "string",
                           "enum": [
@@ -823,6 +960,7 @@
                         "currency",
                         "pricingConfigVersion",
                         "freeEligible",
+                        "proof",
                         "coverage",
                         "licence"
                       ],
@@ -914,6 +1052,59 @@
                           "type": "boolean",
                           "description": "The extent is small enough for the free tier, so priceCents is 0."
                         },
+                        "proof": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "extent": {
+                                  "type": "object",
+                                  "properties": {
+                                    "west": {
+                                      "type": "number"
+                                    },
+                                    "south": {
+                                      "type": "number"
+                                    },
+                                    "east": {
+                                      "type": "number"
+                                    },
+                                    "north": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "west",
+                                    "south",
+                                    "east",
+                                    "north"
+                                  ],
+                                  "additionalProperties": false,
+                                  "description": "The proof extent: the free area centred on the quoted extent, clipped to its outline. Inside the quoted extent, so it can be ordered as it is."
+                                },
+                                "areaKm2": {
+                                  "type": "number",
+                                  "description": "Geodesic area of the proof in square kilometres."
+                                },
+                                "priceCents": {
+                                  "type": "number",
+                                  "const": 0,
+                                  "description": "Always 0: the proof is a free-tier build."
+                                }
+                              },
+                              "required": [
+                                "extent",
+                                "areaKm2",
+                                "priceCents"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The free proof offered beside the whole site, for an extent above the free area; null for an extent inside the free tier, which is one free quote. The extent, areaKm2, priceCents and freeEligible fields above are the whole-site choice. The same drawing always yields the same proof."
+                        },
                         "coverage": {
                           "type": "string",
                           "enum": [
@@ -972,6 +1163,7 @@
                         "currency",
                         "pricingConfigVersion",
                         "freeEligible",
+                        "proof",
                         "coverage",
                         "licence"
                       ],
@@ -988,7 +1180,7 @@
             }
           },
           "422": {
-            "description": "The extent cannot be ordered this way. Codes: invalid_payment_method (free for an extent outside the free tier, or credit for one inside it), aoi_too_small, aoi_too_large, elevation_unavailable_for_aoi, imagery_unavailable_for_aoi, price_invalid.",
+            "description": "The extent cannot be ordered this way. Codes: invalid_payment_method (free for an extent outside the free tier, or credit for one inside it), aoi_too_small, aoi_too_large, elevation_unavailable_for_aoi, imagery_unavailable_for_aoi, price_invalid, proof_mismatch (proofOf names a site whose free proof is not this extent), invalid_proof_link (proofOrderId is not a proof of this extent placed by this account, or is sent with proofOf).",
             "content": {
               "application/json": {
                 "schema": {
@@ -1063,6 +1255,59 @@
                           "type": "boolean",
                           "description": "The extent is small enough for the free tier, so priceCents is 0."
                         },
+                        "proof": {
+                          "anyOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "extent": {
+                                  "type": "object",
+                                  "properties": {
+                                    "west": {
+                                      "type": "number"
+                                    },
+                                    "south": {
+                                      "type": "number"
+                                    },
+                                    "east": {
+                                      "type": "number"
+                                    },
+                                    "north": {
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "west",
+                                    "south",
+                                    "east",
+                                    "north"
+                                  ],
+                                  "additionalProperties": false,
+                                  "description": "The proof extent: the free area centred on the quoted extent, clipped to its outline. Inside the quoted extent, so it can be ordered as it is."
+                                },
+                                "areaKm2": {
+                                  "type": "number",
+                                  "description": "Geodesic area of the proof in square kilometres."
+                                },
+                                "priceCents": {
+                                  "type": "number",
+                                  "const": 0,
+                                  "description": "Always 0: the proof is a free-tier build."
+                                }
+                              },
+                              "required": [
+                                "extent",
+                                "areaKm2",
+                                "priceCents"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ],
+                          "description": "The free proof offered beside the whole site, for an extent above the free area; null for an extent inside the free tier, which is one free quote. The extent, areaKm2, priceCents and freeEligible fields above are the whole-site choice. The same drawing always yields the same proof."
+                        },
                         "coverage": {
                           "type": "string",
                           "enum": [
@@ -1121,6 +1366,7 @@
                         "currency",
                         "pricingConfigVersion",
                         "freeEligible",
+                        "proof",
                         "coverage",
                         "licence"
                       ],

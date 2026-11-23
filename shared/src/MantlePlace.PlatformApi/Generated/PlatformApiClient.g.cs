@@ -552,7 +552,7 @@ namespace MantlePlace.PlatformApi
         /// What an extent costs, before any order exists
         /// </summary>
         /// <remarks>
-        /// The area, price, pricing-config version, coverage verdict and licence terms of an extent. It runs the price, coverage preflight and licence line checkout uses, so the two cannot disagree. Public: no bearer needed. With a valid bearer the answer also carries the account Credit balance and whether a free-tier slot is open; an invalid bearer is ignored and the public Quote comes back. Nothing is stored: a Quote has no id and no expiry.
+        /// The area, price, pricing-config version, coverage verdict and licence terms of an extent. An extent above the free area also carries a free proof: the free area centred on the extent and clipped to its outline, to order beside the whole site at its price. It runs the price, coverage preflight and licence line checkout uses, so the two cannot disagree. Public: no bearer needed. With a valid bearer the answer also carries the account Credit balance and whether a free-tier slot is open; an invalid bearer is ignored and the public Quote comes back. Nothing is stored: a Quote has no id and no expiry.
         /// </remarks>
         /// <returns>The Quote.</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
@@ -566,7 +566,7 @@ namespace MantlePlace.PlatformApi
         /// What an extent costs, before any order exists
         /// </summary>
         /// <remarks>
-        /// The area, price, pricing-config version, coverage verdict and licence terms of an extent. It runs the price, coverage preflight and licence line checkout uses, so the two cannot disagree. Public: no bearer needed. With a valid bearer the answer also carries the account Credit balance and whether a free-tier slot is open; an invalid bearer is ignored and the public Quote comes back. Nothing is stored: a Quote has no id and no expiry.
+        /// The area, price, pricing-config version, coverage verdict and licence terms of an extent. An extent above the free area also carries a free proof: the free area centred on the extent and clipped to its outline, to order beside the whole site at its price. It runs the price, coverage preflight and licence line checkout uses, so the two cannot disagree. Public: no bearer needed. With a valid bearer the answer also carries the account Credit balance and whether a free-tier slot is open; an invalid bearer is ignored and the public Quote comes back. Nothing is stored: a Quote has no id and no expiry.
         /// </remarks>
         /// <returns>The Quote.</returns>
         /// <exception cref="ApiException">A server side error occurred.</exception>
@@ -825,7 +825,7 @@ namespace MantlePlace.PlatformApi
                             {
                                 throw new ApiException("Response was null which was not expected.", status_, objectResponse_.Text, headers_, null);
                             }
-                            throw new ApiException<Response9>("The extent cannot be ordered this way. Codes: invalid_payment_method (free for an extent outside the free tier, or credit for one inside it), aoi_too_small, aoi_too_large, elevation_unavailable_for_aoi, imagery_unavailable_for_aoi, price_invalid.", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
+                            throw new ApiException<Response9>("The extent cannot be ordered this way. Codes: invalid_payment_method (free for an extent outside the free tier, or credit for one inside it), aoi_too_small, aoi_too_large, elevation_unavailable_for_aoi, imagery_unavailable_for_aoi, price_invalid, proof_mismatch (proofOf names a site whose free proof is not this extent), invalid_proof_link (proofOrderId is not a proof of this extent placed by this account, or is sent with proofOf).", status_, objectResponse_.Text, headers_, objectResponse_.Object, null);
                         }
                         else
                         if (status_ == 426)
@@ -2148,6 +2148,19 @@ namespace MantlePlace.PlatformApi
         [System.Text.Json.Serialization.JsonConverter(typeof(MantlePlace.PlatformApi.EnumMemberJsonConverter<Body3Payment>))]
         public Body3Payment Payment { get; set; } = default!;
 
+        /// <summary>
+        /// The drawn site this order is the free proof of. The extent above must be exactly the proof the Quote returned for this site (its proof.extent), else the order is refused with proof_mismatch. A proof takes one of the free builds in the window like any free build.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("proofOf")]
+        public ProofOf? ProofOf { get; set; } = default!;
+
+        /// <summary>
+        /// Orders the whole site from a free proof the account already placed: the orderId of that proof, whose proofOf site is this extent. Any other id, or one that is not this account proof of this extent, is refused with invalid_proof_link. The link is stored on the order. Not with proofOf.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("proofOrderId")]
+        [System.ComponentModel.DataAnnotations.RegularExpression(@"^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$")]
+        public System.Guid? ProofOrderId { get; set; } = default!;
+
         private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
 
         [System.Text.Json.Serialization.JsonExtensionData]
@@ -2373,6 +2386,12 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("freeEligible")]
         public bool FreeEligible { get; set; } = default!;
+
+        /// <summary>
+        /// The free proof offered beside the whole site, for an extent above the free area; null for an extent inside the free tier, which is one free quote. The extent, areaKm2, priceCents and freeEligible fields above are the whole-site choice. The same drawing always yields the same proof.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("proof")]
+        public Proof Proof { get; set; } = default!;
 
         /// <summary>
         /// covered, or degraded when a live elevation probe flaked; a degraded extent can still be ordered. An uncovered extent is refused instead (elevation_unavailable_for_aoi or imagery_unavailable_for_aoi).
@@ -2858,6 +2877,33 @@ namespace MantlePlace.PlatformApi
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class ProofOf
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("west")]
+        public double West { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("south")]
+        public double South { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("east")]
+        public double East { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("north")]
+        public double North { get; set; } = default!;
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class View
     {
 
@@ -2988,6 +3034,21 @@ namespace MantlePlace.PlatformApi
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class Proof
+    {
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public enum Response4Coverage
     {
 
@@ -3059,6 +3120,12 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("freeEligible")]
         public bool FreeEligible { get; set; } = default!;
+
+        /// <summary>
+        /// The free proof offered beside the whole site, for an extent above the free area; null for an extent inside the free tier, which is one free quote. The extent, areaKm2, priceCents and freeEligible fields above are the whole-site choice. The same drawing always yields the same proof.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("proof")]
+        public Proof2 Proof { get; set; } = default!;
 
         /// <summary>
         /// covered, or degraded when a live elevation probe flaked; a degraded extent can still be ordered. An uncovered extent is refused instead (elevation_unavailable_for_aoi or imagery_unavailable_for_aoi).
@@ -3145,6 +3212,12 @@ namespace MantlePlace.PlatformApi
         public bool FreeEligible { get; set; } = default!;
 
         /// <summary>
+        /// The free proof offered beside the whole site, for an extent above the free area; null for an extent inside the free tier, which is one free quote. The extent, areaKm2, priceCents and freeEligible fields above are the whole-site choice. The same drawing always yields the same proof.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("proof")]
+        public Proof3 Proof { get; set; } = default!;
+
+        /// <summary>
         /// covered, or degraded when a live elevation probe flaked; a degraded extent can still be ordered. An uncovered extent is refused instead (elevation_unavailable_for_aoi or imagery_unavailable_for_aoi).
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("coverage")]
@@ -3227,6 +3300,12 @@ namespace MantlePlace.PlatformApi
         /// </summary>
         [System.Text.Json.Serialization.JsonPropertyName("freeEligible")]
         public bool FreeEligible { get; set; } = default!;
+
+        /// <summary>
+        /// The free proof offered beside the whole site, for an extent above the free area; null for an extent inside the free tier, which is one free quote. The extent, areaKm2, priceCents and freeEligible fields above are the whole-site choice. The same drawing always yields the same proof.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("proof")]
+        public Proof4 Proof { get; set; } = default!;
 
         /// <summary>
         /// covered, or degraded when a live elevation probe flaked; a degraded extent can still be ordered. An uncovered extent is refused instead (elevation_unavailable_for_aoi or imagery_unavailable_for_aoi).
@@ -4098,6 +4177,21 @@ namespace MantlePlace.PlatformApi
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class Proof2
+    {
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public enum QuoteCoverage
     {
 
@@ -4148,6 +4242,21 @@ namespace MantlePlace.PlatformApi
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class Proof3
+    {
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
     public enum Quote2Coverage
     {
 
@@ -4194,6 +4303,21 @@ namespace MantlePlace.PlatformApi
 
         [System.Text.Json.Serialization.JsonPropertyName("north")]
         public double North { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.7.1.0 (NJsonSchema v11.6.1.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class Proof4
+    {
+
+        private System.Collections.Generic.IDictionary<string, object>? _additionalProperties;
+
+        [System.Text.Json.Serialization.JsonExtensionData]
+        public System.Collections.Generic.IDictionary<string, object> AdditionalProperties
+        {
+            get { return _additionalProperties ?? (_additionalProperties = new System.Collections.Generic.Dictionary<string, object>()); }
+            set { _additionalProperties = value; }
+        }
 
     }
 
