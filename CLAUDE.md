@@ -208,7 +208,7 @@ Most facts already have exactly one home. Find it before writing a fact down any
   **0022** the shared .NET core library · **0023** the shared core behind the Revit import · **0024** the shared client and WPF code ·
   **0025** shared core, import and site handling · **0026** the Unreal editor importer · **0027** Unreal editor import path ·
   **0028** Unreal editor module and tests · **0029** Unreal auth, cache and vault · **0030** Unreal runtime, corpus reader and Cesium streaming ·
-  **0031** CI, AutoCAD, Blender and gate tooling. **0032** **code carries no comments**; the `comment-ratchet` check holds the line. **0033** every host shows **the round mark with its extrude**, rendered from one source.
+  **0031** CI, AutoCAD, Blender and gate tooling. **0032** **code carries no comments**; the `comment-ratchet` check holds the line. **0033** every host shows **the round mark with its extrude**, rendered from one source. **0034** **no plugin upsells**: a locked Extra is left out and a refusal says `Not included in this bundle.`
   When to write one, and the two edits it takes: [`docs/agents/domain.md`](docs/agents/domain.md).
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the
   authority; never restate a value it owns or hardcode a version in prose — each host's verified

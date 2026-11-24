@@ -320,9 +320,7 @@ staged steps and the same Cancel.
   downloads that level alone. The plugin keeps one download per order, so another level is a fresh download
   that replaces it, and the level you chose stays chosen while the vault refreshes. A bundle sent from the web
   vault opens on the recommendation. A 2.x order has no level to choose in the vault: its levels are the
-  checklist's per-row dropdowns above. Under the control, the plan sheets and the terrain tiles of a free
-  order read as locked rows, `More Extras come with paid sites`, with nothing to download; a kept or paid
-  order lists none.
+  checklist's per-row dropdowns above. A locked Extra is left out of the list.
 - **The import window takes what the download holds.** A 3.0 download holds one level of every file, so its
   rows have no level list; each says what it will take instead, and a row estimated at over five minutes starts unticked, saying why. A step whose file
   the bundle does not hold is shown as skipped, naming the file, with the manifest's own reason where it gives
