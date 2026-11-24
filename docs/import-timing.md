@@ -1,6 +1,6 @@
 ---
 name: import-timing
-description: How long each import step took at Max, Med and Min in every host, as measured by the MPB 3.0 release gates — Unreal 0.9.0 on Unreal 5.8, Revit 1.2.0 on Revit 2025, 2026 and 2027, AutoCAD 1.2.0 on AutoCAD 2025, 2026 and 2027 and Civil 3D 2027 — with the site, the counts and the machine, and the rule the recommended level follows. Read before choosing or changing a recommended level, before quoting how long an import takes, or when a host's import gets slower.
+description: How long each import step took at Max, Med and Min in every host, as measured by the MPB 3.0 release gates — Unreal 0.9.0 on Unreal 5.8, Revit 1.2.0 on Revit 2025, 2026 and 2027, AutoCAD 1.2.0 on AutoCAD 2025, 2026 and 2027 and Civil 3D 2027, and AutoCAD 1.3.0's import of the reviewer's sample step by step — with the site, the counts and the machine, and the rule the recommended level follows. Read before choosing or changing a recommended level, before quoting how long an import takes, or when a host's import gets slower.
 ---
 
 # Import timing
@@ -186,3 +186,27 @@ above, which were measured when it showed 108.4 MB at Max.
 | Import, all steps | 0.67 | 2.27, opening the cached copy included |
 
 Source: [issue 621](https://github.com/mantleplace/mantleplace-dcc/issues/621).
+
+### AutoCAD 1.3.0: the reviewer's import, step by step
+
+Plugin 1.3.0 (the zip built from `de2e981`), 2026-11-24. The import the storefront's reviewer is asked
+to make: the Austin Downtown sample from mantle.place/samples, downloaded at Min (89.9 MB), imported
+from disk with Import Bundle into a new drawing, with no account. From 1.3.0 the import window's
+closing report lists each step's time, so each step is timed on its own; the times below are copied
+from that report. Seconds.
+
+| Step | AutoCAD 2025 | AutoCAD 2026 | AutoCAD 2027 |
+| --- | ---: | ---: | ---: |
+| Verify Files | 0.19 | 0.19 | 0.23 |
+| Aerial Image | 0.03 | 0.31 | 0.38 |
+| Contours | 0.23 | 0.22 | 0.26 |
+| Public-Record Layers | 0.04 | 0.05 | 0.05 |
+| Site Linework | 0.18 | 0.18 | 0.20 |
+| Import, all steps | 0.67 | 0.95 | 1.12 |
+
+The import placed 851 contour polylines, the aerial at 1424 by 1417 metres, 470 public-record
+polylines on 6 layers and 3458 site linework polylines on 7 layers, in each year. The *Import, all
+steps* row is the sum of the steps. AutoCAD 2027 is Civil 3D 2027 started as plain AutoCAD, so it
+builds no surface.
+
+Source: [issue 769](https://github.com/mantleplace/mantleplace-dcc/issues/769).
