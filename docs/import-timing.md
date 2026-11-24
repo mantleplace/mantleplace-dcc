@@ -134,6 +134,49 @@ Source: Revit 2027 on [issue 617](https://github.com/mantleplace/mantleplace-dcc
 2025 and 2026 on [pull request 722](https://github.com/mantleplace/mantleplace-dcc/pull/722) and
 [issue 618](https://github.com/mantleplace/mantleplace-dcc/issues/618).
 
+### Revit 1.3.0: the reviewer's import, step by step
+
+Plugin 1.3.0 (the zip built from `f5185af`), 2026-11-24. The import the storefront's reviewer is asked to
+make: the Austin Downtown sample from mantle.place/samples, downloaded at Min (89.9 MB), imported from disk
+with Import Bundle into a new project, with no account. The import ran unattended, which imports every
+layer, Site Model and Road Surfaces included. One run per version. Seconds, from the import log.
+
+| Step | Revit 2025 | Revit 2026 | Revit 2027 |
+| --- | ---: | ---: | ---: |
+| `ToposurfaceFromSurfaceTin` | 42.0 | 95.9 | 52.4 |
+| `PublishedContours` | 4.5 | 6.1 | 3.4 |
+| `ContextBuildings` | 16.0 | 129.8 | 9.5 |
+| `LinkSiteIfc` | 4.0 | 4.3 | 2.9 |
+| `SetSharedCoordinates` | 0.0 | 0.0 | 0.0 |
+| `SetSiteLocation` | 0.3 | 0.3 | 0.2 |
+| `LandUse` | 28.4 | 34.0 | 19.7 |
+| `LandCover` | 1.8 | 2.3 | 1.5 |
+| `FloodZones` | 93.1 | 113.5 | 73.9 |
+| `SteepGround` | 66.0 | 78.1 | 45.6 |
+| `SiteContextView` | 0.9 | 1.4 | 0.8 |
+| `RoadCentrelines` | 4.8 | 5.9 | 3.6 |
+| `Water` | 12.5 | 33.3 | 34.6 |
+| `RoadPolygons` | 1,082.8 | 1,346.0 | 484.8 |
+| `Vegetation` | 47.2 | 37.6 | 27.0 |
+| `AttributionAndProvenance` | 0.4 | 0.2 | 0.2 |
+| `ImageryDrape` | 23.5 | 47.6 | 36.1 |
+| Import, all steps | 1,428.2 | 1,936.3 | 796.2 |
+
+The *Import, all steps* row is the sum of the steps, and equals the import log's first to last stamp. The
+import added about 188,000 elements in each version: 7,302 trees, 1,812 road centrelines, 1,022 road features
+cut as 66 subdivisions (Revit declined one), 55 water features cut as 3, and 54 flood zones on the hazard
+plan. `RoadPolygons`, the road surfaces, is 76 % of the import in Revit 2025, 70 % in Revit 2026 and 61 % in
+Revit 2027.
+
+**What the window told the reviewer:** in the import window, opened on the same zip, the note under Road
+Subdivisions read "13 subdivisions, about 8 to 22 seconds" in Revit 2025 and about 24 to 32 seconds in Revit 2026
+and 2027, so the box was not unticked as over budget. The step cut 66 subdivisions and took 485 to 1,346 s.
+
+**A repeat that differed, again:** `ContextBuildings` took 129.8 s in Revit 2026, against 16.0 s and 9.5 s in
+the other two, as the 1.2.0 gate's first Revit 2026 run did; the gate did not look for the cause.
+
+Source: [issue 768](https://github.com/mantleplace/mantleplace-dcc/issues/768).
+
 ## AutoCAD and Civil 3D
 
 Plugin 1.2.0 (the zip built from `86cc2f0`), 2026-11-20. AutoCAD 2027 is Civil 3D 2027 started as
