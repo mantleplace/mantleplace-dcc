@@ -46,7 +46,7 @@ struct FMantlePlaceTerrainTilesLogic
 
 		NoTilesListed,
 
-		Locked,
+		NotIncluded,
 	};
 
 	static EFetchPlan PlanFetch(bool bTilesBesideUsable, const FMantlePlaceVaultItem* Item);
@@ -54,7 +54,7 @@ struct FMantlePlaceTerrainTilesLogic
 	static bool SizeMatches(int64 StatedBytes, int64 ActualBytes);
 
 	static FString NoTilesListedReason();
-	static FString LockedReason();
+	static FString NotIncludedReason();
 	static FString NoTilesBesideReason();
 	static FString NotFetchedYetMessage();
 	static FString NotATilesetReason();

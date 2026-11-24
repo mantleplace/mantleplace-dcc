@@ -188,22 +188,17 @@ struct FMantlePlaceVaultExtra
 	int64 SizeBytes = 0;
 
 	/**
-	 * True while the bundle is free and this Extra comes only with a paid or kept bundle ("locked"). It is
-	 * shown as a locked row with no download and never requested: the platform refuses it (HTTP 403, code
-	 * `extra_locked`). A row that does not say is read as not locked.
+	 * True while the bundle does not include this Extra ("locked"). It is left out of the page and never
+	 * requested: the platform refuses it (HTTP 403, code `extra_locked`). A row that does not say is read as
+	 * not locked.
 	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	bool bLocked = false;
 };
 
-inline const TCHAR* MantlePlaceLockedExtrasWords()
+inline const TCHAR* MantlePlaceNotIncludedWords()
 {
-	return TEXT("More Extras come with paid sites");
-}
-
-inline const TCHAR* MantlePlacePaidBuildsWords()
-{
-	return TEXT("Plan sheets and terrain tiles come with paid builds.");
+	return TEXT("Not included in this bundle.");
 }
 
 inline const TCHAR* MantlePlaceTerrainTilesExtraId()
@@ -318,11 +313,6 @@ struct FMantlePlaceVaultItem
 	 */
 	UPROPERTY(BlueprintReadOnly, Category = "Mantle Place|Vault")
 	TArray<FMantlePlaceVaultExtra> Extras;
-
-	bool HasLockedExtras() const
-	{
-		return Extras.ContainsByPredicate([](const FMantlePlaceVaultExtra& Extra) { return Extra.bLocked; });
-	}
 
 	const FMantlePlaceVaultExtra* FindExtra(const FString& ExtraId) const
 	{

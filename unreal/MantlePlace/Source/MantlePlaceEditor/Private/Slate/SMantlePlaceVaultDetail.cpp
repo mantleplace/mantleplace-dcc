@@ -193,17 +193,6 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 			.Font(FMantlePlaceEditorStyle::GetFont(EFont::Mono))
 			.ColorAndOpacity(FSlateColor(MantlePlacePalette::Sub()))
 		];
-		if (!View.PaidOnlyNote.IsEmpty())
-		{
-			ExtrasBox->AddSlot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S3, 0.f, 0.f)
-			[
-				SNew(STextBlock)
-				.Text(FText::FromString(View.PaidOnlyNote))
-				.Font(FMantlePlaceEditorStyle::GetFont(EFont::Small))
-				.ColorAndOpacity(FSlateColor(MantlePlacePalette::Subtle()))
-				.AutoWrapText(true)
-			];
-		}
 		for (const FMantlePlaceVaultExtraView& Extra : View.Extras)
 		{
 			ExtrasBox->AddSlot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S3, 0.f, 0.f)
@@ -214,7 +203,7 @@ void SMantlePlaceVaultDetail::Construct(const FArguments& InArgs)
 					SNew(STextBlock)
 					.Text(FText::FromString(Extra.Label))
 					.Font(FMantlePlaceEditorStyle::GetFont(EFont::Body))
-					.ColorAndOpacity(FSlateColor(Extra.bLocked ? MantlePlacePalette::Faint() : MantlePlacePalette::White()))
+					.ColorAndOpacity(FSlateColor(MantlePlacePalette::White()))
 				]
 				+ SVerticalBox::Slot().AutoHeight().Padding(0.f, FMantlePlaceEditorStyle::S6, 0.f, 0.f)
 				[

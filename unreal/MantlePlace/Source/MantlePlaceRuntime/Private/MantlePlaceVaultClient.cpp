@@ -451,7 +451,7 @@ void UMantlePlaceVaultClient::HandleDownloadAnswer(int32 ResponseCode, const FSt
 
 		if (FMantlePlaceVaultLogic::IsExtraLockedRefusal(ResponseCode, Content))
 		{
-			NotifyPresigned(false, Empty, MantlePlaceLockedExtrasWords());
+			NotifyPresigned(false, Empty, MantlePlaceNotIncludedWords());
 			return;
 		}
 

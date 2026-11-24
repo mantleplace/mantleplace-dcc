@@ -132,9 +132,9 @@ void UMantlePlaceTerrainTilesFetcher::HandleListedNative(bool bSuccess, const TA
 		Finish(false, FMantlePlaceTerrainTilesLogic::NoTilesListedReason());
 		return;
 	}
-	if (Plan == FMantlePlaceTerrainTilesLogic::EFetchPlan::Locked)
+	if (Plan == FMantlePlaceTerrainTilesLogic::EFetchPlan::NotIncluded)
 	{
-		Finish(false, FMantlePlaceTerrainTilesLogic::LockedReason());
+		Finish(false, FMantlePlaceTerrainTilesLogic::NotIncludedReason());
 		return;
 	}
 	ActiveExtra = *Row->FindExtra(MantlePlaceTerrainTilesExtraId());
@@ -150,7 +150,7 @@ void UMantlePlaceTerrainTilesFetcher::HandlePresignedNative(bool bSuccess, const
 	}
 	if (!bSuccess || Download.Url.IsEmpty())
 	{
-		Finish(false, Message == FMantlePlaceTerrainTilesLogic::LockedReason()
+		Finish(false, Message == FMantlePlaceTerrainTilesLogic::NotIncludedReason()
 			? Message
 			: FString::Printf(TEXT("Could not get a link for the terrain tiles: %s"), *Message));
 		return;
