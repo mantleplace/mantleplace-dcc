@@ -17,9 +17,43 @@ internal static class GroundCutBatchesTests
             run.Equal(batches.Count, 21, "1,023 roads in batches of at most 50");
             run.True(batches.All(batch => batch.Count <= GroundCutBatches.MostCuts), "no batch holds more than the cap");
             run.Equal(
-                string.Join(",", batches.SelectMany(batch => batch)),
+                string.Join(",", batches.SelectMany(batch => batch).Order()),
                 string.Join(",", Enumerable.Range(0, 1_023)),
-                "every road is in exactly one batch, in the order it was read");
+                "every road is in exactly one batch");
+        });
+
+        run.Case("a batch stays in one place, so a subdivision does not span the site", () =>
+        {
+            List<GroundCut> alternating = [];
+            for (int step = 0; step < 50; step++)
+            {
+                alternating.Add(Square(step % 10 * 20.0, step / 10 * 20.0, 10.0));
+                alternating.Add(Square(5_000 + (step % 10 * 20.0), 5_000 + (step / 10 * 20.0), 10.0));
+            }
+
+            IReadOnlyList<IReadOnlyList<int>> batches = GroundCutBatches.Of(alternating);
+
+            run.Equal(batches.Count, 2, "two clusters of fifty need two batches, as they did in file order");
+            run.True(
+                batches.All(batch => batch.Select(index => index % 2).Distinct().Count() == 1),
+                "no batch mixes the two clusters");
+            run.Equal(
+                string.Join(",", batches.SelectMany(batch => batch).Order()),
+                string.Join(",", Enumerable.Range(0, 100)),
+                "every cut is placed exactly once");
+            run.Equal(Describe(batches), Describe(GroundCutBatches.Of(alternating)), "the same input gives the same batches");
+        });
+
+        run.Case("a cut with no outer ring is still placed once", () =>
+        {
+            GroundCut empty = new() { Outer = new SiteFeature { Vertices = [], IsClosed = true } };
+
+            IReadOnlyList<IReadOnlyList<int>> batches = GroundCutBatches.Of([Square(0, 0, 10), empty, Square(500, 500, 10)]);
+
+            run.Equal(
+                string.Join(",", batches.SelectMany(batch => batch).Order()),
+                "0,1,2",
+                "each cut is in exactly one batch");
         });
 
         run.Case("roads whose extents overlap or nearly touch are never cut together", () =>

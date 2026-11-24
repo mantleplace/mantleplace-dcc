@@ -238,6 +238,16 @@ renderer-neutral.
   holds each member's stamp on a line of its own (`SiteBoundaryIdentity.Batch`); a re-import reads
   every line (`Members`), and the first names the subdivision. A group Revit refuses at the call is
   cut again one polygon at a time, and the log counts how many were.
+  - **The cuts are batched in Z-order of their extent centre, so a batch stays local.** A
+    subdivision that spans the site costs far more to build and to check for overlaps than a compact
+    one. Measured 2026-11-23 in Revit 2027 on a 1,022-road-surface site, the road step alone on a
+    saved project that already held the terrain, one run each: 795 s (retypes 496 s, commit 299 s,
+    100 subdivisions) in file order, 422 s (285 s, 137 s, 66 subdivisions) in Z-order. Measured the
+    same way and not taken: a 2,000-vertex limit (932 s); letting only the last four batches take a
+    cut (497 s, 147 subdivisions); clearance by ring distance in place of bounding boxes (414 s, 76
+    subdivisions, inside the noise); setting the type through the type parameter in place of
+    `ChangeTypeId` (the commit absorbs the same seconds, 421 s). A saved and reopened project is not
+    faster than the importing session (795 s).
 
 - **Revit can refuse a subdivision at commit, after `CreateSubDivision` returned for it**, and no
   `try` around the cut sees that. A platform-built 1.4.0 bundle's land use did exactly this in 2027:
