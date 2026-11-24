@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Globalization;
 using MantlePlace.Core;
 
 namespace MantlePlace.AutoCad;
@@ -15,10 +17,21 @@ public sealed class AutoCadImportRun
 
     private readonly AutoCadPart?[] _parts;
     private readonly ImportStepState[] _states;
+    private readonly TimeSpan?[] _started;
+    private readonly TimeSpan?[] _ended;
+    private readonly Func<TimeSpan> _clock;
     private bool _cancelAsked;
 
     public AutoCadImportRun(AutoCadImportPlan plan, bool civil3d)
+        : this(plan, WallClock(), civil3d)
     {
+    }
+
+    public AutoCadImportRun(AutoCadImportPlan plan, Func<TimeSpan> clock, bool civil3d)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+        _clock = clock;
+
         ArgumentNullException.ThrowIfNull(plan);
         if (plan.IsRefused)
         {
@@ -31,6 +44,14 @@ public sealed class AutoCadImportRun
             .Select(kind => (AutoCadPart?)kind));
         _parts = [.. parts];
         _states = [.. _parts.Select(_ => ImportStepState.Waiting)];
+        _started = new TimeSpan?[_parts.Length];
+        _ended = new TimeSpan?[_parts.Length];
+    }
+
+    private static Func<TimeSpan> WallClock()
+    {
+        Stopwatch watch = Stopwatch.StartNew();
+        return () => watch.Elapsed;
     }
 
     public int Count => _parts.Length;
@@ -55,6 +76,29 @@ public sealed class AutoCadImportRun
         _ => part.ToString(),
     };
 
+    public double? SecondsAt(int index)
+        => _started[index] is { } started && _ended[index] is { } ended ? (ended - started).TotalSeconds : null;
+
+    public string? StepTimes()
+    {
+        if (_started.All(started => started is null))
+        {
+            return null;
+        }
+
+        List<string> lines = ["Step times (seconds)"];
+        for (int i = 0; i < _parts.Length; i++)
+        {
+            string name = _parts[i] is { } kind ? StepName(kind) : VerifyStep;
+            string said = SecondsAt(i) is { } seconds
+                ? seconds.ToString("0.00", CultureInfo.InvariantCulture)
+                : _states[i] == ImportStepState.Importing ? "did not finish" : "not run";
+            lines.Add($"{name}: {said}");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
     public void RequestCancel() => _cancelAsked = true;
 
     public int? Next()
@@ -77,6 +121,7 @@ public sealed class AutoCadImportRun
         }
 
         _states[next] = ImportStepState.Importing;
+        _started[next] = _clock();
         return next;
     }
 
@@ -88,6 +133,7 @@ public sealed class AutoCadImportRun
         }
 
         _states[index] = succeeded ? ImportStepState.Done : ImportStepState.Failed;
+        _ended[index] = _clock();
         if (!succeeded && _parts[index] is null)
         {
             Stop();

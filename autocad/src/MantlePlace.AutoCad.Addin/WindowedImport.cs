@@ -357,7 +357,7 @@ internal sealed class WindowedImport : IImportWindowHost
         _window?.ShowFinished(
             _run?.View(),
             _run is { WasCancelled: true } ? AutoCadImportRun.CancelledOutcome : null,
-            result.Summary);
+            _run?.StepTimes() is { } times ? result.Summary + Environment.NewLine + Environment.NewLine + times : result.Summary);
 
         _window?.BringForwardAtTheEnd();
         _importer?.Dispose();
