@@ -41,7 +41,7 @@ Upgrade by closing Revit and running the new `Install.cmd` over the old one; not
 
   The Austin Downtown import at Min, every layer, took 1,428 s (about 24 minutes) in Revit 2025, 1,936 s (about 32 minutes) in Revit 2026 and 796 s (about 13 minutes) in Revit 2027; the road surfaces are 61 to 76 % of it. Each step's time is in [`docs/import-timing.md`](https://github.com/mantleplace/mantleplace-dcc/blob/main/docs/import-timing.md).
 
-- Not run: a picture of the vault window with the free order chosen. The window was read as text in each year: the order's row, the level control offering Max, Med and Min, each with its size, the buttons, and no other row. The harness's capture of a Revit plugin window draws an empty picture, and so does `PrintWindow`. A copy of the screen at the vault window's place, tried in Revit 2027 on 2026-11-24, had no screen to copy: the gate machine's desktop was locked.
+  The vault window was captured with the free order chosen in Revit 2025, 2026 and 2027 (2026-11-24, this zip installed clean by the host harness, signed in on the dev platform), drawn by `PrintWindow` with the gate machine's desktop connected. Each image shows the free order's row selected and the level control reading `Max — 69.2 MB (recommended)` above the order list, with no locked row and no wording about paid sites, under the window's title bar and the Mantle Place mark.
 - Published asset: <check from step 4 and its date>.
 - `MantlePlace-Revit-1.3.0.zip` sha256 `39321d2e7e89dfe9179924a538290fdc5ad81f8ae78b1d7d63b2dde38583a9e1`
 - Storefront: <submitted to the Autodesk storefront on date>, from the asset above.
