@@ -97,7 +97,7 @@ key this suite must assert, or it fails.
   begins as the window opens. Its steps and their states are
   `AutoCadImportRun` (Core), each row named by this host (`ImportRunRow.Named`): `Verify Files`, then each
   placed part, one transaction a step, posted one per dispatcher operation so Cancel is heard between
-  steps. An order comes into a drawing from the vault browser (Prepare, download, Import), from an export
+  steps. Each step's time is kept, and the window's closing report ends with a `Step times (seconds)` list (`AutoCadImportRun.StepTimes`), so a harness reads them after the import ends. An order comes into a drawing from the vault browser (Prepare, download, Import), from an export
   sent from the web vault, or through Import Bundle (`MANTLEPLACEIMPORTBUNDLE`, `HPS-61`), which takes a
   zip on disk.
 - **An MPB 3.0 bundle is read from its catalog and frames** (`AutoCadThreeView`), told from 2.x by its
