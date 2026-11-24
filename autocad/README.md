@@ -48,9 +48,7 @@ order shows the control under the buttons, each level with its download size and
 recommendation preselected; **Import** downloads the chosen level. An export of a 3.0 order sent from
 the web vault opens the import window on what the import will do, with the same control and **Import**
 to press: choosing another level there downloads it and reopens the window on it before anything is
-drawn. A 2.x order offers no level. Under the control, the plan sheets and the terrain tiles of a free
-order read as locked rows, `More Extras come with paid sites`, with nothing to download; a kept or paid
-order lists none.
+drawn. A 2.x order offers no level. A locked Extra is left out of the list.
 
 **The import window.** Every import, from the web or from Import Bundle, runs in the **Bundle Import**
 window: it lists the steps (**Verify Files**, then each part the order places) with each one's state,
