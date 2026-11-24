@@ -1,13 +1,13 @@
 # Mantle Place for Revit: how to test
 
-A one-page guide for a store reviewer or a first-time tester of `revit-1.2.0`. It needs **no account**: the
+A one-page guide for a store reviewer or a first-time tester of `revit-1.3.0`. It needs **no account**: the
 sample bundle comes from a public page, and it is imported from disk. Signing in is needed only for the
 vault and for Open in Curator's order extent, and both are optional below.
 
 ## 1. Install
 
 1. Close Revit.
-2. Install from the Autodesk storefront, or unzip `MantlePlace-Revit-1.2.0.zip` and run
+2. Install from the Autodesk storefront, or unzip `MantlePlace-Revit-1.3.0.zip` and run
    `MantlePlace.bundle\Install.cmd` (the manual copy is in `MantlePlace.bundle\README.txt`). Use one
    way in, not both.
 3. Start Revit 2025.5 or later, 2026.5 or later, or 2027. The first time each Revit version loads the plugin it

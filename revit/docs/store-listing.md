@@ -1,10 +1,10 @@
-# Revit 1.2.0: the store listing
+# Revit 1.3.0: the store listing
 
-The text of the Autodesk storefront listing for `revit-1.2.0`, one section per text field of the publisher's
+The text of the Autodesk storefront listing for `revit-1.3.0`, one section per text field of the publisher's
 form, in the form's order. Each field is pasted as it stands, without the heading. Each heading gives the
 field's name on the form, the count of the text below it (spaces included) and the form's own limit, read from
-the form on 2026-11-19. It describes only what 1.2.0 does: what it changed is
-[`release-notes-1.2.0.md`](release-notes-1.2.0.md), and the steps the store's reviewer follows are
+the form on 2026-11-19. It describes only what 1.3.0 does: what it changed is
+[`release-notes-1.3.0.md`](release-notes-1.3.0.md), and the steps the store's reviewer follows are
 [`how-to-test.md`](how-to-test.md).
 
 Two rules from the store's earlier reviews hold for every field and every image: the title does not name the
@@ -13,7 +13,9 @@ listing image or plugin window shows the host product's logo. The icon is the Ma
 company logo ([ADR 0033](../../docs/adr/0033-every-host-shows-the-round-mark-with-its-extrude.md)).
 
 Fields that are not text are set on the form itself: **Autodesk Product Compatibility** is Revit 2025, 2026
-and 2027; **Price** is Free; **Learn More Url** is `https://mantle.place/revit`. The **Commands** table is left
+and 2027; **Price** is Free, and follows the storefront's answer on the pricing category: the founder has asked
+the storefront to keep the listing Free on the strength of the description's paragraph on what is free and
+what is bought, and sets Trial if the storefront still requires it, with no change to the text; **Learn More Url** is `https://mantle.place/revit`. The **Commands** table is left
 empty: it takes a command typed at a command line, and Revit has none.
 
 ## App Name (31 of 50 characters)
@@ -28,7 +30,7 @@ Mantle Place — Real-World Sites
 Import a real site into your project from a Mantle Place bundle: terrain, buildings, roads, trees and imagery, placed at its real-world coordinates.
 ```
 
-## App Description (1,676 of 4,000 characters)
+## App Description (1,880 of 4,000 characters)
 
 ```text
 Mantle Place brings the real world around your site into your project. Draw an area on mantle.place, order it, and import the bundle here: the plugin builds the ground and the context around it, and places all of it at the site's real coordinates.
@@ -48,20 +50,23 @@ The import window shows each step as it runs and can be cancelled. You choose wh
 
 Sign in to reach your vault: list your orders, download one at the level you choose, and import it. Send a bundle from the web vault and Revit opens it for you. Open in Curator takes you from the project to the web curator on the same site.
 
-A bundle you already have imports from disk with no account. Free sample bundles are at mantle.place/samples.
+A bundle you already have imports from disk with no account.
+
+The plugin is free, with no time limit and no locked commands. Site bundles are ordered on mantle.place, where each site's price is shown before you buy; Open in Curator opens that page in your browser. Free sample bundles are at mantle.place/samples.
 
 Prepare for Handover removes the open-licence map content an import brought in before you hand a project to a client, and keeps the data credit.
 ```
 
-## Version Description (1,002 of 4,000 characters)
+## Version Description (1,094 of 4,000 characters)
 
 ```text
-- Reads MPB 3.0 bundles, beside 2.x: terrain, contours, context buildings and the site model, shared coordinates, roads, road surfaces, water, land use, land cover, trees, the imagery drape and the hazard plan, from the vault, from a zip on disk and from a send out of the web vault.
-- Choose the level before the download: an MPB 3.0 order shows Max, Med and Min in the vault, each with its download size, and the recommended one chosen for you.
-- The import window estimates each MPB 3.0 layer's import time before you start, and a layer estimated at over five minutes starts unticked, saying why.
-- About is now a window, with a link to the privacy page.
-- Trees and shrubs from an MPB 3.0 bundle stand on the ground at the site.
-- Fixed from the last review: Open in Curator's size dialog opens, and no plugin window shows the Revit logo.
+- Road surfaces from an MPB 3.0 order import: a download from the vault now asks for the road surface file.
+- Road and water surfaces are cut in batches, polygons near each other in one subdivision, so an import of a thousand roads no longer takes most of an hour.
+- The vault and import windows list only what an order includes, with no row for an Extra the order does not include and no wording about paid sites.
+- Open in Curator says in its tooltip where it goes: mantle.place in your browser, where sites are drawn and ordered.
+- The round Mantle Place mark is on the ribbon buttons, the window title bars and the bundle's icon.
+- Sign In refuses a configuration that splits it across two servers, naming both, and names a server that does not answer.
+- A layer in another coordinate system than the origin's is named as left out, and a re-import of a bundle on a rotated grid is placed at a zero offset instead of being refused.
 
 An MPB 3.0 bundle goes into a project that holds no earlier Mantle Place import; a project that already holds one refuses it, says why, and is left unchanged.
 ```
