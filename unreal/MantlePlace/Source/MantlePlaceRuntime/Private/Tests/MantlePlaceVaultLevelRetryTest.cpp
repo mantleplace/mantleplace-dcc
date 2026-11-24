@@ -156,7 +156,7 @@ bool FMantlePlaceVaultLevelRetryTest::RunTest(const FString& Parameters)
 		TestEqual(TEXT("no request is made again"), F.Requests->Num(), 0);
 		TestEqual(TEXT("one result"), F.Presigned->Count, 1);
 		TestFalse(TEXT("nothing was minted"), F.Presigned->bSuccess);
-		TestEqual(TEXT("the result is the locked row's words"), F.Presigned->Message, FString(MantlePlaceLockedExtrasWords()));
+		TestEqual(TEXT("the result says it is not included"), F.Presigned->Message, FString(TEXT("Not included in this bundle.")));
 	}
 
 	{

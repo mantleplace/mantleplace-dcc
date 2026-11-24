@@ -283,7 +283,6 @@ bool FMantlePlaceVaultExtrasTest::RunTest(const FString& Parameters)
 			TestFalse(TEXT("The Site Brief is never locked"), Items[0].Extras[0].bLocked);
 			TestTrue(TEXT("The plan sheets are locked"), Items[0].Extras[1].bLocked);
 			TestTrue(TEXT("The terrain tiles are locked"), Items[0].Extras[2].bLocked);
-			TestTrue(TEXT("The row has locked Extras"), Items[0].HasLockedExtras());
 		}
 	}
 	{
@@ -295,7 +294,7 @@ bool FMantlePlaceVaultExtrasTest::RunTest(const FString& Parameters)
 			Items, Error);
 		if (TestEqual(TEXT("One row"), Items.Num(), 1))
 		{
-			TestFalse(TEXT("An Extra the platform does not mark is not locked"), Items[0].HasLockedExtras());
+			TestFalse(TEXT("An Extra the platform does not mark is not locked"), Items[0].Extras[0].bLocked);
 		}
 	}
 

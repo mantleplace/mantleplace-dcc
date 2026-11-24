@@ -229,15 +229,14 @@ FMantlePlaceVaultDetailView BuildVaultDetailView(const FMantlePlaceVaultItem& It
 
 	for (const FMantlePlaceVaultExtra& Extra : Item.Extras)
 	{
+		if (Extra.bLocked)
+		{
+			continue;
+		}
 		FMantlePlaceVaultExtraView Row;
 		Row.Label = Extra.Name.IsEmpty() ? Extra.Id : Extra.Name;
-		Row.bLocked = Extra.bLocked;
-		Row.SubLine = Extra.bLocked ? FString(MantlePlaceLockedExtrasWords()) : FormatVaultBytes(Extra.SizeBytes);
+		Row.SubLine = FormatVaultBytes(Extra.SizeBytes);
 		View.Extras.Add(MoveTemp(Row));
-	}
-	if (Item.HasLockedExtras())
-	{
-		View.PaidOnlyNote = MantlePlacePaidBuildsWords();
 	}
 
 	for (const FMantlePlaceVaultArtifact& Artifact : Item.DownloadFormats)

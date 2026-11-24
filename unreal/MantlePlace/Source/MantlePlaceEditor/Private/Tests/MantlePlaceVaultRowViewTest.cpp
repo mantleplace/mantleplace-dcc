@@ -179,25 +179,19 @@ bool FMantlePlaceVaultRowViewTest::RunTest(const FString& Parameters)
 		Item.Extras = {Brief, Plans, Tiles};
 
 		const FMantlePlaceVaultDetailView Free = BuildVaultDetailView(Item, false);
-		if (TestEqual(TEXT("three Extra rows"), Free.Extras.Num(), 3))
+		if (TestEqual(TEXT("a locked Extra is left out, so one Extra row"), Free.Extras.Num(), 1))
 		{
-			TestFalse(TEXT("the Site Brief row is not locked"), Free.Extras[0].bLocked);
+			TestEqual(TEXT("the Site Brief row is named"), Free.Extras[0].Label, FString(TEXT("Site Brief")));
 			TestEqual(TEXT("the Site Brief row shows its size"), Free.Extras[0].SubLine, FString(TEXT("2.0 KB")));
-			TestTrue(TEXT("the plan sheets row is locked"), Free.Extras[1].bLocked);
-			TestEqual(TEXT("the plan sheets row is named"), Free.Extras[1].Label, FString(TEXT("Plan sheets")));
-			TestEqual(TEXT("and says the words, with nothing to download"), Free.Extras[1].SubLine,
-				FString(TEXT("More Extras come with paid sites")));
-			TestTrue(TEXT("the terrain tiles row is locked"), Free.Extras[2].bLocked);
 		}
-		TestEqual(TEXT("the proof view says what comes with paid builds"), Free.PaidOnlyNote,
-			FString(TEXT("Plan sheets and terrain tiles come with paid builds.")));
 
 		Item.Extras[1].bLocked = false;
 		Item.Extras[2].bLocked = false;
-		const FMantlePlaceVaultDetailView Paid = BuildVaultDetailView(Item, false);
-		TestTrue(TEXT("a paid bundle's Extras are all unlocked rows"),
-			!Paid.Extras[0].bLocked && !Paid.Extras[1].bLocked && !Paid.Extras[2].bLocked);
-		TestTrue(TEXT("and it says nothing of paid builds"), Paid.PaidOnlyNote.IsEmpty());
+		const FMantlePlaceVaultDetailView Unlocked = BuildVaultDetailView(Item, false);
+		if (TestEqual(TEXT("an order that includes them lists all three"), Unlocked.Extras.Num(), 3))
+		{
+			TestEqual(TEXT("the plan sheets row is named"), Unlocked.Extras[1].Label, FString(TEXT("Plan sheets")));
+		}
 
 		TestEqual(TEXT("a 2.x bundle has no Extra rows"),
 			BuildVaultDetailView(MakeItem(EMantlePlaceVaultBundleStatus::Available, {TEXT("glb")}), false).Extras.Num(), 0);

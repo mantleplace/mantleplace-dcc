@@ -90,7 +90,6 @@ struct FMantlePlaceVaultExtraView
 {
 	FString Label;
 	FString SubLine;
-	bool bLocked = false;
 };
 
 struct FMantlePlaceVaultDetailView
@@ -112,7 +111,6 @@ struct FMantlePlaceVaultDetailView
 	FString ManifestVersion;
 	TArray<FMantlePlaceVaultArtifactView> Artifacts;
 	TArray<FMantlePlaceVaultExtraView> Extras;
-	FString PaidOnlyNote;
 	FString PrimaryLabel;
 	bool bPrimaryEnabled = false;
 };

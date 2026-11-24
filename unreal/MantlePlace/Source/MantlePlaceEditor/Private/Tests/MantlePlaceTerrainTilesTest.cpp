@@ -136,7 +136,7 @@ bool FMantlePlaceTerrainTilesLogicTest::RunTest(const FString& Parameters)
 		LockedTiles.bLocked = true;
 		Locked.Extras.Add(LockedTiles);
 		TestTrue(TEXT("listed but locked on a free bundle: nothing is fetched, the platform would refuse it"),
-			L::PlanFetch(false, &Locked) == L::EFetchPlan::Locked);
+			L::PlanFetch(false, &Locked) == L::EFetchPlan::NotIncluded);
 		TestTrue(TEXT("tiles already on disk are used even when the listing now locks them"),
 			L::PlanFetch(true, &Locked) == L::EFetchPlan::Reuse);
 		TestTrue(TEXT("the platform lists other Extras but no terrain tiles: disabled"),
@@ -148,7 +148,7 @@ bool FMantlePlaceTerrainTilesLogicTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("a length the row did not state is not a mismatch"), L::SizeMatches(0, 99));
 
 	TestTrue(TEXT("none listed names the cause"), L::NoTilesListedReason().Contains(TEXT("lists no terrain tiles")));
-	TestEqual(TEXT("locked says the locked row's words"), L::LockedReason(), FString(MantlePlaceLockedExtrasWords()));
+	TestEqual(TEXT("a free order's tiles are not included"), L::NotIncludedReason(), FString(TEXT("Not included in this bundle.")));
 	TestTrue(TEXT("none beside names the file and the way on"),
 		L::NoTilesBesideReason().Contains(L::TilesFileName()) && L::NoTilesBesideReason().Contains(TEXT("vault")));
 	return true;
