@@ -233,6 +233,10 @@ internal static class SharedWindowsTests
             run.True(!row.Contains("_locked", StringComparison.Ordinal), "and holds no locked panel");
             run.True(!row.Contains("GrayTextBrush", StringComparison.Ordinal), "so nothing is drawn greyed");
             run.True(!row.Contains("Button", StringComparison.Ordinal), "and offers no button");
+            run.True(!row.Contains(".Locked", StringComparison.Ordinal), "it reads no Locked flag");
+            run.True(!row.Contains("Offer.Extras", StringComparison.Ordinal), "it loops over no Offer extras");
+            run.True(!row.Contains("paid", StringComparison.OrdinalIgnoreCase), "and names no paid tier");
+            run.True(!row.Contains("ControlDarkBrush", StringComparison.Ordinal), "and draws nothing greyed");
         });
 
         return run.Report("shared windows");
