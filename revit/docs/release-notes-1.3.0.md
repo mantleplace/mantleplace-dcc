@@ -11,7 +11,7 @@ each number instead, because a bare number in a tracked file is refused by the p
 ## The release body
 
 ```markdown
-**Revit 2025.5 or later, 2026.5 or later, and 2027, Windows 64-bit.** One build serves all three. Close Revit, extract the zip and run `MantlePlace.bundle\Install.cmd`, or copy the files directly inside `MantlePlace.bundle\Contents` into your add-ins folder as `README.txt` describes. The plugin is unsigned, so each Revit version asks once: choose **Always Load**. [Install guide](https://github.com/mantleplace/mantleplace-dcc/blob/main/revit/README.md)
+**Revit 2025.5 or later, 2026.5 or later, and 2027, Windows 64-bit.** One build serves all three. Close Revit, extract the zip and run `MantlePlace.bundle\Install.cmd`, or copy the files directly inside `MantlePlace.bundle\Contents` into your add-ins folder as `README.txt` describes. The plugin is unsigned, so each Revit version asks once: choose **Always Load**. [Install guide](https://github.com/mantleplace/mantleplace-dcc/blob/main/revit/README.md) · [mantle.place/revit](https://mantle.place/revit)
 Upgrade by closing Revit and running the new `Install.cmd` over the old one; nothing else to do.
 
 ## What's new
@@ -41,7 +41,7 @@ Upgrade by closing Revit and running the new `Install.cmd` over the old one; not
 
   The Austin Downtown import at Min, every layer, took 1,428 s (about 24 minutes) in Revit 2025, 1,936 s (about 32 minutes) in Revit 2026 and 796 s (about 13 minutes) in Revit 2027; the road surfaces are 61 to 76 % of it. Each step's time is in [`docs/import-timing.md`](https://github.com/mantleplace/mantleplace-dcc/blob/main/docs/import-timing.md).
 
-- Not run: a picture of the vault window with the free order chosen. The window was read as text in each year: the order's row, the level control offering Max, Med and Min, each with its size, the buttons, and no other row. The harness's capture of a Revit plugin window draws an empty picture.
+- Not run: a picture of the vault window with the free order chosen. The window was read as text in each year: the order's row, the level control offering Max, Med and Min, each with its size, the buttons, and no other row. The harness's capture of a Revit plugin window draws an empty picture, and so does `PrintWindow`. A copy of the screen at the vault window's place, tried in Revit 2027 on 2026-11-24, had no screen to copy: the gate machine's desktop was locked.
 - Published asset: <check from step 4 and its date>.
 - `MantlePlace-Revit-1.3.0.zip` sha256 `39321d2e7e89dfe9179924a538290fdc5ad81f8ae78b1d7d63b2dde38583a9e1`
 - Storefront: <submitted to the Autodesk storefront on date>, from the asset above.
