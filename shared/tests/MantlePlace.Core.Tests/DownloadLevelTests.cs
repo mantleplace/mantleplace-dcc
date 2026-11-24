@@ -29,22 +29,18 @@ internal static class DownloadLevelTests
             run.Equal(ListedExample("mpb3SmallSite").Levels!.Recommended, FidelityLevel.Max, "Max for the small site");
         });
 
-        run.Case("a free site's plan sheets and terrain tiles are locked rows with no download; a large site's are not", () =>
+        run.Case("a free site's locked Extras leave no row in the level control; a large site's are unchanged", () =>
         {
             LevelControl small = LevelControl.For(ListedExample("mpb3SmallSite"))!;
-            run.True(small.Offer.Extras.Select(extra => extra.Locked).SequenceEqual([false, true, true]), "the Site Brief is never locked");
-            run.Equal(WindowLabels.LockedExtrasWords, "More Extras come with paid sites", "the founder's words");
-            run.True(
-                small.LockedRows.SequenceEqual(
-                [
-                    "Plan sheets — More Extras come with paid sites",
-                    "Terrain tiles — More Extras come with paid sites",
-                ]),
-                "one locked row for each, in the platform's order");
+            run.True(small.Offer.Extras.Select(extra => extra.Locked).SequenceEqual([false, true, true]), "the platform still marks the plan sheets and terrain tiles locked");
+            string[] words = [.. small.Options.SelectMany(option => new[] { option.Label, option.ToolTip })];
+            run.True(words.All(text => !text.Contains("Plan sheets", StringComparison.Ordinal) && !text.Contains("Terrain tiles", StringComparison.Ordinal) && !text.Contains("paid", StringComparison.OrdinalIgnoreCase)), "so no option names a locked Extra or paid sites");
+            run.True(typeof(LevelControl).GetProperty("LockedRows") is null, "and the control has no locked rows to draw");
+            run.True(typeof(WindowLabels).GetMember("LockedExtraRow").Length == 0 && typeof(WindowLabels).GetMember("LockedExtrasWords").Length == 0, "and the labels carry no locked-row words");
 
             LevelControl large = LevelControl.For(ListedExample("mpb3LargeSite"))!;
             run.True(large.Offer.Extras.All(extra => !extra.Locked), "a kept or paid bundle lists them unlocked");
-            run.Equal(large.LockedRows.Count, 0, "so no locked row");
+            run.Equal(large.Options.Count, 3, "and lists its three levels as before");
 
             run.True(
                 VaultListingReader.TryParse("""{ "bundles": [ { "id": "c", "mpb3": { "version": "3.0", "recommendedLevel": "Max", "levels": { "Max": { "sizeBytes": 1 }, "Med": { "sizeBytes": 1 }, "Min": { "sizeBytes": 1 } }, "extras": [ { "id": "PlanSheets", "name": "Plan sheets", "sizeBytes": 5 } ] } } ] }""", out VaultListing older) is null,

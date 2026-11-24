@@ -28,9 +28,6 @@ public sealed class LevelControl
 
     public int SelectedIndex => Options.ToList().FindIndex(option => option.Level == Selected);
 
-    public IReadOnlyList<string> LockedRows
-        => [.. Offer.Extras.Where(extra => extra.Locked).Select(extra => WindowLabels.LockedExtraRow(extra.Name))];
-
     public string SlotLevel => DownloadLevels.SlotLevel(Bundle, Selected);
 
     public static LevelControl? For(VaultBundle? bundle)

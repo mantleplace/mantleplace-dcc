@@ -224,30 +224,15 @@ internal static class SharedWindowsTests
             }
         });
 
-        run.Case("the level row draws a locked Extra as the control's words and nothing to press", () =>
+        run.Case("the level row draws no locked row", () =>
         {
             string? shared = RepoTree.Find(SharedWindowsFolder);
             string row = shared is null ? string.Empty : File.ReadAllText(Path.Combine(shared, "LevelChoiceRow.cs"));
-            Match drawn = Regex.Match(
-                row,
-                @"foreach\s*\(\s*string\s+(?<r>\w+)\s+in\s+control\.LockedRows\s*\)\s*\{(?<body>.*?)\r?\n            \}",
-                RegexOptions.CultureInvariant | RegexOptions.Singleline);
-            string body = drawn.Groups["body"].Value;
-            Match ctor = Regex.Match(row, @"public\s+LevelChoiceRow\s*\(\s*\)\s*\{(?<body>.*?)?
-    \}", RegexOptions.CultureInvariant | RegexOptions.Singleline);
-            run.True(ctor.Success, "the row has its constructor");
-            run.True(
-                Regex.IsMatch(ctor.Groups["body"].Value, @"^\s*Children\.Add\(\s*_locked\s*\)\s*;", RegexOptions.CultureInvariant | RegexOptions.Multiline),
-                "the locked panel is attached to the row in the constructor, so what is added to it is drawn");
-            run.True(drawn.Success, "it loops over the rows the control decided");
-            run.True(
-                Regex.IsMatch(body, @"^\s*_locked\.Children\.Add\(\s*new\s+TextBlock\b", RegexOptions.CultureInvariant),
-                "and adds a TextBlock to the locked panel for each, as the first thing it does");
-            run.True(
-                Regex.IsMatch(body, $@"Text\s*=\s*{Regex.Escape(drawn.Groups["r"].Value)}\s*,", RegexOptions.CultureInvariant),
-                "showing the row's words");
-            run.True(body.Contains("IsEnabled = false", StringComparison.Ordinal), "disabled, so there is nothing to press");
-            run.True(!row.Contains("Button", StringComparison.Ordinal), "and offers no button, so no request for a locked Extra");
+            run.True(row.Length > 0, "the row's source is found");
+            run.True(!row.Contains("LockedRows", StringComparison.Ordinal), "it loops over no locked rows");
+            run.True(!row.Contains("_locked", StringComparison.Ordinal), "and holds no locked panel");
+            run.True(!row.Contains("GrayTextBrush", StringComparison.Ordinal), "so nothing is drawn greyed");
+            run.True(!row.Contains("Button", StringComparison.Ordinal), "and offers no button");
         });
 
         return run.Report("shared windows");
