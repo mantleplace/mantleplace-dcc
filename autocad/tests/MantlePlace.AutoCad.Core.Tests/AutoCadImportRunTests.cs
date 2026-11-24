@@ -115,6 +115,48 @@ internal static class AutoCadImportRunTests
             run.Throws<InvalidOperationException>(() => _ = import.Next(), "a second step before the first ends");
         });
 
+        run.Case("each step's time is kept in seconds and listed for the closing report", () =>
+        {
+            TimeSpan now = TimeSpan.Zero;
+            AutoCadImportRun import = new(Plan(AutoCadPart.Contours, AutoCadPart.Aerial, AutoCadPart.Linework), () => now, civil3d: false);
+
+            run.True(import.StepTimes() is null, "nothing ran, nothing to list");
+
+            now = TimeSpan.FromSeconds(10);
+            int verify = import.Next()!.Value;
+            now = TimeSpan.FromSeconds(10.4);
+            import.End(verify, succeeded: true);
+            int aerial = import.Next()!.Value;
+            now = TimeSpan.FromSeconds(13.65);
+            import.End(aerial, succeeded: false);
+            _ = import.Next();
+
+            run.True(Math.Abs((import.SecondsAt(0) ?? -1) - 0.4) < 0.0001, "the verification took four tenths");
+            run.True(Math.Abs((import.SecondsAt(1) ?? -1) - 3.25) < 0.0001, "the aerial took 3.25");
+            run.True(import.SecondsAt(2) is null, "a step in flight has no time yet");
+            run.True(import.SecondsAt(3) is null, "a step never reached has none");
+
+            now = TimeSpan.FromSeconds(14);
+            import.End(2, succeeded: true);
+            import.Stop();
+
+            run.Equal(
+                import.StepTimes()!,
+                "Step times (seconds)" + Environment.NewLine + "Verify Files: 0.40" + Environment.NewLine + "Aerial Image: 3.25" + Environment.NewLine + "Contours: 0.35" + Environment.NewLine + "Site Linework: not run",
+                "one line a step, in the window's order");
+        });
+
+        run.Case("the step times name no path, order or drawing", () =>
+        {
+            AutoCadImportRun import = new(Plan(AutoCadPart.Contours), civil3d: false);
+            import.End(import.Next()!.Value, succeeded: true);
+            import.End(import.Next()!.Value, succeeded: true);
+
+            string times = import.StepTimes()!;
+            run.False(times.Contains("order-1", StringComparison.Ordinal), "no order id");
+            run.False(times.Contains(BackSlash, StringComparison.Ordinal), "no path");
+        });
+
         run.Case("a refused plan has no run", () =>
             run.Throws<ArgumentException>(() => _ = new AutoCadImportRun(new AutoCadImportPlan { Refusal = "no." }, civil3d: false), "refused"));
 
@@ -136,6 +178,8 @@ internal static class AutoCadImportRunTests
             }),
         ],
     };
+
+    private const string BackSlash = "\\";
 
     private static string Names(AutoCadImportRun import) => string.Join("|", import.View().Rows.Select(row => row.StepName));
 
