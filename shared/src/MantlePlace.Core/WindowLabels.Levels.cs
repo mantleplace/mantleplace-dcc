@@ -109,10 +109,6 @@ public static partial class WindowLabels
 
     public const string DownloadLevelHeading = LevelHeading;
 
-    public const string LockedExtrasWords = "More Extras come with paid sites";
-
-    public static string LockedExtraRow(string name) => $"{name} — {LockedExtrasWords}";
-
     public const string RecommendedLevel = "recommended";
 
     public static string LevelChoice(FidelityLevel level, long sizeBytes, bool recommended)

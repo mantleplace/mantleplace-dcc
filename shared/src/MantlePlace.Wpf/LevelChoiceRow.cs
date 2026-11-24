@@ -8,7 +8,6 @@ namespace MantlePlace.Wpf;
 public sealed class LevelChoiceRow : StackPanel
 {
     private readonly ComboBox _levels = new() { MinWidth = 220, Margin = new Thickness(8, 0, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly StackPanel _locked = new();
     private bool _filling;
 
     public LevelChoiceRow()
@@ -22,7 +21,6 @@ public sealed class LevelChoiceRow : StackPanel
         levelLine.Children.Add(heading);
         levelLine.Children.Add(_levels);
         Children.Add(levelLine);
-        Children.Add(_locked);
 
         _levels.SelectionChanged += (_, _) =>
         {
@@ -45,7 +43,6 @@ public sealed class LevelChoiceRow : StackPanel
             _levels.Items.Clear();
             if (control is null)
             {
-                _locked.Children.Clear();
                 Visibility = Visibility.Collapsed;
                 return;
             }
@@ -56,18 +53,6 @@ public sealed class LevelChoiceRow : StackPanel
             }
 
             _levels.SelectedIndex = control.SelectedIndex;
-
-            _locked.Children.Clear();
-            foreach (string row in control.LockedRows)
-            {
-                _locked.Children.Add(new TextBlock
-                {
-                    Text = row,
-                    Margin = new Thickness(0, 4, 0, 0),
-                    IsEnabled = false,
-                    Foreground = SystemColors.GrayTextBrush,
-                });
-            }
 
             Visibility = Visibility.Visible;
         }
