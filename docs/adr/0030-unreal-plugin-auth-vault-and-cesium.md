@@ -10,7 +10,7 @@ Date: 2026-11-21
 
 ## Status
 
-Accepted. Recorded from the code comments that held these decisions, when the comments were removed; each decision was already in force in the code and none is new.
+Accepted. Recorded from the code comments that held these decisions, when the comments were removed; each decision was already in force in the code and none is new. The locked-row decision (a locked Extra is shown as a locked row) is superseded by [ADR 0034](0034-no-plugin-upsells.md).
 
 ## Context
 
