@@ -1,6 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <RevitApiRuntimeConfig>$(RevitApiDir)\RevitAPI.runtimeconfig.json</RevitApiRuntimeConfig>
+    <RevitApiTargetFramework>net8.0-windows</RevitApiTargetFramework>
+  </PropertyGroup>
+  <PropertyGroup Condition="Exists('$(RevitApiRuntimeConfig)')">
+    <RevitApiTargetFramework Condition="$([System.IO.File]::ReadAllText('$(RevitApiRuntimeConfig)').Contains('&quot;net10.0&quot;'))">net10.0-windows</RevitApiTargetFramework>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>$(RevitApiTargetFramework)</TargetFramework>
     <AssemblyName>$(HarnessAssemblyName)</AssemblyName>
     <RootNamespace>MantlePlace.Scratch.Timing</RootNamespace>
     <UseWPF>true</UseWPF>
