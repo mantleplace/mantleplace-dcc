@@ -522,9 +522,9 @@ public sealed class MantlePlaceApplication : IExternalApplication
             assemblyPath,
             typeof(OpenInCuratorCommand).FullName)
         {
-            ToolTip = "Open the web curator on the extent this project already knows.",
+            ToolTip = "Opens mantle.place in your browser, where sites are drawn and ordered, on the extent this project already knows.",
             LongDescription =
-                "Opens the Mantle Place curator in your browser with the extent drawn and ready. The extent "
+                "Opens mantle.place in your browser, where sites are drawn and ordered, with the extent drawn and ready. The extent "
                 + "is the one of the order this project was imported from, read from your vault, or else the "
                 + "project's site location, with a size you choose. A project with neither opens the plain "
                 + "curator. Nothing in your project changes.",

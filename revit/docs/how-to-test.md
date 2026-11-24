@@ -68,7 +68,7 @@ the United States, so its flood zones draw on the hazard plan.
 7. **Import Bundle**. Step 3 above.
 8. **Prepare for Handover**. Asks first, then removes the open-licence (ODbL) map content the import brought in
    and keeps the data credit. It is one undo step: press Ctrl+Z to put it back.
-9. **Open in Curator**. Opens the web curator in your browser. After the sample import it asks for a size
+9. **Open in Curator**. Opens mantle.place in your browser, where sites are drawn and ordered. After the sample import it asks for a size
    (500 m to 4 km) around the project's site location, then opens the curator on that area. It changes nothing in
    the project.
 
