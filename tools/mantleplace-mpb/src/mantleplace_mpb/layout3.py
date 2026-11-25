@@ -35,7 +35,7 @@ TREE = frozenset(
         "Water", "Grass", "Forest", "Dirt", "Rock", "Sand", "Snow", "Built")]
     + [f"Basemap/{n}" for n in (
         "Basemap.tif", "Basemap.png", "Basemap.usdz", "Buildings.glb", "Roads.csv")]
-    + [f"Basemap/{n}.{e}" for n in ("Buildings", "Roads", "Pavement", "Water", "Landuse")
+    + [f"Basemap/{n}.{e}" for n in ("Buildings", "Roads", "Pavement", "Railways", "Water", "Landuse")
        for e in ("gpkg", "dxf")]
     + [f"Records/{n}.{e}" for n in _RECORDS for e in ("gpkg", "dxf")]
     + ["Site/Site.usdz", "Site/Site.ifc", "Site/Site.dxf"])

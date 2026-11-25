@@ -1,5 +1,5 @@
 {
-  "$comment": "What a reader finds in the Max download of a 3.0 bundle: all sixty-nine files of the file table, found by their catalog names, each with its family and frame from its extension (format.md §4) and the count the catalog states for it (§9.5). `Readme.md`, `Manifest.json` and `Terrain.mtl` are in neither family and have no count.",
+  "$comment": "What a reader finds in the Max download of a 3.0 bundle: all seventy-one files of the file table, found by their catalog names, each with its family and frame from its extension (format.md §4) and the count the catalog states for it (§9.5). `Readme.md`, `Manifest.json` and `Terrain.mtl` are in neither family and have no count.",
   "bundle": "bundle/v3-full.json",
   "result": {
     "outcome": "read",
@@ -73,6 +73,8 @@
       {"path": "Basemap/Landuse.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
       {"path": "Basemap/Pavement.dxf", "family": "georeferenced", "frame": "order", "count": 120},
       {"path": "Basemap/Pavement.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Railways.dxf", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Railways.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
       {"path": "Basemap/Roads.csv", "family": "host-ready", "frame": "site", "count": 1600},
       {"path": "Basemap/Roads.dxf", "family": "georeferenced", "frame": "order", "count": 120},
       {"path": "Basemap/Roads.gpkg", "family": "georeferenced", "frame": "order", "count": 120},

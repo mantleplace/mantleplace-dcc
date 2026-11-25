@@ -759,7 +759,7 @@
       "group": "manifest",
       "file": "manifest/vector-layer-vocabulary.json",
       "expect": "accept",
-      "reason": "Every name `vector.layers` can carry, in the producer's order, each with its own digest. The schema types a layer name as a free string, so this file is the vocabulary's executable form (spec/format.md section 6.3). Today every host asserts one layer here, road_splines, and selecting it among all seven, with a sibling derived from the same `road`, proves a reader does not stop at the first layer or match a prefix. A host that starts reading another layer by name asserts it against this file by adding that layer's expectation keys here. The distinct digests mean a host that picked the wrong layer reports the wrong sha, not merely a path.",
+      "reason": "Every name `vector.layers` can carry, in the producer's order, each with its own digest. The schema types a layer name as a free string, so this file is the vocabulary's executable form (spec/format.md section 6.3). Today every host asserts one layer here, road_splines, and selecting it among all eight, with a sibling derived from the same `road`, proves a reader does not stop at the first layer or match a prefix. A host that starts reading another layer by name asserts it against this file by adding that layer's expectation keys here. The distinct digests mean a host that picked the wrong layer reports the wrong sha, not merely a path.",
       "manifestVersion": "1.0.0",
       "expectations": {
         "jobId": "vl",
@@ -2602,9 +2602,9 @@
       "file": "bundle/v3-full.json",
       "expect": "accept",
       "stagedSchema": true,
-      "reason": "The Max download of a 3.0 bundle, whole: the sixty-nine files of the file table (format.md §6) in the seven subject folders, Readme.md and Manifest.json alone at the root, one level, and a catalog with one entry per file, each with its sha256. 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "reason": "The Max download of a 3.0 bundle, whole: the seventy-one files of the file table (format.md §6) in the seven subject folders, Readme.md and Manifest.json alone at the root, one level, and a catalog with one entry per file, each with its sha256. 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
       "expectations": {
-        "hashesVerified": 68
+        "hashesVerified": 70
       }
     },
     {
@@ -2829,9 +2829,9 @@
       "file": "bundle/v3-full-med.json",
       "expect": "accept",
       "stagedSchema": true,
-      "reason": "The Med download of the same 3.0 bundle (format.md §8): the same sixty-nine names and paths, the level stated once as Med, every host-ready file built coarser and every georeferenced file the Max bytes. A level is never in a name, so nothing but the manifest's one statement tells a validator which download it holds. 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
+      "reason": "The Med download of the same 3.0 bundle (format.md §8): the same seventy-one names and paths, the level stated once as Med, every host-ready file built coarser and every georeferenced file the Max bytes. A level is never in a name, so nothing but the manifest's one statement tells a validator which download it holds. 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
       "expectations": {
-        "hashesVerified": 68
+        "hashesVerified": 70
       }
     },
     {
@@ -2842,7 +2842,7 @@
       "stagedSchema": true,
       "reason": "The Min download of the same 3.0 bundle (format.md §8): the Max names at the third level, stated once as Min. 3.0.0 is staged, served and not yet in the freeze ledger, so the case is held to the served schema (`stagedSchema`).",
       "expectations": {
-        "hashesVerified": 68
+        "hashesVerified": 70
       }
     },
     {

@@ -1,5 +1,5 @@
 {
-  "$comment": "The same sixty-nine names at Min: the level the manifest states, every host-ready count a quarter of Max (a raster's, a side quartered), every georeferenced count as at Max.",
+  "$comment": "The same seventy-one names at Min: the level the manifest states, every host-ready count a quarter of Max (a raster's, a side quartered), every georeferenced count as at Max.",
   "bundle": "bundle/v3-full-min.json",
   "result": {
     "outcome": "read",
@@ -73,6 +73,8 @@
       {"path": "Basemap/Landuse.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
       {"path": "Basemap/Pavement.dxf", "family": "georeferenced", "frame": "order", "count": 120},
       {"path": "Basemap/Pavement.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Railways.dxf", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Railways.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
       {"path": "Basemap/Roads.csv", "family": "host-ready", "frame": "site", "count": 400},
       {"path": "Basemap/Roads.dxf", "family": "georeferenced", "frame": "order", "count": 120},
       {"path": "Basemap/Roads.gpkg", "family": "georeferenced", "frame": "order", "count": 120},

@@ -1,5 +1,5 @@
 {
-  "$comment": "The Min download of the same 3.0 bundle as `bundle/v3-full.json`: the same sixty-nine names and paths (format.md §8: a level belongs to the download, never to the file name), the level stated once, every host-ready file built coarser (here a different placeholder, so its sha256 differs) and its count quartered, every georeferenced file byte-identical to the Max file. The manifest is held to the served 3.0.0 schema, a staged release, which the validator reports at info (`schema.staged`).",
+  "$comment": "The Min download of the same 3.0 bundle as `bundle/v3-full.json`: the same seventy-one names and paths (format.md §8: a level belongs to the download, never to the file name), the level stated once, every host-ready file built coarser (here a different placeholder, so its sha256 differs) and its count quartered, every georeferenced file byte-identical to the Max file. The manifest is held to the served 3.0.0 schema, a staged release, which the validator reports at info (`schema.staged`).",
   "files": {
     "Manifest.json": {
       "version": "3.0.0",
@@ -293,6 +293,46 @@
           "levelled": false,
           "size_bytes": 38,
           "sha256": "cdc2a40829ab0a52b2750301c4b591b1291cc88c81dc7414b25b7ad0cdfd1efa",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ]
+        },
+        "Basemap/Railways.dxf": {
+          "subject": "Railway centrelines",
+          "format": "DXF, 2D lines",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 37,
+          "sha256": "f8ec527ec58562f1d6fa7bfbe437226c2dbcf79599142c2c0c48d3b7c7457657",
+          "count": {
+            "kind": "features",
+            "value": 120
+          },
+          "odbl_role": "database",
+          "license": "ODbL-1.0",
+          "sources": [
+            {
+              "name": "OpenStreetMap",
+              "license": "ODbL-1.0"
+            }
+          ]
+        },
+        "Basemap/Railways.gpkg": {
+          "subject": "Railway centrelines",
+          "format": "GeoPackage, 2D lines",
+          "family": "georeferenced",
+          "levelled": false,
+          "size_bytes": 38,
+          "sha256": "a1102db2f283de7068aa30dac776bccd03c10301a530377f1f6fc511bc865f79",
           "count": {
             "kind": "features",
             "value": 120
@@ -1593,6 +1633,8 @@
     "Basemap/Landuse.gpkg": "placeholder for Basemap/Landuse.gpkg\n",
     "Basemap/Pavement.dxf": "placeholder for Basemap/Pavement.dxf\n",
     "Basemap/Pavement.gpkg": "placeholder for Basemap/Pavement.gpkg\n",
+    "Basemap/Railways.dxf": "placeholder for Basemap/Railways.dxf\n",
+    "Basemap/Railways.gpkg": "placeholder for Basemap/Railways.gpkg\n",
     "Basemap/Roads.csv": "placeholder for Basemap/Roads.csv at Min\n",
     "Basemap/Roads.dxf": "placeholder for Basemap/Roads.dxf\n",
     "Basemap/Roads.gpkg": "placeholder for Basemap/Roads.gpkg\n",
