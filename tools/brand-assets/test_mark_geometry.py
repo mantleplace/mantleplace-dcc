@@ -105,6 +105,10 @@ class Targets(unittest.TestCase):
         unreal = {t.path.rsplit("/", 1)[-1]: t.size for t in g.targets() if t.path.startswith(g.UNREAL_RESOURCES)}
         self.assertEqual(unreal, {"MantlePlaceTabIcon.png": 64, "Icon128.png": 128})
 
+    def test_blender_gets_one_mark_its_preview_icon_renders_from(self):
+        blender = [t for t in g.targets() if t.path.startswith(g.BLENDER_RESOURCES)]
+        self.assertEqual(blender, [g.Target(f"{g.BLENDER_RESOURCES}/MantlePlaceMark.png", 32)])
+
     def test_every_target_already_exists_in_the_tree(self):
         root = Path(__file__).resolve().parent.parent.parent
         for target in g.targets():

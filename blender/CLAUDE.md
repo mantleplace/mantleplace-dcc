@@ -61,6 +61,11 @@ on a runner with no Blender.
   absent one is reported as unchecked, never as corrupt.
 - **No placement value is derived here.** The origin is applied verbatim; a patch that computes one
   locally is refused at review, however correct the arithmetic.
+- **The mark** (`HPS-64`): `resources/MantlePlaceMark.png` is rendered by
+  `tools/brand-assets/render_mark.py`, never edited here. Blender has no panel of ours to head, so the
+  mark goes where the plugin shows itself: the File > Import entry and the top of its **Add-ons**
+  preferences. Send Feedback keeps Blender's own `URL` glyph, a command beside other commands.
+  `--background` allocates no icon ids, so the headless run checks the loaded image, not the icon.
 - **Shared words** (`HPS-51`): `Import Bundle` and `Send Feedback`. The Send Feedback link is
   `core.feedback.feedback_url` (`HPS-56`), and `source` is `dcc-blender`.
 

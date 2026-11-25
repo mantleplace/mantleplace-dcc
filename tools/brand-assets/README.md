@@ -40,11 +40,13 @@ headless test of the core.
 | `…/MantlePlaceMark_64.png` | 64 |
 | `unreal/MantlePlace/Resources/MantlePlaceTabIcon.png` | 64 |
 | `unreal/MantlePlace/Resources/Icon128.png` | 128 |
+| `blender/mantleplace_blender/resources/MantlePlaceMark.png` | 32 |
 
 The .NET hosts pick a `MantlePlaceMark_*` file by slot and display scale (`MarkRenders`): the ribbon
 buttons, the window title bars and the dialog headers. Both Autodesk bundle icons are the 48 px file.
-Unreal's tab icon and panel header draw `MantlePlaceTabIcon.png`, and its plugin browser draws
-`Icon128.png`.
+Unreal's tab icon, panel header and Tools menu entry draw `MantlePlaceTabIcon.png`, and its plugin
+browser draws `Icon128.png`. Blender loads its file through `bpy.utils.previews`, which builds a
+32 px icon from it, and draws it on the File > Import entry and atop the plugin's **Add-ons** preferences.
 
 The AutoCAD plugin and the shared WPF windows read the Revit folder's files, so one set serves every
 .NET host. A new host or a new size is a new entry in `mark_geometry.targets()`.

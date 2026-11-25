@@ -70,6 +70,8 @@ def main():
 
     mantleplace_blender.register()
     check("mantleplace_bundle" in dir(bpy.ops.import_scene), "the plugin registers its operator")
+    from mantleplace_blender import shim
+    check(tuple(shim._previews[shim.MARK].image_size) == (32, 32), "the plugin loads the 32 px mark as a preview")
 
     fresh_scene()
     check(run_import(bundle, True) == {"FINISHED"}, "the import finishes with Features")

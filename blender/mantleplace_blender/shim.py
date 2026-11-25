@@ -8,6 +8,7 @@ import tempfile
 from dataclasses import dataclass, field
 
 import bpy
+import bpy.utils.previews
 from bpy.props import BoolProperty, StringProperty
 from bpy_extras.io_utils import ImportHelper
 from mathutils import Vector
@@ -19,6 +20,16 @@ from .core.feedback import feedback_url
 from .core.source import left_behind_note, open_bundle, remove_tree
 
 ROOT_LAYER = "Site.usda"
+MARK_FILE = os.path.join(os.path.dirname(__file__), "resources", "MantlePlaceMark.png")
+MARK = "mantleplace_mark"
+
+_previews = None
+
+
+def _mark_icon() -> int:
+    if _previews is None or MARK not in _previews:
+        return 0
+    return _previews[MARK].icon_id
 
 
 @dataclass
@@ -159,11 +170,13 @@ class MANTLEPLACE_AP_preferences(bpy.types.AddonPreferences):
     bl_idname = __package__
 
     def draw(self, context):
+        self.layout.label(text="Mantle Place", icon_value=_mark_icon())
         self.layout.operator(MANTLEPLACE_OT_send_feedback.bl_idname, icon="URL")
 
 
 def _import_menu(self, context):
-    self.layout.operator(MANTLEPLACE_OT_import_bundle.bl_idname, text="Mantle Place Bundle (.zip)")
+    self.layout.operator(MANTLEPLACE_OT_import_bundle.bl_idname, text="Mantle Place Bundle (.zip)",
+                         icon_value=_mark_icon())
 
 
 def _help_menu(self, context):
@@ -175,6 +188,9 @@ _CLASSES = (MANTLEPLACE_OT_import_bundle, MANTLEPLACE_OT_send_feedback, MANTLEPL
 
 
 def register() -> None:
+    global _previews
+    _previews = bpy.utils.previews.new()
+    _previews.load(MARK, MARK_FILE, "IMAGE")
     for cls in _CLASSES:
         bpy.utils.register_class(cls)
     bpy.types.TOPBAR_MT_file_import.append(_import_menu)
@@ -182,7 +198,11 @@ def register() -> None:
 
 
 def unregister() -> None:
+    global _previews
     bpy.types.TOPBAR_MT_help.remove(_help_menu)
     bpy.types.TOPBAR_MT_file_import.remove(_import_menu)
     for cls in reversed(_CLASSES):
         bpy.utils.unregister_class(cls)
+    if _previews is not None:
+        bpy.utils.previews.remove(_previews)
+        _previews = None

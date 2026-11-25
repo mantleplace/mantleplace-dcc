@@ -1,6 +1,7 @@
 // Copyright 2026 Mantle Place LLC. Licensed under the Apache License, Version 2.0.
 
 #include "MantlePlaceBundleCacheLogic.h"
+#include "MantlePlaceSha256.h"
 
 #include "Containers/StringConv.h"
 #include "Dom/JsonObject.h"

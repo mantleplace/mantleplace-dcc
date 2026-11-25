@@ -51,7 +51,7 @@ void FMantlePlaceEditorModule::RegisterMenus()
 		"MantlePlacePrepareForHandover",
 		LOCTEXT("PrepareForHandoverLabel", "Prepare for handover"),
 		LOCTEXT("PrepareForHandoverTooltip", "Remove the ODbL content the import filed under ODbL (or swap in its Produced Work) and add the credit, so this level is safe to ship or share. One undo step; nothing is saved."),
-		FSlateIcon(),
+		FSlateIcon(FMantlePlaceEditorStyle::GetStyleSetName(), "MantlePlace.TabIcon"),
 		FUIAction(FExecuteAction::CreateLambda([]()
 		{
 			FNotificationInfo Info(FText::FromString(MantlePlaceHandover::PrepareEditorWorld().Summary()));
