@@ -330,6 +330,7 @@ the corpus case `manifest.vectorLayerVocabulary` carries every name in it:
 | `water` | Water as the source maps it: streams as centrelines, water bodies as polygons | Lines, polygons and points | Overture base |
 | `land_use` | Land-use areas, with class and subtype | Mostly polygons; lines and points occur | Overture base |
 | `land_cover` | Physical ground cover, with a subtype such as forest | Polygons | Overture base |
+| `rail` | Railway centrelines, with class and name | Lines | Overture transportation |
 | `road_splines` | The `road` centrelines draped onto the delivered elevation, carrying an estimated width, class and name | Lines with Z | Derived from `road`, and marked with `derived_from` |
 | `road_polygons` | Road surfaces: the `road` centrelines widened by the same estimated width, merged per class, and cut so no two overlap (the wider class keeps the ground where classes meet), carrying class and width | Polygons | Derived from `road`, and marked with `derived_from` |
 

@@ -21,7 +21,7 @@ Imagery/    Imagery.tif  Imagery.png
 Landcover/  Landcover.tif  Landcover.gpkg  Landcover.dxf  Canopy.tif  Trees.gpkg  Trees.csv
 Materials/  Water.png  Grass.png  Forest.png  Dirt.png  Rock.png  Sand.png  Snow.png  Built.png
 Basemap/    Basemap.tif  Basemap.png  Basemap.usdz  Buildings.glb  Roads.csv
-            Buildings, Roads, Pavement, Water, Landuse   (each .gpkg + .dxf)
+            Buildings, Roads, Pavement, Railways, Water, Landuse   (each .gpkg + .dxf)
 Records/    Parcels, Zoning, Floodplain, Wetlands, Soils, Heritage, Conservation, Habitat,
             Hydrography, Contamination   (each .gpkg + .dxf)
 Site/       Site.usdz  Site.ifc  Site.dxf
@@ -100,7 +100,7 @@ Each host-ready format holds that frame in its own convention, which is fixed he
 
 ## 6. The file table
 
-One row per file of the tree, sixty-nine in all. **Family** is §4's. **Level** says whether the file is built at each level (§8): `yes` means the Med and Min downloads hold a coarser file under the same name; `no` means the three downloads hold the same bytes. **Precision** is the data type, the scale (what one stored unit means) and the no-data value; no reader depends on a scale tag inside the file, because this column and the catalog state it (§7). **Count** is what the catalog counts for that file (§9.5); `None` means the file has nothing to count, and its catalog entry states no count. Every file's entry states its size and its sha256, except that of `Manifest.json`, which cannot carry its own hash.
+One row per file of the tree, seventy-one in all. **Family** is §4's. **Level** says whether the file is built at each level (§8): `yes` means the Med and Min downloads hold a coarser file under the same name; `no` means the three downloads hold the same bytes. **Precision** is the data type, the scale (what one stored unit means) and the no-data value; no reader depends on a scale tag inside the file, because this column and the catalog state it (§7). **Count** is what the catalog counts for that file (§9.5); `None` means the file has nothing to count, and its catalog entry states no count. Every file's entry states its size and its sha256, except that of `Manifest.json`, which cannot carry its own hash.
 
 | File | Subject | Format | Family | Level | Precision | Count |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -146,6 +146,8 @@ One row per file of the tree, sixty-nine in all. **Family** is §4's. **Level** 
 | `Basemap/Roads.dxf` | Road centrelines, draped | DXF, 3D polylines | Georeferenced | no | Double coordinates in the order's unit and vertical datum | Features |
 | `Basemap/Pavement.gpkg` | Road surfaces, as areas | GeoPackage, 2D polygons | Georeferenced | no | Double coordinates in the order's unit | Features |
 | `Basemap/Pavement.dxf` | Road surfaces, as areas | DXF, 2D polygons | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Basemap/Railways.gpkg` | Railway centrelines | GeoPackage, 2D lines | Georeferenced | no | Double coordinates in the order's unit | Features |
+| `Basemap/Railways.dxf` | Railway centrelines | DXF, 2D lines | Georeferenced | no | Double coordinates in the order's unit | Features |
 | `Basemap/Water.gpkg` | Water bodies and waterways | GeoPackage, 2D | Georeferenced | no | Double coordinates in the order's unit | Features |
 | `Basemap/Water.dxf` | Water bodies and waterways | DXF, 2D | Georeferenced | no | Double coordinates in the order's unit | Features |
 | `Basemap/Landuse.gpkg` | Land use, as areas | GeoPackage, 2D polygons | Georeferenced | no | Double coordinates in the order's unit | Features |
@@ -184,6 +186,7 @@ One row per file of the tree, sixty-nine in all. **Family** is §4's. **Level** 
 - **`Trees.csv`** has the columns `x`, `y`, `ground_z`, `height_m`, `crown_radius_m` and `foliage_type`. The platform thins the trees by canopy, water and land cover when it writes the file, and ranks them: the Med and Min files are the first rows of the Max file, so a tree keeps its row at every level. `Trees.gpkg` holds the same trees as the Max `Trees.csv`, with the same attributes, in the georeferenced frame.
 - **`Roads.csv`** has one row per vertex, with the columns `road`, `vertex`, `x`, `y`, `z`, `class`, `width_m` and `name`. Rows of one road share its `road` number and are in vertex order.
 - **`Pavement`** holds the road surfaces as areas, not centrelines: the platform builds them, and a host never buffers a centreline to make them.
+- **`Railways`** holds the railway centrelines, each with its class and name. They come from the same Overture transportation segments as `Roads`, the segments whose subtype is rail, so the pair has the roads' sources and is an ODbL database like them (§3). It is held only where the AOI has rail: an AOI with none ships neither file, and the manifest lists both as not held because the AOI has no such data (§9.6).
 - **`Habitat`** is a critical-habitat designation; like every record, it is present only where the AOI has one. The `Parcels` pair is in the tree although many AOIs have no parcel source.
 - **`Basemap.usdz` and `Site.usdz` are kept apart on purpose:** `Basemap.usdz` holds the ODbL features as a database, with their attributes, and `Site.usdz` is the Produced Work scene. `Basemap.usdz` composes onto `Site.usdz` as a sublayer.
 - **`Site.dxf`** is the flat plan drawing of the site with its paper-space layouts, so a CAD user can plot the plan sheets.
@@ -418,4 +421,4 @@ The inventory in [`docs/import-inventory.md`](../docs/import-inventory.md#every-
 
 ## 15. The file-by-host table
 
-Before this text was frozen, three bundles were repacked into this tree and sixty files of the tree were opened in eight hosts with their own importers: QGIS, Blender, 3ds Max, AutoCAD, Civil 3D, Revit, Unreal Engine and Twinmotion. Unreal Engine and Twinmotion were given only the host-ready files. Of the sixty, fifty-eight opened in at least one host; `Readme.md` and `Manifest.json` (text) opened in none, since no host has an importer for them. The other nine files of the tree were not opened by any host: they joined the tree on the run's findings or had no source in the three bundles. The result, a row per file and a column per host, is [`file-by-host.md`](file-by-host.md). It is evidence for the tree, not part of the contract: a host's importer can change, and the promise in §3 does not.
+Before this text was frozen, three bundles were repacked into this tree and sixty files of the tree were opened in eight hosts with their own importers: QGIS, Blender, 3ds Max, AutoCAD, Civil 3D, Revit, Unreal Engine and Twinmotion. Unreal Engine and Twinmotion were given only the host-ready files. Of the sixty, fifty-eight opened in at least one host; `Readme.md` and `Manifest.json` (text) opened in none, since no host has an importer for them. The other nine files of the tree at the time were not opened by any host: they joined the tree on the run's findings or had no source in the three bundles. The `Railways` pair joined the tree after the run, from the same source as `Roads`, and was not opened either. The result, a row per file and a column per host, is [`file-by-host.md`](file-by-host.md). It is evidence for the tree, not part of the contract: a host's importer can change, and the promise in §3 does not.

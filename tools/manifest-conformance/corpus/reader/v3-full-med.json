@@ -1,5 +1,5 @@
 {
-  "$comment": "The same sixty-nine names at Med (format.md §8): the level is the one the manifest states, a host-ready file's count is its Max count halved (a raster's, a side halved), and a georeferenced file's count is unchanged.",
+  "$comment": "The same seventy-one names at Med (format.md §8): the level is the one the manifest states, a host-ready file's count is its Max count halved (a raster's, a side halved), and a georeferenced file's count is unchanged.",
   "bundle": "bundle/v3-full-med.json",
   "result": {
     "outcome": "read",
@@ -73,6 +73,8 @@
       {"path": "Basemap/Landuse.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
       {"path": "Basemap/Pavement.dxf", "family": "georeferenced", "frame": "order", "count": 120},
       {"path": "Basemap/Pavement.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Railways.dxf", "family": "georeferenced", "frame": "order", "count": 120},
+      {"path": "Basemap/Railways.gpkg", "family": "georeferenced", "frame": "order", "count": 120},
       {"path": "Basemap/Roads.csv", "family": "host-ready", "frame": "site", "count": 800},
       {"path": "Basemap/Roads.dxf", "family": "georeferenced", "frame": "order", "count": 120},
       {"path": "Basemap/Roads.gpkg", "family": "georeferenced", "frame": "order", "count": 120},

@@ -59,6 +59,17 @@
         ]
       },
       {
+        "name": "rail",
+        "feature_count": 14,
+        "formats": [
+          {
+            "format": "geojson",
+            "path": "Vector/Railway.geojson",
+            "sha256": "8888888888888888888888888888888888888888888888888888888888888888"
+          }
+        ]
+      },
+      {
         "name": "road_splines",
         "derived_from": "road",
         "feature_count": 96,
