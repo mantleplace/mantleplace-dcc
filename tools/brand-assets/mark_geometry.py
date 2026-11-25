@@ -11,9 +11,11 @@ BLACK = (0x00, 0x00, 0x00)
 HOST_SIZES = (16, 24, 32, 48, 64)
 UNREAL_SMALL_SIZE = 64
 UNREAL_ICON_SIZE = 128
+BLENDER_ICON_SIZE = 32
 
 REVIT_RESOURCES = "revit/src/MantlePlace.Revit.Addin/Resources"
 UNREAL_RESOURCES = "unreal/MantlePlace/Resources"
+BLENDER_RESOURCES = "blender/mantleplace_blender/resources"
 
 CURVE_SEGMENTS = 16
 
@@ -30,6 +32,7 @@ def targets() -> List[Target]:
     plan = [Target(f"{REVIT_RESOURCES}/MantlePlaceMark_{size}.png", size) for size in HOST_SIZES]
     plan.append(Target(f"{UNREAL_RESOURCES}/MantlePlaceTabIcon.png", UNREAL_SMALL_SIZE))
     plan.append(Target(f"{UNREAL_RESOURCES}/Icon128.png", UNREAL_ICON_SIZE))
+    plan.append(Target(f"{BLENDER_RESOURCES}/MantlePlaceMark.png", BLENDER_ICON_SIZE))
     return plan
 
 
