@@ -52,8 +52,19 @@ Upgrade by closing AutoCAD and running the new `Install.cmd` over the old one; n
   - `civil3d.import-check`, the Austin sample: pass, 40 of 40 in each year
 
   The first attempts at three AutoCAD 2025 checks stopped on AutoCAD's unsigned-file prompt, which the harness could not read, and the first Civil 3D 2026 import failed only the harness's own foreground assertion; each passed when run again.
+- Rebuilt at `4826187` on `main` for the cut: the shared core's import-window estimates and labels changed, so the full gate was run again (2026-11-25) against the rebuilt zip, installed clean by the host harness in AutoCAD and Civil 3D 2025, 2026 and 2027, signed in on the dev platform where a check signs in.
+
+  - `autocad.plugin-loads`: pass, 13 of 13 in each year
+  - `autocad.plugin-windows`: pass, 47 of 47 in each year
+  - `autocad.import-check`, the Austin sample: pass, 35 of 35 in each year
+  - `autocad.import-check`, a free 3.0.0 order at Min through the vault window: pass, 33 of 33 in each year
+  - `civil3d.plugin-loads`: pass, 13 of 13 in each year
+  - `civil3d.plugin-windows`: pass, 47 of 47 in each year
+  - `civil3d.import-check`, the Austin sample: pass, 40 of 40 in each year
+
+  The first vault imports in each AutoCAD year stopped when the dev platform answered the download with HTTP 500, for every client; each passed once the dev server was restarted. The first `civil3d.plugin-windows` in Civil 3D 2025 and the first `civil3d.plugin-loads` in Civil 3D 2026 stopped with the plugin not loaded after the harness had pressed Load Once at Civil 3D's unsigned-file prompt, and two Civil 3D 2026 runs and the second Civil 3D 2025 `civil3d.plugin-windows` failed only the harness's own foreground assertion; each passed when run again.
 - Published asset: <check from step 4 and its date>.
-- `MantlePlace-AutoCad-1.3.0.zip` sha256 `a78e3448e387bbacee5454665a406e3b740810f266cea1088922f038ca9a9e61`, built at `55e39f3`
+- `MantlePlace-AutoCad-1.3.0.zip` sha256 `23cc1bf5b55380111adbce19ad64348a6c7a1f61e4bbbeb5ec84d3419aa1cc90`, built at `4826187`
 - Storefront: <submitted to the Autodesk storefront on date>, from the asset above.
 
 Previous: [autocad-1.2.0](https://github.com/mantleplace/mantleplace-dcc/releases/tag/autocad-1.2.0)
