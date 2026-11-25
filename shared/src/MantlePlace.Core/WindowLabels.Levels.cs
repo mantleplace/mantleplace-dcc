@@ -88,6 +88,7 @@ public static partial class WindowLabels
             CostUnit.Triangles => cost.Count == 1 ? "triangle" : "triangles",
             CostUnit.Pixels => cost.Count == 1 ? "pixel" : "pixels",
             CostUnit.Posts => cost.Count == 1 ? "post" : "posts",
+            CostUnit.RoadSurfaces => cost.Count == 1 ? "road surface" : "road surfaces",
 
             _ => string.Empty,
         };

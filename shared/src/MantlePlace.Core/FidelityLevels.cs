@@ -62,6 +62,7 @@ public enum CostUnit
     Triangles,
     Pixels,
     Posts,
+    RoadSurfaces,
 }
 
 public enum SameAsReason

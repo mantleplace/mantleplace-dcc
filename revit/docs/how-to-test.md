@@ -29,9 +29,11 @@ the United States, so its flood zones draw on the hazard plan.
 
 1. `Mantle Place ▸ Bundles ▸ Import Bundle`, and pick the zip.
 2. The **Bundle Import** window opens. Under the bundle's name, one line names its units and coordinate system.
-   Below it is a checklist headed **Include**, one box per layer, every box ticked but **Site Model**.
-3. Untick **Road Subdivisions**, the road surfaces, and leave the other boxes as they are. Press **Import**.
-   Nothing runs before this.
+   Below it is a checklist headed **Include**, one box per layer, every box ticked but **Site Model** and
+   **Road Subdivisions**, the road surfaces. The note under Road Subdivisions estimates them at over five
+   minutes, which is why that box starts unticked; the notes under Planting and Context Buildings give their
+   estimates too.
+3. Leave the boxes as they are and press **Import**. Nothing runs before this.
 4. The window lists each step and marks it `Waiting`, `Importing` and `Done`, counting the buildings and trees in
    as they go. On our test workstation the import took at most 8 minutes, in Revit 2026, and less in Revit 2025
    and 2027. Revit may say "not responding" while the terrain is committed; the window keeps its clock running

@@ -171,6 +171,11 @@ Revit 2027.
 **What the window told the reviewer:** in the import window, opened on the same zip, the note under Road
 Subdivisions read "13 subdivisions, about 8 to 22 seconds" in Revit 2025 and about 24 to 32 seconds in Revit 2026
 and 2027, so the box was not unticked as over budget. The step cut 66 subdivisions and took 485 to 1,346 s.
+The count was the catalog's 13 road-surface features, priced at the time per subdivision. The note now prices each
+road-surface feature at this gate's own time per feature, so the same zip reads "13 road surfaces, about 18
+minutes" in Revit 2025, about 22 minutes in Revit 2026 and about 8 minutes in Revit 2027, and the box starts
+unticked. The Planting and Context Buildings notes scale from this gate's runs and the earlier Max-level runs
+of the same order; no other box has an estimate.
 
 **A repeat that differed, again:** `ContextBuildings` took 129.8 s in Revit 2026, against 16.0 s and 9.5 s in
 the other two, as the 1.2.0 gate's first Revit 2026 run did; the gate did not look for the cause.

@@ -27,6 +27,10 @@ public static class SlowStepNotice
 
         public UnitCost? PerUnit { get; init; }
 
+        public UnitCost? PerCatalogCount { get; init; }
+
+        public UnitCost? CostPer(CostUnit unit) => new[] { PerUnit, PerCatalogCount }.FirstOrDefault(cost => cost?.Unit == unit);
+
         public SecondsRange? In(int version) => ForVersion(version, Revit2025, Revit2026, Revit2027);
 
         public double Slowest => MeasuredVersions
@@ -69,7 +73,7 @@ public static class SlowStepNotice
 
     public static LevelEstimate? EstimateLevel(ImportStepKind kind, CostDriver? cost, string? revitVersionNumber)
     {
-        if (cost is not { Unit: not CostUnit.Unknown } || Measured(kind)?.PerUnit is not { } perUnit || perUnit.Unit != cost.Unit)
+        if (cost is not { Unit: not CostUnit.Unknown } || Measured(kind)?.CostPer(cost.Unit) is not { } perUnit)
         {
             return null;
         }
@@ -92,7 +96,7 @@ public static class SlowStepNotice
     }
 
     public static CostDriver? CostOfCatalogCount(ImportStepKind kind, long? count)
-        => count is { } stated && Measured(kind)?.PerUnit is { } perUnit
+        => count is { } stated && Measured(kind) is { } measured && (measured.PerCatalogCount ?? measured.PerUnit) is { } perUnit
             ? new CostDriver(perUnit.Unit, perUnit.Unit.ToString().ToLowerInvariant(), stated)
             : null;
 
@@ -101,7 +105,10 @@ public static class SlowStepNotice
         ImportStepKind.ToposurfaceFromPointsFile or ImportStepKind.ToposurfaceFromSurfaceTin
             => new(new(25.9, 41.9), new(57.3, 58.2), new(59.6, 79.1)),
         ImportStepKind.PublishedContours => new(new(2.1, 3.1), new(2.2, 2.2), new(2.2, 3.3)),
-        ImportStepKind.ContextBuildings => new(new(33.6, 57.4), new(32.4, 41.3), new(35.9, 59.2)),
+        ImportStepKind.ContextBuildings => new(new(33.6, 57.4), new(32.4, 41.3), new(35.9, 59.2))
+        {
+            PerUnit = new(CostUnit.Elements, new(0.0255, 0.0436), new(0.0245, 0.289), new(0.0211, 0.0452)),
+        },
         ImportStepKind.LinkSiteIfc => new(new(41.1, 71.2), new(39.3, 39.5), new(43.8, 44.6)),
         ImportStepKind.SetSharedCoordinates or ImportStepKind.SetSiteLocation or ImportStepKind.RoadCentrelines
             => new(new(1.6, 3.1), new(1.9, 1.9), new(1.6, 2.8)),
@@ -109,10 +116,11 @@ public static class SlowStepNotice
         ImportStepKind.RoadPolygons => new(new(870, 1_112), new(1_318.6, 1_754.6), new(1_337.0, 1_781.7))
         {
             PerUnit = new(CostUnit.Cuts, new(0.65, 1.67), new(1.90, 2.49), new(1.85, 2.46)),
+            PerCatalogCount = new(CostUnit.RoadSurfaces, new(83.3, 83.3), new(103.5, 103.5), new(37.3, 37.3)),
         },
         ImportStepKind.Vegetation => new(new(206, 415), new(266, 275), new(231, 338))
         {
-            PerUnit = new(CostUnit.Elements, new(0.00328, 0.00561), new(0.00334, 0.00565), new(0.00332, 0.00580)),
+            PerUnit = new(CostUnit.Elements, new(0.00328, 0.00647), new(0.00334, 0.00565), new(0.00332, 0.00580)),
         },
         ImportStepKind.AttributionAndProvenance => new(new(0.1, 0.6), new(0.1, 0.1), new(0.1, 0.2)),
         ImportStepKind.SiteContextView => new(new(0.5, 0.6), new(0.8, 1.0), new(0.8, 1.0)),

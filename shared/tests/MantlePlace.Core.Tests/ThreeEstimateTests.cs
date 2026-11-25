@@ -10,6 +10,8 @@ internal static class ThreeEstimateTests
 
     private const string TreesPath = "Landcover/Trees.csv";
 
+    private const string SiteModelPath = "Site/Site.ifc";
+
     internal static int Run()
     {
         TestRun run = new();
@@ -19,14 +21,32 @@ internal static class ThreeEstimateTests
             BundleImportPlan plan = PlanWith(pavement: 2_000, trees: 5_000);
 
             CostDriver? roads = ThreePlanTests.Step(plan, ImportStepKind.RoadPolygons)?.Cost;
-            run.True(roads is { Unit: CostUnit.Cuts, Count: 2_000 }, "the road surfaces' features are cuts");
+            run.True(roads is { Unit: CostUnit.RoadSurfaces, Count: 2_000 }, "the road surfaces' features are road surfaces, not the subdivisions Revit cuts them into");
 
             CostDriver? trees = ThreePlanTests.Step(plan, ImportStepKind.Vegetation)?.Cost;
             run.True(trees is { Unit: CostUnit.Elements, Count: 5_000 }, "the trees' rows are elements");
 
+            CostDriver? buildings = ThreePlanTests.Step(plan, ImportStepKind.ContextBuildings)?.Cost;
+            run.True(buildings is { Unit: CostUnit.Elements, Count: 450 }, "the site model's features are elements");
+
             run.True(
-                plan.Steps.Where(step => step.Kind is not (ImportStepKind.RoadPolygons or ImportStepKind.Vegetation)).All(step => step.Cost is null),
+                plan.Steps.Where(step => step.Kind is not (ImportStepKind.RoadPolygons or ImportStepKind.Vegetation or ImportStepKind.ContextBuildings))
+                    .All(step => step.Cost is null),
                 "a step with no measured cost per unit has no cost to estimate from");
+        });
+
+        run.Case("the measured order's 13 road surfaces break the budget in every Revit it was timed in, as they did", () =>
+        {
+            (string Version, string Estimate)[] measured = [("2025", "about 18 minutes"), ("2026", "about 22 minutes"), ("2027", "about 8 minutes")];
+            foreach ((string version, string estimate) in measured)
+            {
+                ImportChecklist checklist = ImportChecklist.For(PlanWith(pavement: 13, trees: 7_302), version);
+                run.True(checklist.IsOverBudget(ImportLayer.RoadSubdivisions), $"Revit {version}: over five minutes");
+                run.False(checklist.IsChecked(ImportLayer.RoadSubdivisions), $"Revit {version}: so the box starts unticked");
+                string note = checklist.EstimateNote(ImportLayer.RoadSubdivisions) ?? string.Empty;
+                run.Contains(note, "13 road surfaces", $"Revit {version}: the note says what was counted");
+                run.Contains(note, estimate, $"Revit {version}: and the time the 1.3.0 gate measured");
+            }
         });
 
         run.Case("a layer over the five-minute budget starts unticked with its estimate and a plain line; one inside starts ticked", () =>
@@ -34,12 +54,11 @@ internal static class ThreeEstimateTests
             ImportChecklist checklist = ImportChecklist.For(PlanWith(pavement: 2_000, trees: 5_000), "2026");
 
             run.True(checklist.Layers.Contains(ImportLayer.RoadSubdivisions), "the bundle offers the road surfaces");
-            run.True(checklist.IsOverBudget(ImportLayer.RoadSubdivisions), "2,000 cuts at 1.9 to 2.5 s each break the budget");
+            run.True(checklist.IsOverBudget(ImportLayer.RoadSubdivisions), "2,000 road surfaces break the budget");
             run.False(checklist.IsChecked(ImportLayer.RoadSubdivisions), "so the box starts unticked");
             run.True(checklist.IsEnabled(ImportLayer.RoadSubdivisions), "and the curator can tick it");
             string note = checklist.EstimateNote(ImportLayer.RoadSubdivisions) ?? string.Empty;
-            run.Contains(note, "2,000 subdivisions", "the note says what was counted");
-            run.Contains(note, "about 63 to 83 minutes", "and the estimate");
+            run.Contains(note, "2,000 road surfaces", "the note says what was counted");
             run.Contains(note, "five minutes", "and why it starts unticked");
 
             run.False(checklist.IsOverBudget(ImportLayer.Planting), "5,000 trees at 3.3 to 5.7 ms each fit");
@@ -53,9 +72,30 @@ internal static class ThreeEstimateTests
 
         run.Case("a bundle whose road surfaces fit starts them ticked", () =>
         {
-            ImportChecklist checklist = ImportChecklist.For(PlanWith(pavement: 120, trees: 5_000), "2026");
-            run.True(checklist.IsChecked(ImportLayer.RoadSubdivisions), "120 cuts take about 4 to 5 minutes at most");
-            run.Contains(checklist.EstimateNote(ImportLayer.RoadSubdivisions) ?? string.Empty, "minutes", "and show the estimate");
+            ImportChecklist checklist = ImportChecklist.For(PlanWith(pavement: 2, trees: 5_000), "2026");
+            run.True(checklist.IsChecked(ImportLayer.RoadSubdivisions), "2 road surfaces take about 3 minutes");
+            run.Contains(checklist.EstimateNote(ImportLayer.RoadSubdivisions) ?? string.Empty, "about 3 minutes", "and show the estimate");
+        });
+
+        run.Case("the trees' estimate holds the 1.3.0 gate's slowest Revit 2025 run", () =>
+        {
+            ImportChecklist checklist = ImportChecklist.For(PlanWith(pavement: 2, trees: 7_302), "2025");
+            run.Contains(checklist.EstimateNote(ImportLayer.Planting) ?? string.Empty, "7,302 elements, about 24 to 47 seconds", "47.2 s was measured");
+        });
+
+        run.Case("the context buildings are estimated per building, and a large order's start unticked in Revit 2026", () =>
+        {
+            ImportChecklist measured = ImportChecklist.For(PlanWith(pavement: 2, trees: 7_302, buildings: 450), "2025");
+            run.True(measured.IsChecked(ImportLayer.ContextBuildings), "the measured order's 450 fit");
+            run.Contains(measured.EstimateNote(ImportLayer.ContextBuildings) ?? string.Empty, "450 elements, about 11 to 20 seconds", "with their estimate");
+
+            ImportChecklist slow = ImportChecklist.For(PlanWith(pavement: 2, trees: 7_302, buildings: 450), "2026");
+            run.True(slow.IsChecked(ImportLayer.ContextBuildings), "Revit 2026's slowest run of them still fits");
+            run.Contains(slow.EstimateNote(ImportLayer.ContextBuildings) ?? string.Empty, "about 1 to 2 minutes", "and says so");
+
+            ImportChecklist large = ImportChecklist.For(PlanWith(pavement: 2, trees: 7_302, buildings: 1_319), "2026");
+            run.True(large.IsOverBudget(ImportLayer.ContextBuildings), "1,319 buildings at up to 0.29 s each break the budget");
+            run.False(large.IsChecked(ImportLayer.ContextBuildings), "so they start unticked");
         });
 
         run.Case("ticking the layer imports all of it: the plan reads the whole file, with its count unchanged", () =>
@@ -110,8 +150,8 @@ internal static class ThreeEstimateTests
         return run.Report("MPB 3.0 estimate");
     }
 
-    private static BundleImportPlan PlanWith(long pavement, long trees)
-        => Plan(Manifest(pavement, trees), ImportLayerChoice.All);
+    private static BundleImportPlan PlanWith(long pavement, long trees, long buildings = 450)
+        => Plan(Manifest(pavement, trees, buildings), ImportLayerChoice.All);
 
     private static BundleImportPlan Plan(BundleManifest manifest, ImportLayerChoice choice)
         => BundleImportPlanner.Plan(
@@ -120,11 +160,12 @@ internal static class ThreeEstimateTests
             _ => new ImageSize(1024, 1024),
             choice);
 
-    private static BundleManifest Manifest(long pavement, long trees)
+    private static BundleManifest Manifest(long pavement, long trees, long buildings = 450)
         => ThreePlanTests.Read(ThreePlanTests.Load(FullBundle, root =>
         {
             JsonObject catalog = root["catalog"]!.AsObject();
             catalog[PavementPath]!["count"]!["value"] = pavement;
             catalog[TreesPath]!["count"]!["value"] = trees;
+            catalog[SiteModelPath]!["count"]!["value"] = buildings;
         }));
 }
