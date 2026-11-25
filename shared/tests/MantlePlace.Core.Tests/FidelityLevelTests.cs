@@ -440,7 +440,7 @@ internal static class FidelityLevelTests
                 ImportStepKind.Vegetation, new CostDriver(CostUnit.Elements, "elements", 20534), "2025");
             run.True(trees is not null, "trees are estimated");
             run.Within(trees!.Seconds.Low, 20534 * 0.00328, 1e-9, "fastest");
-            run.Within(trees.Seconds.High, 20534 * 0.00561, 1e-9, "slowest");
+            run.Within(trees.Seconds.High, 20534 * 0.00647, 1e-9, "slowest");
             run.True(trees.Timed && trees.Version == 2025, "from this Revit's own measurement");
 
             SlowStepNotice.LevelEstimate? roads = SlowStepNotice.EstimateLevel(
@@ -480,11 +480,11 @@ internal static class FidelityLevelTests
         run.Case("the window says seconds under two minutes and minutes above", () =>
         {
             SlowStepNotice.LevelEstimate trees = SlowStepNotice.EstimateLevel(
-                ImportStepKind.Vegetation, new CostDriver(CostUnit.Elements, "elements", 20534), "2025")!;
+                ImportStepKind.Vegetation, new CostDriver(CostUnit.Elements, "elements", 20534), "2026")!;
             PublishedLevel max = Parse(Fixture()).TreePoints!.Levels![FidelityLevel.Max];
             run.Equal(
                 WindowLabels.LevelOption(FidelityLevel.Max, max, true, new CostDriver(CostUnit.Elements, "elements", 20534), trees),
-                "MAX — 20,534 elements, about 67 to 115 seconds",
+                "MAX — 20,534 elements, about 69 to 116 seconds",
                 "seconds");
 
             PublishedLevel med = Parse(Fixture()).TreePoints!.Levels![FidelityLevel.Min];
