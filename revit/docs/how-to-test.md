@@ -30,17 +30,20 @@ the United States, so its flood zones draw on the hazard plan.
 1. `Mantle Place ▸ Bundles ▸ Import Bundle`, and pick the zip.
 2. The **Bundle Import** window opens. Under the bundle's name, one line names its units and coordinate system.
    Below it is a checklist headed **Include**, one box per layer, every box ticked but **Site Model**.
-3. Leave the defaults and press **Import**. Nothing runs before this.
+3. Untick **Road Subdivisions**, the road surfaces, and leave the other boxes as they are. Press **Import**.
+   Nothing runs before this.
 4. The window lists each step and marks it `Waiting`, `Importing` and `Done`, counting the buildings and trees in
-   as they go. On our test workstation the whole import took about 24 minutes in Revit 2025, 32 minutes in Revit
-   2026 and 13 minutes in Revit 2027, most of it on the road surfaces. Revit may say "not responding" while the
-   terrain is committed; the window keeps its clock running and Revit comes back by itself.
+   as they go. On our test workstation the import took at most 8 minutes, in Revit 2026, and less in Revit 2025
+   and 2027. Revit may say "not responding" while the terrain is committed; the window keeps its clock running
+   and Revit comes back by itself. With every box ticked, road surfaces included, the same import took up to 32
+   minutes.
 
 ## 4. What you should see
 
 - A terrain (toposolid) about 1.4 km across, with aerial imagery draped on it, contours, and the site's
   buildings as context, each one its own element.
-- Roads, road surfaces and water on the terrain, and trees planted on it.
+- Road centrelines and water on the terrain, and trees planted on it; no road surfaces, because their box was
+  unticked.
 - A 3D view named **Mantle Place Site Context**.
 - Floor plans whose names begin **Mantle Place Hazard Plan**, **Mantle Place Land Use Plan** and **Mantle Place
   Land Cover Plan**, each with a key beside the site. A layer the area has none of draws no plan.

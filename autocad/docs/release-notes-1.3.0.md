@@ -44,8 +44,16 @@ Upgrade by closing AutoCAD and running the new `Install.cmd` over the old one; n
   - `civil3d.import-check`, the Austin Downtown sample at Min (bundle 3.0.0) from disk: pass, 40 of 40 in each year
 
   The import window's closing report was read for the same sample in each year, once in a drawing set to metres and once in a drawing set to feet, both in the sample's zone. In metres the surface was built as a TIN surface of 75,297 points, and the import took 10.13 s in Civil 3D 2025, 9.05 s in Civil 3D 2026 and 7.69 s in Civil 3D 2027, the sum of the step times its closing report lists, of which building the surface took 9.33 s, 8.39 s and 7.08 s. In feet the surface was not imported, and the report said why: the drawing's Civil 3D units are feet and the order is in metres, so set them to metres (Drawing Settings, Units and Zone) and import again; the aerial image, contours, public-record layers and site linework were imported, in 0.79 s, 0.74 s and 0.67 s. The vault window was captured with the free order chosen in Civil 3D 2025, 2026 and 2027, signed in on the dev platform: each image shows the free order's row selected and the level control reading `Max — 69.2 MB (recommended)`, with no locked row and no wording about paid sites.
+- Rebuilt at `55e39f3` on `main` for the cut: the shared core gained a step only Revit calls, so the gate was run again (2026-11-24) against the rebuilt zip, installed clean by the host harness in AutoCAD and Civil 3D 2025, 2026 and 2027, with the Austin Downtown sample at Min imported from disk.
+
+  - `autocad.plugin-loads`: pass, 13 of 13 in each year
+  - `autocad.import-check`, the Austin sample: pass, 35 of 35 in each year
+  - `civil3d.plugin-loads`: pass, 13 of 13 in each year
+  - `civil3d.import-check`, the Austin sample: pass, 40 of 40 in each year
+
+  The first attempts at three AutoCAD 2025 checks stopped on AutoCAD's unsigned-file prompt, which the harness could not read, and the first Civil 3D 2026 import failed only the harness's own foreground assertion; each passed when run again.
 - Published asset: <check from step 4 and its date>.
-- `MantlePlace-AutoCad-1.3.0.zip` sha256 `f4578adbdd70e66d6452af67b4c76354a910a6712623b334394b00f34e5936e0`
+- `MantlePlace-AutoCad-1.3.0.zip` sha256 `a78e3448e387bbacee5454665a406e3b740810f266cea1088922f038ca9a9e61`, built at `55e39f3`
 - Storefront: <submitted to the Autodesk storefront on date>, from the asset above.
 
 Previous: [autocad-1.2.0](https://github.com/mantleplace/mantleplace-dcc/releases/tag/autocad-1.2.0)
