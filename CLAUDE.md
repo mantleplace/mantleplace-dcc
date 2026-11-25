@@ -3,7 +3,7 @@
 **This repo is `mantleplace-dcc`. Version control is git. It is open source, Apache 2.0, and
 everything in it is world-readable.**
 
-Read that line before running any write command. Both halves matter — see "The three rules" below.
+Both halves matter: see the content-law card and "Rule 3" below.
 
 **Workflow** — worktrees, branches, commits, the gate, closing an issue, landing — is
 [`docs/agents/contributor-procedure.md`](docs/agents/contributor-procedure.md). This file holds only
@@ -41,13 +41,6 @@ and everything in it is world-readable.
 
 ## Identity
 
-| | |
-| --- | --- |
-| Repo | `mantleplace/mantleplace-dcc` on GitHub |
-| VCS | **git**. No Git LFS — see "Binaries" below |
-| Licence | [Apache 2.0](LICENSE), except `spec/` prose (CC BY 4.0); the name is not licensed ([TRADEMARK.md](TRADEMARK.md)) |
-| Contribution terms | DCO sign-off, no CLA ([CONTRIBUTING.md](CONTRIBUTING.md)) |
-
 **dcc means *digital content creation*:** the host applications designers work in. This repo holds
 the Mantle Place plugin for each such host, and nothing else. A consumer mounts it as a git
 submodule inside the Unreal project's `Plugins/` directory, where plugin discovery is a recursive
@@ -70,42 +63,14 @@ tool and check script (`HPS-50`), a Send Feedback action (`HPS-56`), and its own
 repository's code** — paths, folders, modules, symbols — **not the strings a plugin writes into a
 user's project** ([`unreal/CLAUDE.md`](unreal/CLAUDE.md#naming)).
 
-## The three rules
+## Rule 3, if this tree is a submodule
 
-### 1. Everything here is public
-
-Anything you write lands in a world-readable repository, permanently, across six surfaces: tracked
-files, commit messages, pull request titles, pull request bodies, branch names and the issue
-tracker's own text. Internal trackers, documents and repositories are not citable here — not by URL,
-path or issue number; a bare `#42` in a Markdown file auto-links to *this* repo's issue 42. No
-credentials, including in `.uasset` files, which serialize property values. `ci-public-hygiene`
-checks the first five (its `references` job is required on `main`); `ci-tracker-hygiene` detects the
-sixth after the fact. **Before writing on any of the six, read
-[`docs/agents/public-surface.md`](docs/agents/public-surface.md)** — what is refused, the one split
-that makes a bare `#42` fine in a commit message, the exemptions, and the pre-publication hook.
-
-### 2. Confirm the repo before any write command
-
-`git remote -v` must show `mantleplace-dcc`. Sibling checkouts of other Mantle Place repositories
-sit beside this one, all git, so a confused session can run a *successful* commit in the wrong
-place — silently. Never assume the working directory from conversation history; check it.
-
-### 3. If this tree is a submodule, create a branch before your first edit
-
-⛔ **Run `git status` first. `HEAD detached at <sha>` means you are inside a consumer's submodule
-checkout, and a commit made now belongs to no branch.** That is the default state in every consumer
-— `git submodule update` checks out a commit, not a branch — and the next update leaves the commit
-unreachable. Nothing warns you. Before you edit anything:
-
-```bash
-git fetch origin
-git switch -c <type>/<short-description> origin/main
-```
-
-Commit with `-s` ([CONTRIBUTING.md](CONTRIBUTING.md)), **push the branch before touching the
-consuming project**, and open the PR here. The consumer's pin moves only after that PR merges, and
-only to the merged commit on `main` — a pin to your branch tip is unfetchable for everyone else. The
-Mantle Place project tree mounts this repo at `Plugins/MantlePlaceDcc/` and documents its side.
+`git status` first. `HEAD detached at <sha>` is a consumer's submodule checkout (the default state after
+`git submodule update`), and a commit made there belongs to no branch and is lost on the next update. Branch
+before the first edit (the card's Rule 3), commit with `-s`, **push the branch before touching the consuming
+project**, and open the PR here. The consumer's pin moves only after that PR merges, and only to the merged
+commit on `main`: a pin to a branch tip is unfetchable for everyone else. The Mantle Place project tree mounts
+this repo at `Plugins/MantlePlaceDcc/` and documents its side.
 
 ## Worktrees
 
@@ -118,22 +83,17 @@ and everything else about worktrees, are in
 
 ## Releases
 
-**One release track per host** (plus the `mpb` Python reader, tagged `mpb-<version>`), tagged `<host>-<version>` with no `v` (`revit-0.1.0`,
-`unreal-0.4.0`), so tag-matches-artifact is a string equality. The release body is the changelog and
-the provenance record; there is no changelog file. **No host release is built or gated in public CI,
-ever** — both hosts need a licensed install, so packaging runs privately. The one exception is the
-pure-Python `mpb` track, published to PyPI by `release-mpb.yml` ([ADR 0017](docs/adr/0017-the-mpb-reader-is-a-ci-published-python-track.md)).
-[ADR 0001](docs/adr/0001-per-host-release-tracks.md) holds why; [`docs/releases.md`](docs/releases.md) holds
-the cut order, the title and the body template every release follows; each host's README holds its
-packaging.
+**One release track per host**, tagged `<host>-<version>` with no `v`; the body is the changelog and the
+provenance record, with no changelog file. **No host release is built or gated in public CI, ever**: hosts
+need a licensed install, so packaging runs privately. The one exception is the pure-Python `mpb` track
+([ADR 0017](docs/adr/0017-the-mpb-reader-is-a-ci-published-python-track.md)). Cut order and body template:
+[`docs/releases.md`](docs/releases.md); why: [ADR 0001](docs/adr/0001-per-host-release-tracks.md).
 
 ## Binaries
 
-**No Git LFS, on purpose** — a stranger's first clone must not be a multi-hundred-megabyte pull. The
-binaries here are plain git blobs. **Ask before you `git add` any binary**, a new file of a type already here
-included: the axis is bytes, not novelty, and there is deliberately no per-file size threshold, which
-is why the answer is to ask. A binary committed here is in history forever. **No engine binaries, no
-compiled plugins, no test bundles, no sample assets, no sample bundles — ever**; real geospatial data
+**No Git LFS, on purpose**: a stranger's first clone must not be a multi-hundred-megabyte pull. **Ask before
+you `git add` any binary**, a new file of a type already here included: the axis is bytes, not novelty, so
+there is no per-file size threshold. A binary committed here is in history forever. Real geospatial data
 carries licence obligations, so the docs show generation instead.
 
 ## The boundary that keeps this client thin
@@ -188,28 +148,7 @@ Most facts already have exactly one home. Find it before writing a fact down any
 - **CI jobs, required checks, workflow rules** → [`docs/agents/ci.md`](docs/agents/ci.md).
 - **What a word means** → [`CONTEXT.md`](CONTEXT.md) — the glossary only; no rule, decision or
   implementation detail. A term belongs there once the same word has meant two things to two people.
-- **Why a decision was taken** → [`docs/adr/`](docs/adr/), numbered and append-only:
-  **0001** per-host release tracks, no `v` · **0002** Unreal: a **re-import replaces** ·
-  **0003** naming authority and the `MP_` prefix · **0004** Revit terrain: a **re-import refuses** ·
-  **0005** release installs are copy-first · **0006** Unreal **declines**
-  `elevation.dem.bounds_target_crs`, Revit consumes it · **0007** a publicly cited `HPS-NN` must
-  resolve in a public document · **0008** the Revit drape is anchored to the **smooth-shading
-  origin** · **0009** host assets render the **monogram** (superseded by 0033) · **0010** Revit tooltip **vignettes are
-  drawn**, capped at 355 px · **0011** the Revit provenance **schema GUID is permanent** ·
-  **0012** Revit context buildings are **the site model's own extrusions, copied** · **0013** Revit
-  **published contours** are DirectShapes · **0014** Revit draws hazards **on a hazard plan** ·
-  **0015** Revit **subdivides only roads and water**; land use and land cover go **on land plans** ·
-  **0016** Unreal **Mesh Terrain is parked** until UE 5.9; the Landscape stays the only terrain target ·
-  **0017** the **mpb reader** is a CI-published Python track, tagged `mpb-<version>` ·
-  **0018** the **Revit track goes to 1.0.0** for its storefront; Unreal's numbering is unaffected.
-  Amendment A1: any track published to the Autodesk storefront starts at 1.0.0, and the AutoCAD track starts at `autocad-1.0.0`.
-  **0019** plugins share **a common core, a .NET home and corpus cases**; each host keeps its **own version track**.
-  **0020** to **0031** the decisions the removed code comments held: **0020** the Revit plugin · **0021** Revit tooling and the shared core ·
-  **0022** the shared .NET core library · **0023** the shared core behind the Revit import · **0024** the shared client and WPF code ·
-  **0025** shared core, import and site handling · **0026** the Unreal editor importer · **0027** Unreal editor import path ·
-  **0028** Unreal editor module and tests · **0029** Unreal auth, cache and vault · **0030** Unreal runtime, corpus reader and Cesium streaming ·
-  **0031** CI, AutoCAD, Blender and gate tooling. **0032** **code carries no comments**; the `comment-ratchet` check holds the line. **0033** every host shows **the round mark with its extrude**, rendered from one source. **0034** **no plugin upsells**: a locked Extra is left out and a refusal says `Not included in this bundle.`
-  When to write one, and the two edits it takes: [`docs/agents/domain.md`](docs/agents/domain.md).
+- **Why a decision was taken** → [`docs/adr/`](docs/adr/), numbered and append-only (the file names are the titles). When to write one, and the two edits it takes: [`docs/agents/domain.md`](docs/agents/domain.md).
 - **The manifest contract** → the published JSON Schema series, cited by public URL. It is the
   authority; never restate a value it owns or hardcode a version in prose — each host's verified
   version lives in

@@ -8,7 +8,13 @@
       "Read(/revit/**/bin/**)",
       "Read(/revit/**/obj/**)",
       "Read(/revit/dist/**)",
-      "Read(**/.venv/**)"
+      "Read(**/.venv/**)",
+      "Artifact",
+      "mcp__Claude_Browser__*",
+      "mcp__visualize__*",
+      "SuggestPluginInstall",
+      "SearchPlugins",
+      "SuggestSkills"
     ]
   }
 }
