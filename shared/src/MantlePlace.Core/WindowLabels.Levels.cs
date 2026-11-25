@@ -42,7 +42,7 @@ public static partial class WindowLabels
         text += " — " + CostText(cost);
         if (estimate is not null)
         {
-            text += ", about " + Duration(estimate.Seconds);
+            text += ", " + estimate.Approximately + " " + Duration(estimate.Seconds);
             if (!estimate.Timed)
             {
                 text += string.Format(CultureInfo.InvariantCulture, " (as timed in Revit {0})", estimate.Version);
@@ -57,7 +57,7 @@ public static partial class WindowLabels
         ArgumentNullException.ThrowIfNull(cost);
         ArgumentNullException.ThrowIfNull(estimate);
 
-        string text = CostText(cost) + ", about " + Duration(estimate.Seconds);
+        string text = CostText(cost) + ", " + estimate.Approximately + " " + Duration(estimate.Seconds);
         if (!estimate.Timed)
         {
             text += string.Format(CultureInfo.InvariantCulture, " (as timed in Revit {0})", estimate.Version);

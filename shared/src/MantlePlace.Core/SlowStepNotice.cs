@@ -66,10 +66,17 @@ public static class SlowStepNotice
 
     public sealed record UnitCost(CostUnit Unit, SecondsRange? Revit2025, SecondsRange? Revit2026, SecondsRange? Revit2027)
     {
+        public bool IsFloor { get; init; }
+
         public SecondsRange? In(int version) => ForVersion(version, Revit2025, Revit2026, Revit2027);
     }
 
-    public sealed record LevelEstimate(SecondsRange Seconds, int Version, bool Timed);
+    public sealed record LevelEstimate(SecondsRange Seconds, int Version, bool Timed)
+    {
+        public bool IsFloor { get; init; }
+
+        public string Approximately => IsFloor ? "at least" : "about";
+    }
 
     public static LevelEstimate? EstimateLevel(ImportStepKind kind, CostDriver? cost, string? revitVersionNumber)
     {
@@ -84,7 +91,7 @@ public static class SlowStepNotice
         }
 
         SecondsRange each = perUnit.In(quoted)!.Value;
-        return new LevelEstimate(new SecondsRange(cost.Count * each.Low, cost.Count * each.High), quoted, timed);
+        return new LevelEstimate(new SecondsRange(cost.Count * each.Low, cost.Count * each.High), quoted, timed) { IsFloor = perUnit.IsFloor };
     }
 
     public const double BudgetSeconds = 300;
@@ -116,7 +123,7 @@ public static class SlowStepNotice
         ImportStepKind.RoadPolygons => new(new(870, 1_112), new(1_318.6, 1_754.6), new(1_337.0, 1_781.7))
         {
             PerUnit = new(CostUnit.Cuts, new(0.65, 1.67), new(1.90, 2.49), new(1.85, 2.46)),
-            PerCatalogCount = new(CostUnit.RoadSurfaces, new(83.3, 83.3), new(103.5, 103.5), new(37.3, 37.3)),
+            PerCatalogCount = new(CostUnit.RoadSurfaces, new(83.3, 83.3), new(103.5, 103.5), new(37.3, 37.3)) { IsFloor = true },
         },
         ImportStepKind.Vegetation => new(new(206, 415), new(266, 275), new(231, 338))
         {

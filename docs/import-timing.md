@@ -172,9 +172,10 @@ Revit 2027.
 Subdivisions read "13 subdivisions, about 8 to 22 seconds" in Revit 2025 and about 24 to 32 seconds in Revit 2026
 and 2027, so the box was not unticked as over budget. The step cut 66 subdivisions and took 485 to 1,346 s.
 The count was the catalog's 13 road-surface features, priced at the time per subdivision. The note now prices each
-road-surface feature at this gate's own time per feature, so the same zip reads "13 road surfaces, about 18
-minutes" in Revit 2025, about 22 minutes in Revit 2026 and about 8 minutes in Revit 2027, and the box starts
-unticked. The Planting and Context Buildings notes scale from this gate's runs and the earlier Max-level runs
+road-surface feature at this gate's own time per feature, so the same zip reads "13 road surfaces, at least 18
+minutes" in Revit 2025, at least 22 minutes in Revit 2026 and at least 8 minutes in Revit 2027, and the box starts
+unticked. It is a floor: the step's time follows the polygons inside those features (1,023 here), which the catalog
+does not count, so an order with more polygons per feature takes longer than the note says. The Planting and Context Buildings notes scale from this gate's runs and the earlier Max-level runs
 of the same order; no other box has an estimate.
 
 **A repeat that differed, again:** `ContextBuildings` took 129.8 s in Revit 2026, against 16.0 s and 9.5 s in

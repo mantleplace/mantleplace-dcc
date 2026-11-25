@@ -37,7 +37,7 @@ internal static class ThreeEstimateTests
 
         run.Case("the measured order's 13 road surfaces break the budget in every Revit it was timed in, as they did", () =>
         {
-            (string Version, string Estimate)[] measured = [("2025", "about 18 minutes"), ("2026", "about 22 minutes"), ("2027", "about 8 minutes")];
+            (string Version, string Estimate)[] measured = [("2025", "at least 18 minutes"), ("2026", "at least 22 minutes"), ("2027", "at least 8 minutes")];
             foreach ((string version, string estimate) in measured)
             {
                 ImportChecklist checklist = ImportChecklist.For(PlanWith(pavement: 13, trees: 7_302), version);
@@ -45,7 +45,7 @@ internal static class ThreeEstimateTests
                 run.False(checklist.IsChecked(ImportLayer.RoadSubdivisions), $"Revit {version}: so the box starts unticked");
                 string note = checklist.EstimateNote(ImportLayer.RoadSubdivisions) ?? string.Empty;
                 run.Contains(note, "13 road surfaces", $"Revit {version}: the note says what was counted");
-                run.Contains(note, estimate, $"Revit {version}: and the time the 1.3.0 gate measured");
+                run.Contains(note, estimate, $"Revit {version}: and the time the 1.3.0 gate measured, as a floor: the catalog does not count the polygons that drive it");
             }
         });
 
@@ -73,8 +73,8 @@ internal static class ThreeEstimateTests
         run.Case("a bundle whose road surfaces fit starts them ticked", () =>
         {
             ImportChecklist checklist = ImportChecklist.For(PlanWith(pavement: 2, trees: 5_000), "2026");
-            run.True(checklist.IsChecked(ImportLayer.RoadSubdivisions), "2 road surfaces take about 3 minutes");
-            run.Contains(checklist.EstimateNote(ImportLayer.RoadSubdivisions) ?? string.Empty, "about 3 minutes", "and show the estimate");
+            run.True(checklist.IsChecked(ImportLayer.RoadSubdivisions), "2 road surfaces take at least 3 minutes");
+            run.Contains(checklist.EstimateNote(ImportLayer.RoadSubdivisions) ?? string.Empty, "at least 3 minutes", "and show the estimate");
         });
 
         run.Case("the trees' estimate holds the 1.3.0 gate's slowest Revit 2025 run", () =>
