@@ -3,7 +3,7 @@
 The body the `autocad-1.3.0` release takes, titled `autocad-1.3.0 — Mantle Place for AutoCAD` and written to
 [`docs/releases.md`](../../docs/releases.md). The founder confirms what is in it before the cut. The
 **Verification** section holds the release gate on the packaged zip in AutoCAD and in Civil 3D; the
-published-asset and storefront lines are filled in when the release is cut and the zip is submitted. What an MPB 3.0 import places and leaves out is unchanged from 1.2.0 and stays in
+published-asset and storefront lines are filled in when the release is cut and the zip is submitted; the release was cut on 2026-11-25 from `8c0188c`. What an MPB 3.0 import places and leaves out is unchanged from 1.2.0 and stays in
 [`release-notes-1.2.0.md`](release-notes-1.2.0.md). The published body cites each pull request by its bare
 number, as [`docs/releases.md`](../../docs/releases.md) asks; this file links each number instead, because a
 bare number in a tracked file is refused by the public-reference gate.
@@ -63,9 +63,9 @@ Upgrade by closing AutoCAD and running the new `Install.cmd` over the old one; n
   - `civil3d.import-check`, the Austin sample: pass, 40 of 40 in each year
 
   The first vault imports in each AutoCAD year stopped when the dev platform answered the download with HTTP 500, for every client; each passed once the dev server was restarted. The first `civil3d.plugin-windows` in Civil 3D 2025 and the first `civil3d.plugin-loads` in Civil 3D 2026 stopped with the plugin not loaded after the harness had pressed Load Once at Civil 3D's unsigned-file prompt, and two Civil 3D 2026 runs and the second Civil 3D 2025 `civil3d.plugin-windows` failed only the harness's own foreground assertion; each passed when run again.
-- Published asset: <check from step 4 and its date>.
+- Published asset: downloaded from this release on 2026-11-25, its sha256 matches the line below, and `autocad.plugin-loads` passed, 13 of 13, in AutoCAD 2025, 2026 and 2027 with it installed clean by the host harness.
 - `MantlePlace-AutoCad-1.3.0.zip` sha256 `23cc1bf5b55380111adbce19ad64348a6c7a1f61e4bbbeb5ec84d3419aa1cc90`, built at `4826187`
-- Storefront: <submitted to the Autodesk storefront on date>, from the asset above.
+- Storefront: not yet submitted.
 
 Previous: [autocad-1.2.0](https://github.com/mantleplace/mantleplace-dcc/releases/tag/autocad-1.2.0)
 ```

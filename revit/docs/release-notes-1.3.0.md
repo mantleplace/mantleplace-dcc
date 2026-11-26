@@ -3,7 +3,7 @@
 The body the `revit-1.3.0` release takes, titled `revit-1.3.0 — Mantle Place for Revit` and written to
 [`docs/releases.md`](../../docs/releases.md). The founder confirms what is in it before the cut. The
 **Verification** section holds the release gate's results on the packaged zip; the published-asset and storefront
-lines are filled in when the release is cut and the zip is submitted. What an MPB 3.0 import places and leaves
+lines are filled in when the release is cut and the zip is submitted; the release was cut on 2026-11-25 from `8c0188c`. What an MPB 3.0 import places and leaves
 out is unchanged from 1.2.0 and stays in [`release-notes-1.2.0.md`](release-notes-1.2.0.md). The published body
 cites each pull request by its bare number, as [`docs/releases.md`](../../docs/releases.md) asks; this file links
 each number instead, because a bare number in a tracked file is refused by the public-reference gate.
@@ -43,9 +43,9 @@ Upgrade by closing Revit and running the new `Install.cmd` over the old one; not
   The Austin Downtown import at Min, every layer, took 1,407 s (about 23 minutes) in Revit 2025, 1,048 s (about 17 minutes) in Revit 2026 and 1,242 s (about 21 minutes) in Revit 2027, the sum of the step times its import log lists; the road surfaces are 62 to 71 % of it. With Road Subdivisions unticked, the path the reviewer guide gives, the same import through the import window took 257 s in Revit 2025, 456 s in Revit 2026 and 421 s in Revit 2027 (2026-11-24, the 1.3.0 source at `55e39f3`, whose import code is this commit's). Each step's time is in [`docs/import-timing.md`](https://github.com/mantleplace/mantleplace-dcc/blob/main/docs/import-timing.md).
 
   The vault window was captured with the free order chosen in Revit 2025, 2026 and 2027 (2026-11-24, the zip gated at `f5185af` installed clean by the host harness, signed in on the dev platform), drawn by `PrintWindow` with the gate machine's desktop connected. Each image shows the free order's row selected and the level control reading `Max — 69.2 MB (recommended)` above the order list, with no locked row and no wording about paid sites, under the window's title bar and the Mantle Place mark.
-- Published asset: <check from step 4 and its date>.
+- Published asset: downloaded from this release on 2026-11-25, its sha256 matches the line below, and `revit.plugin-loads` passed, 8 of 8, in Revit 2025, 2026 and 2027 with it installed clean by the host harness.
 - `MantlePlace-Revit-1.3.0.zip` sha256 `23fecd75d838d4c642fc42d872b38cd57dc682af2e3f217e5c85263450f1c33f`
-- Storefront: <submitted to the Autodesk storefront on date>, from the asset above.
+- Storefront: not yet submitted.
 
 Previous: [revit-1.2.0](https://github.com/mantleplace/mantleplace-dcc/releases/tag/revit-1.2.0)
 ```
