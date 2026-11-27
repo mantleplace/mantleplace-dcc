@@ -56,7 +56,8 @@ these names (`MantlePlaceTreeScatterColumns`, which `MantlePlace.Import.FoliageS
 to `ColumnContract()`), and the decoded coverage rasters the same import made:
 
 - **`water_mask` and `worldcover` exclude.** A point on a water texel, or on a land-cover class the
-  node's excluded list names (built-up, snow and ice, permanent water by default), is dropped.
+  node's excluded list names (snow and ice, permanent water by default), is dropped. Built-up land
+  (class 50) is not on the default list, so street trees stand; a user adds 50 to drop them.
 - **`canopy_height` modulates trees, not shrubs.** A tree where the canopy reads at or below the
   node's minimum is dropped, the keep chance ramps to one at its full-density height, and a row with
   no `HeightCm` takes the canopy's height. The ramp's heights are node settings, not published

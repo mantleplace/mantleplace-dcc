@@ -70,9 +70,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Meshes")
 	FName MeshAttribute = FName(TEXT("Mesh"));
 
-	/** Land-cover class codes no point stands on. Defaults: 50 built-up, 70 snow and ice, 80 permanent water. */
+	/** Land-cover class codes no point stands on. Defaults: 70 snow and ice, 80 permanent water. Built-up (50) is kept, so street trees stay; add 50 to drop trees on it. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scatter")
-	TArray<int32> ExcludedLandCoverClasses = { 50, 70, 80 };
+	TArray<int32> ExcludedLandCoverClasses = { 70, 80 };
 
 	/** At or below this canopy height (m) a tree point is dropped. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Scatter", meta = (ClampMin = "0"))

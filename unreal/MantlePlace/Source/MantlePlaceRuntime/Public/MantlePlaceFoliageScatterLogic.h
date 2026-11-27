@@ -41,7 +41,7 @@ struct FTreePoint
 
 struct FParams
 {
-	TArray<int32> ExcludedLandCoverClasses = { 50, 70, 80 };
+	TArray<int32> ExcludedLandCoverClasses = { 70, 80 };
 	double MinCanopyHeightM = 0.5;
 	double FullDensityCanopyHeightM = 3.0;
 	double DensityScale = 1.0;
