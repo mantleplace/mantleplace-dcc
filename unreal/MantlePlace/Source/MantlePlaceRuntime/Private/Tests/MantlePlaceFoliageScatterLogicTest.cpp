@@ -111,6 +111,8 @@ bool FMantlePlaceFoliageScatterJudgeTest::RunTest(const FString& Parameters)
 	Inputs.LandCover = MakeRaster(EMantlePlaceCoverageMapping::Legend, 10);
 	Inputs.LandCover.FullScale = 255.0;
 	Inputs.LandCover.Samples[6] = 50;
+	Inputs.LandCover.Samples[10] = 70;
+	Inputs.LandCover.Samples[11] = 80;
 	Inputs.CanopyHeight = MakeRaster(EMantlePlaceCoverageMapping::Scale, 65535);
 	Inputs.CanopyHeight.MaxValue = 30.0;
 	Inputs.CanopyHeight.Samples[9] = 0;
@@ -118,7 +120,9 @@ bool FMantlePlaceFoliageScatterJudgeTest::RunTest(const FString& Parameters)
 
 	TestEqual(TEXT("a tree on open forest is kept"), Judge(Tree(CentreOf(0, 0)), Inputs, Params, nullptr), EVerdict::Keep);
 	TestEqual(TEXT("a tree on water is dropped"), Judge(Tree(CentreOf(1, 1)), Inputs, Params, nullptr), EVerdict::Water);
-	TestEqual(TEXT("a tree on built-up land is dropped"), Judge(Tree(CentreOf(2, 1)), Inputs, Params, nullptr), EVerdict::ExcludedLandCover);
+	TestEqual(TEXT("a tree on built-up land is kept by default"), Judge(Tree(CentreOf(2, 1)), Inputs, Params, nullptr), EVerdict::Keep);
+	TestEqual(TEXT("a tree on snow and ice is dropped"), Judge(Tree(CentreOf(2, 2)), Inputs, Params, nullptr), EVerdict::ExcludedLandCover);
+	TestEqual(TEXT("a tree on permanent water is dropped"), Judge(Tree(CentreOf(3, 2)), Inputs, Params, nullptr), EVerdict::ExcludedLandCover);
 	TestEqual(TEXT("a tree under no canopy is dropped"), Judge(Tree(CentreOf(1, 2)), Inputs, Params, nullptr), EVerdict::NoCanopy);
 	FTreePoint Shrub = Tree(CentreOf(1, 2), 150.0f, 80.0f);
 	Shrub.bShrub = true;
@@ -132,6 +136,10 @@ bool FMantlePlaceFoliageScatterJudgeTest::RunTest(const FString& Parameters)
 		+ (Judge(OnBorder, Inputs, Params, &East) == EVerdict::Keep ? 1 : 0);
 	TestEqual(TEXT("a border point is in exactly one cell"), Claims, 1);
 	TestEqual(TEXT("a point in the other cell is outside this one"), Judge(Tree(CentreOf(0, 0)), Inputs, Params, &East), EVerdict::OutsideCell);
+
+	FParams BuiltUpExcluded = Params;
+	BuiltUpExcluded.ExcludedLandCoverClasses.Add(50);
+	TestEqual(TEXT("a tree on built-up land is dropped once 50 is excluded"), Judge(Tree(CentreOf(2, 1)), Inputs, BuiltUpExcluded, nullptr), EVerdict::ExcludedLandCover);
 
 	FParams None = Params;
 	None.DensityScale = 0.0;
