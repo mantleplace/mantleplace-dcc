@@ -359,7 +359,7 @@ bool FMantlePlaceWorldPartitionFoliageTest::RunTest(const FString& Parameters)
 		}
 		TestTrue(*FString::Printf(TEXT("%s: the fixture has water texels the table's points stand on"), *Pass), WaterTexels > 0);
 		TestEqual(*FString::Printf(TEXT("%s: zero instances at the water texels' sample points"), *Pass), InstancesInWaterTexels, 0);
-		TestEqual(*FString::Printf(TEXT("%s: every other point is scattered"), *Pass), Instances.Num(), 256 - (4 + 8) * 4 - 4);
+		TestEqual(*FString::Printf(TEXT("%s: every point off water is scattered, built-up land included"), *Pass), Instances.Num(), 256 - (4 + 8) * 4);
 
 		MantlePlaceImportOrchestration::ReplacePriorActors(World, Identity, Timeline);
 		TestEqual(*FString::Printf(TEXT("%s: the wipe leaves no tagged actor"), *Pass), CountTagged(World), 0);
